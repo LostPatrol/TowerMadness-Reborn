@@ -9,6 +9,7 @@ param(
     [ValidateSet('arm', 'x86')]
     [string]$Architecture = 'arm',
     [switch]$PlayStore,
+    [switch]$LegacyAdb,
     [switch]$LaunchOriginal
 )
 
@@ -110,6 +111,15 @@ if ($PlayStore) {
     $packages[1].Size = 812724041L
     $packages[1].Sha1 = 'b52e9593ffdde65c1a0970256a32e8967c89cc22'
 }
+if ($LegacyAdb) {
+    # Keep the older client separate; it uses the existing host keypair without changing it.
+    $packages[2].Name = 'platform-tools_r29.0.6-windows.zip'
+    $packages[2].Url = 'https://dl.google.com/android/repository/platform-tools_r29.0.6-windows.zip'
+    $packages[2].Size = 7278590L
+    $packages[2].Sha1 = 'c970e1216ef99abf9fd480b01439998c4780728e'
+    $packages[2].Destination = Join-Path $sdkDirectory 'platform-tools-29'
+    $packages[2].Marker = Join-Path $sdkDirectory 'platform-tools-29/platform-tools/adb.exe'
+}
 
 # Use Git's curl when available because this computer's system curl has had TLS failures.
 $curlExecutable = 'D:/Git/mingw64/bin/curl.exe'
@@ -207,7 +217,9 @@ if (-not (Test-Path -LiteralPath $configPath)) {
 }
 $sdcardPath = Join-Path $avdDirectory 'sdcard.img'
 if (-not (Test-Path -LiteralPath $sdcardPath)) {
-    & (Join-Path $sdkDirectory 'tools/mksdcard.exe') '512M' $sdcardPath
+    $sdcardExecutable = Join-Path $sdkDirectory 'tools/mksdcard.exe'
+    if ($PlayStore) { $sdcardExecutable = Join-Path $sdkDirectory 'emulator/mksdcard.exe' }
+    & $sdcardExecutable '512M' $sdcardPath
     if ($LASTEXITCODE -ne 0) { throw 'Could not create the reference SD card image.' }
 }
 
@@ -225,6 +237,7 @@ $packages | ForEach-Object {
 $emulatorExecutable = Join-Path $sdkDirectory 'tools/emulator.exe'
 if ($PlayStore) { $emulatorExecutable = Join-Path $sdkDirectory 'emulator/emulator.exe' }
 $adbExecutable = Join-Path $sdkDirectory 'platform-tools/adb.exe'
+if ($LegacyAdb) { $adbExecutable = Join-Path $sdkDirectory 'platform-tools-29/platform-tools/adb.exe' }
 Write-Host "Reference emulator: $emulatorExecutable"
 Write-Host "Reference adb: $adbExecutable"
 if (-not $LaunchOriginal) {
@@ -242,10 +255,13 @@ if ((Get-FileHash -LiteralPath $apkPath -Algorithm SHA256).Hash -ne $apkSha256) 
 $previousSdkRoot = $env:ANDROID_SDK_ROOT
 $previousAndroidHome = $env:ANDROID_HOME
 $previousAvdHome = $env:ANDROID_AVD_HOME
+$previousAdbMaxPort = $env:ADB_LOCAL_TRANSPORT_MAX_PORT
 try {
     $env:ANDROID_SDK_ROOT = $sdkDirectory
     $env:ANDROID_HOME = $sdkDirectory
     $env:ANDROID_AVD_HOME = $avdRoot
+    # Legacy adb otherwise scans only through 5585, below the retained reference AVD's port.
+    $env:ADB_LOCAL_TRANSPORT_MAX_PORT = '5589'
     # An offline serial is still a booting AVD; launching it again would hit its device-data lock.
     $existingDevice = @(& $adbExecutable devices) | Where-Object { $_ -match "^$serial\s" }
     $emulatorProcess = $null
@@ -273,6 +289,10 @@ try {
         if ($emulatorProcess -and $emulatorProcess.HasExited) {
             throw "Reference emulator exited with code $($emulatorProcess.ExitCode). Inspect $logsDirectory"
         }
+        $deviceState = @(& $adbExecutable devices) | Where-Object { $_ -match "^$serial\s" }
+        if ($deviceState -match '\sunauthorized\b') {
+            throw 'Reference transport is unauthorized; no APK command was issued. Check device/client authentication.'
+        }
         $bootStatus = & $adbExecutable -s $serial shell getprop sys.boot_completed 2>$null
         if ($bootStatus -eq '1') { $booted = $true; break }
         Start-Sleep -Seconds 5
@@ -288,4 +308,5 @@ try {
     $env:ANDROID_SDK_ROOT = $previousSdkRoot
     $env:ANDROID_HOME = $previousAndroidHome
     $env:ANDROID_AVD_HOME = $previousAvdHome
+    $env:ADB_LOCAL_TRANSPORT_MAX_PORT = $previousAdbMaxPort
 }
