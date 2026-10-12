@@ -1,0 +1,19 @@
+{
+  "name": "Newton",
+  "material": "Newton",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Newton",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

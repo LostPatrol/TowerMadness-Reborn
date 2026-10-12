@@ -1,0 +1,8 @@
+{
+  "Volcano": {
+    "tex": "Volcano",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

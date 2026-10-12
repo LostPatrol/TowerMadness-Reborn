@@ -1,0 +1,19 @@
+{
+  "name": "Darkside",
+  "material": "Darkside",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Darkside",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

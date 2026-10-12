@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "trees": {
+      "vbo": "marshplant4",
+      "material": "marshplants",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

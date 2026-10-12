@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "turretbase_2": {
+      "vbo": "turretbase_2",
+      "material": "turretbasenumeral",
+      "transformation": [
+        -1,
+        0,
+        0,
+        0,
+        0,
+        -1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

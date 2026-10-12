@@ -1,0 +1,8 @@
+{
+  "Normandy": {
+    "tex": "Normandy",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

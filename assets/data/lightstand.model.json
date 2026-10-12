@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "lightstand": {
+      "vbo": "lightstand",
+      "material": "moondoodads",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

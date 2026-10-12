@@ -1,0 +1,12 @@
+{
+  "waves": "Hotspot",
+  "logoatlas": "Hotspot",
+  "logoatlastrans": "Hotspot",
+  "shortdescription": "The Smoking Fields",
+  "description": "The aliens are turning up the heat. Do you have what it takes to stop them?",
+  "tech": "Insane",
+  "map": "Hotspot",
+  "difficulty": 9,
+  "lifes": 10,
+  "money": 150
+}

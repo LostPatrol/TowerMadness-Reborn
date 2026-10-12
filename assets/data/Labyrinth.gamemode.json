@@ -1,0 +1,12 @@
+{
+  "waves": "Invasion",
+  "logoatlas": "Labyrinth",
+  "logoatlastrans": "Labyrinth",
+  "shortdescription": "The Crooked Corridor",
+  "description": "Stop the invading force before it completes its twisted march.",
+  "tech": "Insane",
+  "map": "Labyrinth",
+  "difficulty": 6,
+  "lifes": 10,
+  "money": 115
+}

@@ -1,0 +1,8 @@
+{
+  "Maxwell": {
+    "tex": "Maxwell",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

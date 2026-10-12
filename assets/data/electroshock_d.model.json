@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "electroshock_d": {
+      "vbo": "electroshock_d",
+      "material": "electroshock_d",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

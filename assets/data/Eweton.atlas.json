@@ -1,0 +1,19 @@
+{
+  "name": "Eweton",
+  "material": "Eweton",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Eweton",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

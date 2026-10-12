@@ -1,0 +1,30 @@
+{
+  "name": "roundedcorner",
+  "material": "roundedcorner",
+  "width": 32,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "corner",
+      "size": [
+        16,
+        16
+      ],
+      "position": [
+        8,
+        8
+      ]
+    },
+    {
+      "name": "fill",
+      "size": [
+        16,
+        16
+      ],
+      "position": [
+        8,
+        40
+      ]
+    }
+  ]
+}

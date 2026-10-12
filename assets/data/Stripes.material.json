@@ -1,0 +1,53 @@
+{
+  "marshplants": {
+    "tex": "marshplants",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "cull": "none"
+  },
+  "tr_marsh": {
+    "tex": "tr_marsh",
+    "blend": "alpha",
+    "toffset": [
+      0,
+      0
+    ],
+    "tscale": [
+      1,
+      1
+    ],
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "bt_marsh": {
+    "tex": "bt_marsh",
+    "toffset": [
+      0,
+      0
+    ],
+    "tscale": [
+      1,
+      1
+    ],
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "Stripes": {
+    "tex": "Stripes",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

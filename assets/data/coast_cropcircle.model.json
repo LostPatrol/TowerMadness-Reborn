@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "coast_cropcircle": {
+      "vbo": "coast_cropcircle",
+      "material": "coast_cropcircle",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

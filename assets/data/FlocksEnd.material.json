@@ -1,0 +1,8 @@
+{
+  "FlocksEnd": {
+    "tex": "FlocksEnd",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

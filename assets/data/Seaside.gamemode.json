@@ -1,0 +1,12 @@
+{
+  "waves": "Seaside",
+  "logoatlas": "Seaside",
+  "logoatlastrans": "Seaside",
+  "shortdescription": "Windy Waters",
+  "description": "Hold off the enemy on this maze of an island.",
+  "tech": "Insane",
+  "map": "Seaside",
+  "difficulty": 5,
+  "lifes": 10,
+  "money": 75
+}

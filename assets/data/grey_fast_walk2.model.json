@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "grey_fast_walk2": {
+      "vbo": "grey_fast_walk2",
+      "material": "grey",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

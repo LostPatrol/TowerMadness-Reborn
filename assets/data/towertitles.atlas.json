@@ -1,0 +1,151 @@
+{
+  "name": "towertitles",
+  "material": "towertitles",
+  "width": 256,
+  "height": 512,
+  "subtextures": [
+    {
+      "name": "electroslow",
+      "size": [
+        256,
+        32
+      ],
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "electroshock",
+      "size": [
+        256,
+        32
+      ],
+      "position": [
+        0,
+        32
+      ]
+    },
+    {
+      "name": "flak",
+      "size": [
+        256,
+        32
+      ],
+      "position": [
+        0,
+        64
+      ]
+    },
+    {
+      "name": "railgun",
+      "size": [
+        256,
+        32
+      ],
+      "position": [
+        0,
+        96
+      ]
+    },
+    {
+      "name": "homingmissiles",
+      "size": [
+        256,
+        32
+      ],
+      "position": [
+        0,
+        128
+      ]
+    },
+    {
+      "name": "electroboost",
+      "size": [
+        256,
+        32
+      ],
+      "position": [
+        0,
+        160
+      ]
+    },
+    {
+      "name": "newmap",
+      "size": [
+        256,
+        32
+      ],
+      "position": [
+        0,
+        192
+      ]
+    },
+    {
+      "name": "newenemy",
+      "size": [
+        256,
+        32
+      ],
+      "position": [
+        0,
+        224
+      ]
+    },
+    {
+      "name": "congratulations",
+      "size": [
+        256,
+        32
+      ],
+      "position": [
+        0,
+        256
+      ]
+    },
+    {
+      "name": "nuke",
+      "size": [
+        256,
+        32
+      ],
+      "position": [
+        0,
+        288
+      ]
+    },
+    {
+      "name": "newenemy_de",
+      "size": [
+        256,
+        32
+      ],
+      "position": [
+        0,
+        320
+      ]
+    },
+    {
+      "name": "congratulations_de",
+      "size": [
+        256,
+        32
+      ],
+      "position": [
+        0,
+        352
+      ]
+    },
+    {
+      "name": "newmap_de",
+      "size": [
+        256,
+        32
+      ],
+      "position": [
+        0,
+        384
+      ]
+    }
+  ]
+}

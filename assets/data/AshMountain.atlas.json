@@ -1,0 +1,19 @@
+{
+  "name": "AshMountain",
+  "material": "AshMountain",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "AshMountain",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

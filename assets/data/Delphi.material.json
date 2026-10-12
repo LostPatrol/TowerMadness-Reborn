@@ -1,0 +1,8 @@
+{
+  "Delphi": {
+    "tex": "Delphi",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

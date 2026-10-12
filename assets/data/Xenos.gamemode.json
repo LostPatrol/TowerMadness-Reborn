@@ -1,0 +1,12 @@
+{
+  "waves": "Checkerboard",
+  "logoatlas": "Xenos",
+  "logoatlastrans": "Xenos",
+  "shortdescription": "The Lunar Conspiracy",
+  "description": "Guard the facility from impending doom.",
+  "tech": "Insane",
+  "map": "Xenos",
+  "difficulty": 8,
+  "lifes": 10,
+  "money": 105
+}

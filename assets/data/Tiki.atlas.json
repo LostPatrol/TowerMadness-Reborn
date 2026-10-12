@@ -1,0 +1,19 @@
+{
+  "name": "Tiki",
+  "material": "Tiki",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Tiki",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

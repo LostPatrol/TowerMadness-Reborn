@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "palmtree4": {
+      "vbo": "palmtree4",
+      "material": "palmtree",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

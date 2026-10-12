@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "ui_backgroundgradient": {
+      "vbo": "rect",
+      "material": "uibackgroundgradient",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

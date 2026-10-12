@@ -1,0 +1,8 @@
+{
+  "Sunshine": {
+    "tex": "Sunshine",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

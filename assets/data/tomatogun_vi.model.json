@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "tomatogun_vi": {
+      "vbo": "tomatogun_vi",
+      "material": "tomatogun_vi",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

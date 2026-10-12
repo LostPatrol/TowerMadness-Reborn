@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "nuke": {
+      "vbo": "nuke",
+      "material": "nuke",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

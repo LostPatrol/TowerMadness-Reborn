@@ -1,0 +1,8 @@
+{
+  "Tiki": {
+    "tex": "Tiki",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

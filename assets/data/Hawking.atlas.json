@@ -1,0 +1,19 @@
+{
+  "name": "Hawking",
+  "material": "Hawking",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Hawking",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

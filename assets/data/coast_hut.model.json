@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "coast_hut": {
+      "vbo": "coast_hut",
+      "material": "coast_hut",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "waves": "Invasion",
+  "logoatlas": "Peach",
+  "logoatlastrans": "Peach",
+  "shortdescription": "Tree of Delight",
+  "description": "A nectarine's nemesis.",
+  "tech": "Insane",
+  "map": "Peach",
+  "difficulty": 10,
+  "lifes": 10,
+  "money": 2500
+}

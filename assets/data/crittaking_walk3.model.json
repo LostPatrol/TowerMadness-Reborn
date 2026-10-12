@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "crittaking_walk3": {
+      "vbo": "crittaking_walk3",
+      "material": "crittasaur",
+      "transformation": [
+        0.6,
+        0,
+        0,
+        0,
+        0,
+        0.6,
+        0,
+        0,
+        0,
+        0,
+        0.6,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

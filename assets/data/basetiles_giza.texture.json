@@ -1,0 +1,6 @@
+{
+  "type": "pvr",
+  "file": "basetiles_giza",
+  "mag": "linear",
+  "min": "linear_mipmap_linear"
+}

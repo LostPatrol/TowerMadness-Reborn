@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "ui_sidestrip": {
+      "vbo": "ui_sidestrip",
+      "material": "uielements",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

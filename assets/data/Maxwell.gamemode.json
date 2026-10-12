@@ -1,0 +1,12 @@
+{
+  "waves": "Maxwell",
+  "logoatlas": "Maxwell",
+  "logoatlastrans": "Maxwell",
+  "shortdescription": "Equations",
+  "description": "Can you find a good solution?",
+  "tech": "Insane",
+  "map": "Maxwell",
+  "difficulty": 5,
+  "lifes": 10,
+  "money": 100
+}

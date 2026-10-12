@@ -1,0 +1,6 @@
+{
+  "type": "pvr",
+  "file": "potatogun_iii",
+  "mag": "linear",
+  "min": "linear_mipmap_nearest"
+}

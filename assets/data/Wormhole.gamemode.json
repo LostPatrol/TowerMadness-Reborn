@@ -1,0 +1,12 @@
+{
+  "waves": "Sparta",
+  "logoatlas": "Wormhole",
+  "logoatlastrans": "Wormhole",
+  "shortdescription": "The Solitary Station",
+  "description": "                                             An outpost is being overrun from the south.",
+  "tech": "Insane",
+  "map": "Wormhole",
+  "difficulty": 5,
+  "lifes": 10,
+  "money": 85
+}

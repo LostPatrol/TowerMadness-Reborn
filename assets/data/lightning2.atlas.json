@@ -1,0 +1,52 @@
+{
+  "name": "lightning2",
+  "material": "lightning2",
+  "width": 256,
+  "height": 256,
+  "subtextures": [
+    {
+      "name": "lightning_0",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "lightning_1",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        64
+      ]
+    },
+    {
+      "name": "lightning_2",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        128
+      ]
+    },
+    {
+      "name": "lightning_3",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        192
+      ]
+    }
+  ]
+}

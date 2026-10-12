@@ -1,0 +1,6 @@
+{
+  "type": "pvr",
+  "file": "stun",
+  "mag": "linear",
+  "min": "linear_mipmap_nearest"
+}

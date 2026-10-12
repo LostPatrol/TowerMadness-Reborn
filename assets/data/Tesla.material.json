@@ -1,0 +1,8 @@
+{
+  "Tesla": {
+    "tex": "Tesla",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "rock1": {
+      "vbo": "rock1",
+      "material": "lavadoodads",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

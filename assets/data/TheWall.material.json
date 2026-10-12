@@ -1,0 +1,52 @@
+{
+  "snowytrees": {
+    "tex": "snowytrees",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "tr_snow": {
+    "tex": "tr_snow",
+    "blend": "alpha",
+    "toffset": [
+      0,
+      0
+    ],
+    "tscale": [
+      1,
+      1
+    ],
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "bt_snow": {
+    "tex": "bt_snow",
+    "toffset": [
+      0,
+      0
+    ],
+    "tscale": [
+      1,
+      1
+    ],
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "TheWall": {
+    "tex": "TheWall",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

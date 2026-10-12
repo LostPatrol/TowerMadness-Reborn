@@ -1,0 +1,19 @@
+{
+  "name": "Normandy",
+  "material": "Normandy",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Normandy",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "Racetrack": {
+    "tex": "Racetrack",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

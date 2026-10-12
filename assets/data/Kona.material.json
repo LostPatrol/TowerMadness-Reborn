@@ -1,0 +1,8 @@
+{
+  "Kona": {
+    "tex": "Kona",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

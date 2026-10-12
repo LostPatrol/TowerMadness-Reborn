@@ -1,0 +1,6 @@
+{
+  "type": "pvr",
+  "file": "bt_lava",
+  "mag": "linear",
+  "min": "linear_mipmap_linear"
+}

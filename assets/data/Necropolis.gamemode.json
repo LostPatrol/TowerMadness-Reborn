@@ -1,0 +1,12 @@
+{
+  "waves": "Necropolis",
+  "logoatlas": "Necropolis",
+  "logoatlastrans": "Necropolis",
+  "shortdescription": "The Cursed Desert",
+  "description": "                                        Many have fallen along these sandy trails.",
+  "tech": "Insane",
+  "map": "Necropolis",
+  "difficulty": 5,
+  "lifes": 10,
+  "money": 100
+}

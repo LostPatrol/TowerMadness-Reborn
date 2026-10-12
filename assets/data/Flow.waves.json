@@ -1,0 +1,4458 @@
+[
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.5,
+    "health": 26,
+    "count": 10,
+    "gold": 4,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.625,
+    "health": 40,
+    "count": 10,
+    "gold": 4,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.15625,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 0.75,
+    "health": 49,
+    "count": 10,
+    "gold": 4,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.875,
+    "health": 71,
+    "count": 10,
+    "gold": 4,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.21875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1,
+    "health": 88,
+    "count": 10,
+    "gold": 4,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.25,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 1.125,
+    "health": 95,
+    "count": 10,
+    "gold": 4,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.25,
+    "health": 150,
+    "count": 5,
+    "gold": 8,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.3125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 1822,
+    "count": 1,
+    "gold": 70,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.5,
+    "health": 200,
+    "count": 5,
+    "gold": 10,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.625,
+    "health": 189,
+    "count": 10,
+    "gold": 5,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.15625,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.75,
+    "health": 255,
+    "count": 5,
+    "gold": 10,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.1875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.875,
+    "health": 237,
+    "count": 10,
+    "gold": 5,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.21875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1,
+    "health": 315,
+    "count": 5,
+    "gold": 10,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.25,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.125,
+    "health": 289,
+    "count": 10,
+    "gold": 5,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.28125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.25,
+    "health": 380,
+    "count": 5,
+    "gold": 10,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.3125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 2593,
+    "count": 1,
+    "gold": 84,
+    "frequency": 1500,
+    "speed": 0.75,
+    "flying": true,
+    "height": 2,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 0.5,
+    "health": 338,
+    "count": 10,
+    "gold": 6,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "grey",
+    "walk": [
+      "grey_spawn_walk0",
+      "grey_spawn_walk1",
+      "grey_spawn_walk2",
+      "grey_spawn_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.75,
+    "health": 225,
+    "count": 6,
+    "gold": 18,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.1875,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 0.75,
+    "health": 394,
+    "count": 10,
+    "gold": 6,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.875,
+    "health": 471,
+    "count": 10,
+    "gold": 6,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.21875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1,
+    "health": 606,
+    "count": 5,
+    "gold": 12,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.25,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "grey",
+    "walk": [
+      "grey_spawn_walk0",
+      "grey_spawn_walk1",
+      "grey_spawn_walk2",
+      "grey_spawn_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.35,
+    "health": 300,
+    "count": 6,
+    "gold": 18,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.3375,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 1.25,
+    "health": 519,
+    "count": 10,
+    "gold": 6,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "kinggrey",
+    "walk": [
+      "grey_spawnking_walk0",
+      "grey_spawnking_walk1",
+      "grey_spawnking_walk2",
+      "grey_spawnking_walk3"
+    ],
+    "subwalk": [
+      "grey_king_walk0",
+      "grey_king_walk1",
+      "grey_king_walk2",
+      "grey_king_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 2558,
+    "count": 1,
+    "gold": 98,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.5,
+    "health": 652,
+    "count": 10,
+    "gold": 7,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "regengrey",
+    "submodel": "regengrey",
+    "walk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "subwalk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.625,
+    "health": 691,
+    "count": 10,
+    "gold": 7,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.15625,
+    "spawn": 0,
+    "regen": 27,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.75,
+    "health": 732,
+    "count": 10,
+    "gold": 7,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.1875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "regengrey",
+    "submodel": "regengrey",
+    "walk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "subwalk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.875,
+    "health": 773,
+    "count": 10,
+    "gold": 7,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.21875,
+    "spawn": 0,
+    "regen": 30,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1,
+    "health": 979,
+    "count": 5,
+    "gold": 14,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.25,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "regengrey",
+    "submodel": "regengrey",
+    "walk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "subwalk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.125,
+    "health": 859,
+    "count": 10,
+    "gold": 7,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.28125,
+    "spawn": 0,
+    "regen": 34,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "kinggrey",
+    "walk": [
+      "grey_spawnking_walk0",
+      "grey_spawnking_walk1",
+      "grey_spawnking_walk2",
+      "grey_spawnking_walk3"
+    ],
+    "subwalk": [
+      "grey_king_walk0",
+      "grey_king_walk1",
+      "grey_king_walk2",
+      "grey_king_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 3768,
+    "count": 1,
+    "gold": 98,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "regenkinggrey",
+    "submodel": "regenkinggrey",
+    "walk": [
+      "grey_regenking_walk0",
+      "grey_regenking_walk1",
+      "grey_regenking_walk2",
+      "grey_regenking_walk3"
+    ],
+    "subwalk": [
+      "grey_regenking_walk0",
+      "grey_regenking_walk1",
+      "grey_regenking_walk2",
+      "grey_regenking_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 11876,
+    "count": 1,
+    "gold": 112,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 59,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.5,
+    "health": 996,
+    "count": 10,
+    "gold": 8,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 1,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.625,
+    "health": 1044,
+    "count": 10,
+    "gold": 8,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.15625,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 2,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.75,
+    "health": 1093,
+    "count": 10,
+    "gold": 8,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.1875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 3,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.875,
+    "health": 1143,
+    "count": 10,
+    "gold": 8,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.21875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 1,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1,
+    "health": 1194,
+    "count": 10,
+    "gold": 8,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.25,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 2,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.125,
+    "health": 1247,
+    "count": 10,
+    "gold": 8,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.28125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 3,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 9751,
+    "count": 1,
+    "gold": 112,
+    "frequency": 1500,
+    "speed": 0.75,
+    "flying": true,
+    "height": 2,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittaking",
+    "submodel": "crittaking",
+    "walk": [
+      "crittaking_walk2",
+      "crittaking_walk1",
+      "crittaking_walk2",
+      "crittaking_walk3"
+    ],
+    "subwalk": [
+      "crittaking_walk2",
+      "crittaking_walk1",
+      "crittaking_walk2",
+      "crittaking_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1",
+      "crittadeath2",
+      "crittadeath3"
+    ],
+    "size": 2,
+    "health": 16930,
+    "count": 1,
+    "gold": 126,
+    "frequency": 1200,
+    "speed": 1.15,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.5,
+    "health": 1409,
+    "count": 10,
+    "gold": 9,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 0.625,
+    "health": 1319,
+    "count": 10,
+    "gold": 9,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "regengrey",
+    "submodel": "regengrey",
+    "walk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "subwalk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.75,
+    "health": 1523,
+    "count": 10,
+    "gold": 9,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.1875,
+    "spawn": 0,
+    "regen": 60,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 0.875,
+    "health": 1423,
+    "count": 10,
+    "gold": 9,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "grey",
+    "walk": [
+      "grey_spawn_walk0",
+      "grey_spawn_walk1",
+      "grey_spawn_walk2",
+      "grey_spawn_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.2,
+    "health": 912,
+    "count": 6,
+    "gold": 27,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.3,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 1.125,
+    "health": 1532,
+    "count": 10,
+    "gold": 9,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "grey",
+    "walk": [
+      "grey_spawn_walk0",
+      "grey_spawn_walk1",
+      "grey_spawn_walk2",
+      "grey_spawn_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.5,
+    "health": 980,
+    "count": 6,
+    "gold": 27,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.375,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 22836,
+    "count": 1,
+    "gold": 140,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.5,
+    "health": 2268,
+    "count": 5,
+    "gold": 20,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "regengrey",
+    "submodel": "regengrey",
+    "walk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "subwalk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.625,
+    "health": 1955,
+    "count": 10,
+    "gold": 10,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.15625,
+    "spawn": 0,
+    "regen": 78,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.75,
+    "health": 2425,
+    "count": 5,
+    "gold": 20,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.1875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "regengrey",
+    "submodel": "regengrey",
+    "walk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "subwalk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.875,
+    "health": 2088,
+    "count": 10,
+    "gold": 10,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.21875,
+    "spawn": 0,
+    "regen": 83,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1,
+    "health": 2156,
+    "count": 10,
+    "gold": 10,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.25,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.125,
+    "health": 2671,
+    "count": 5,
+    "gold": 20,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.28125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 1.25,
+    "health": 2066,
+    "count": 10,
+    "gold": 10,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 17755,
+    "count": 1,
+    "gold": 154,
+    "frequency": 1500,
+    "speed": 0.75,
+    "flying": true,
+    "height": 2,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "regengrey",
+    "submodel": "regengrey",
+    "walk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "subwalk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.5,
+    "health": 2439,
+    "count": 10,
+    "gold": 11,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.125,
+    "spawn": 0,
+    "regen": 97,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "grey",
+    "walk": [
+      "grey_spawn_walk0",
+      "grey_spawn_walk1",
+      "grey_spawn_walk2",
+      "grey_spawn_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.75,
+    "health": 1396,
+    "count": 6,
+    "gold": 33,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.1875,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 0.75,
+    "health": 2328,
+    "count": 10,
+    "gold": 11,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.875,
+    "health": 3195,
+    "count": 5,
+    "gold": 22,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.21875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "regengrey",
+    "submodel": "regengrey",
+    "walk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "subwalk": [
+      "grey_regen_walk0",
+      "grey_regen_walk1",
+      "grey_regen_walk2",
+      "grey_regen_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1,
+    "health": 2739,
+    "count": 10,
+    "gold": 11,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.25,
+    "spawn": 0,
+    "regen": 109,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.125,
+    "health": 2817,
+    "count": 10,
+    "gold": 11,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.28125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 1.25,
+    "health": 2606,
+    "count": 10,
+    "gold": 11,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "regenkinggrey",
+    "submodel": "regenkinggrey",
+    "walk": [
+      "grey_regenking_walk0",
+      "grey_regenking_walk1",
+      "grey_regenking_walk2",
+      "grey_regenking_walk3"
+    ],
+    "subwalk": [
+      "grey_regenking_walk0",
+      "grey_regenking_walk1",
+      "grey_regenking_walk2",
+      "grey_regenking_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 37200,
+    "count": 1,
+    "gold": 168,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 186,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.5,
+    "health": 3056,
+    "count": 10,
+    "gold": 12,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 1,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.625,
+    "health": 3138,
+    "count": 10,
+    "gold": 12,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.15625,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 2,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.75,
+    "health": 3221,
+    "count": 10,
+    "gold": 12,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.1875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 3,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 0.875,
+    "health": 2975,
+    "count": 10,
+    "gold": 12,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1,
+    "health": 3390,
+    "count": 10,
+    "gold": 12,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.25,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 1,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.125,
+    "health": 3477,
+    "count": 10,
+    "gold": 12,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.28125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 2,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.25,
+    "health": 3564,
+    "count": 10,
+    "gold": 12,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.3125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 3,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittaking",
+    "submodel": "crittaking",
+    "walk": [
+      "crittaking_walk2",
+      "crittaking_walk1",
+      "crittaking_walk2",
+      "crittaking_walk3"
+    ],
+    "subwalk": [
+      "crittaking_walk2",
+      "crittaking_walk1",
+      "crittaking_walk2",
+      "crittaking_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1",
+      "crittadeath2",
+      "crittadeath3"
+    ],
+    "size": 2,
+    "health": 45658,
+    "count": 1,
+    "gold": 182,
+    "frequency": 1200,
+    "speed": 1.15,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "grey",
+    "walk": [
+      "grey_spawn_walk0",
+      "grey_spawn_walk1",
+      "grey_spawn_walk2",
+      "grey_spawn_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.6,
+    "health": 2078,
+    "count": 6,
+    "gold": 39,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.15,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 0.625,
+    "health": 3449,
+    "count": 10,
+    "gold": 13,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.75,
+    "health": 4708,
+    "count": 5,
+    "gold": 26,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.1875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.875,
+    "health": 4016,
+    "count": 10,
+    "gold": 13,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.21875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1,
+    "health": 4110,
+    "count": 10,
+    "gold": 13,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.25,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 1,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.125,
+    "health": 4204,
+    "count": 10,
+    "gold": 13,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.28125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 3,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.25,
+    "health": 4300,
+    "count": 10,
+    "gold": 13,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.3125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 2,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "kinggrey",
+    "walk": [
+      "grey_spawnking_walk0",
+      "grey_spawnking_walk1",
+      "grey_spawnking_walk2",
+      "grey_spawnking_walk3"
+    ],
+    "subwalk": [
+      "grey_king_walk0",
+      "grey_king_walk1",
+      "grey_king_walk2",
+      "grey_king_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 18322,
+    "count": 1,
+    "gold": 196,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.5,
+    "health": 4495,
+    "count": 10,
+    "gold": 14,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 0.625,
+    "health": 4134,
+    "count": 10,
+    "gold": 14,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittaking",
+    "submodel": "crittaking",
+    "walk": [
+      "crittaking_walk2",
+      "crittaking_walk1",
+      "crittaking_walk2",
+      "crittaking_walk3"
+    ],
+    "subwalk": [
+      "crittaking_walk2",
+      "crittaking_walk1",
+      "crittaking_walk2",
+      "crittaking_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1",
+      "crittadeath2",
+      "crittadeath3"
+    ],
+    "size": 2,
+    "health": 58679,
+    "count": 1,
+    "gold": 196,
+    "frequency": 1200,
+    "speed": 1.15,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.875,
+    "health": 5754,
+    "count": 5,
+    "gold": 28,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.21875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "grey",
+    "walk": [
+      "grey_spawn_walk0",
+      "grey_spawn_walk1",
+      "grey_spawn_walk2",
+      "grey_spawn_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.2,
+    "health": 2720,
+    "count": 6,
+    "gold": 42,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.3,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.125,
+    "health": 5000,
+    "count": 10,
+    "gold": 14,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.28125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 2,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.25,
+    "health": 5105,
+    "count": 10,
+    "gold": 14,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.3125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 1,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.375,
+    "health": 5210,
+    "count": 10,
+    "gold": 15,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.09375,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 3,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 66460,
+    "count": 1,
+    "gold": 210,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 67803,
+    "count": 1,
+    "gold": 210,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 0.75,
+    "health": 4979,
+    "count": 10,
+    "gold": 15,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "grey",
+    "walk": [
+      "grey_spawn_walk0",
+      "grey_spawn_walk1",
+      "grey_spawn_walk2",
+      "grey_spawn_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.05,
+    "health": 3134,
+    "count": 6,
+    "gold": 45,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.2625,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1,
+    "health": 5753,
+    "count": 10,
+    "gold": 15,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.25,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.125,
+    "health": 5864,
+    "count": 10,
+    "gold": 15,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.28125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 2,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittaking",
+    "submodel": "crittaking",
+    "walk": [
+      "crittaking_walk2",
+      "crittaking_walk1",
+      "crittaking_walk2",
+      "crittaking_walk3"
+    ],
+    "subwalk": [
+      "crittaking_walk2",
+      "crittaking_walk1",
+      "crittaking_walk2",
+      "crittaking_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1",
+      "crittadeath2",
+      "crittadeath3"
+    ],
+    "size": 2,
+    "health": 74719,
+    "count": 1,
+    "gold": 210,
+    "frequency": 1200,
+    "speed": 1.15,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.375,
+    "health": 6091,
+    "count": 10,
+    "gold": 16,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.09375,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 3,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 77578,
+    "count": 1,
+    "gold": 224,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.625,
+    "health": 6322,
+    "count": 10,
+    "gold": 16,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.15625,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 0.75,
+    "health": 5795,
+    "count": 10,
+    "gold": 16,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.875,
+    "health": 7868,
+    "count": 5,
+    "gold": 32,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.21875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "kinggrey",
+    "walk": [
+      "grey_spawnking_walk0",
+      "grey_spawnking_walk1",
+      "grey_spawnking_walk2",
+      "grey_spawnking_walk3"
+    ],
+    "subwalk": [
+      "grey_king_walk0",
+      "grey_king_walk1",
+      "grey_king_walk2",
+      "grey_king_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 27819,
+    "count": 1,
+    "gold": 224,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.125,
+    "health": 6796,
+    "count": 10,
+    "gold": 16,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.28125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 2,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.25,
+    "health": 6918,
+    "count": 10,
+    "gold": 16,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.3125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 1,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.375,
+    "health": 7040,
+    "count": 10,
+    "gold": 17,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.09375,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 3,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 89548,
+    "count": 1,
+    "gold": 238,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.625,
+    "health": 7288,
+    "count": 10,
+    "gold": 17,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.15625,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 0.75,
+    "health": 6672,
+    "count": 10,
+    "gold": 17,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.875,
+    "health": 9048,
+    "count": 5,
+    "gold": 34,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.21875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "kinggrey",
+    "walk": [
+      "grey_spawnking_walk0",
+      "grey_spawnking_walk1",
+      "grey_spawnking_walk2",
+      "grey_spawnking_walk3"
+    ],
+    "subwalk": [
+      "grey_king_walk0",
+      "grey_king_walk1",
+      "grey_king_walk2",
+      "grey_king_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 31951,
+    "count": 1,
+    "gold": 238,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.125,
+    "health": 7796,
+    "count": 10,
+    "gold": 17,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.28125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 2,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.25,
+    "health": 7926,
+    "count": 10,
+    "gold": 17,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.3125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 1,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.375,
+    "health": 8057,
+    "count": 10,
+    "gold": 18,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.09375,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 3,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 102370,
+    "count": 1,
+    "gold": 252,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.625,
+    "health": 8322,
+    "count": 10,
+    "gold": 18,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.15625,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittasaur",
+    "submodel": "crittasaur",
+    "walk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "subwalk": [
+      "crittasaur_walk2",
+      "crittasaur_walk1",
+      "crittasaur_walk2",
+      "crittasaur_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1"
+    ],
+    "size": 0.75,
+    "health": 7611,
+    "count": 10,
+    "gold": 18,
+    "frequency": 1200,
+    "speed": 1.5,
+    "flying": false,
+    "height": 0,
+    "offset": 0,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.875,
+    "health": 10310,
+    "count": 5,
+    "gold": 36,
+    "frequency": 1500,
+    "speed": 0.9,
+    "flying": true,
+    "height": 2,
+    "offset": 0.21875,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "kinggrey",
+    "walk": [
+      "grey_spawnking_walk0",
+      "grey_spawnking_walk1",
+      "grey_spawnking_walk2",
+      "grey_spawnking_walk3"
+    ],
+    "subwalk": [
+      "grey_king_walk0",
+      "grey_king_walk1",
+      "grey_king_walk2",
+      "grey_king_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 36366,
+    "count": 1,
+    "gold": 252,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.125,
+    "health": 8865,
+    "count": 10,
+    "gold": 18,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.28125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 2,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 1.25,
+    "health": 9003,
+    "count": 10,
+    "gold": 18,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.3125,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 1,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "armoredgrey",
+    "submodel": "armoredgrey",
+    "walk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "subwalk": [
+      "grey_armored_walk0",
+      "grey_armored_walk1",
+      "grey_armored_walk2",
+      "grey_armored_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 0.375,
+    "health": 9142,
+    "count": 10,
+    "gold": 19,
+    "frequency": 1200,
+    "speed": 1,
+    "flying": false,
+    "height": 0,
+    "offset": 0.09375,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 3,
+    "boss": false,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 116042,
+    "count": 1,
+    "gold": 266,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "regenkinggrey",
+    "submodel": "regenkinggrey",
+    "walk": [
+      "grey_regenking_walk0",
+      "grey_regenking_walk1",
+      "grey_regenking_walk2",
+      "grey_regenking_walk3"
+    ],
+    "subwalk": [
+      "grey_regenking_walk0",
+      "grey_regenking_walk1",
+      "grey_regenking_walk2",
+      "grey_regenking_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 117811,
+    "count": 1,
+    "gold": 266,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 589,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "kinggrey",
+    "walk": [
+      "grey_spawnking_walk0",
+      "grey_spawnking_walk1",
+      "grey_spawnking_walk2",
+      "grey_spawnking_walk3"
+    ],
+    "subwalk": [
+      "grey_king_walk0",
+      "grey_king_walk1",
+      "grey_king_walk2",
+      "grey_king_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 51823,
+    "count": 1,
+    "gold": 266,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "crittaking",
+    "submodel": "crittaking",
+    "walk": [
+      "crittaking_walk2",
+      "crittaking_walk1",
+      "crittaking_walk2",
+      "crittaking_walk3"
+    ],
+    "subwalk": [
+      "crittaking_walk2",
+      "crittaking_walk1",
+      "crittaking_walk2",
+      "crittaking_walk3"
+    ],
+    "deathsounds": [
+      "crittadeath1",
+      "crittadeath2",
+      "crittadeath3"
+    ],
+    "size": 2,
+    "health": 157805,
+    "count": 1,
+    "gold": 266,
+    "frequency": 1200,
+    "speed": 1.15,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "spawngrey",
+    "submodel": "kinggrey",
+    "walk": [
+      "grey_spawnking_walk0",
+      "grey_spawnking_walk1",
+      "grey_spawnking_walk2",
+      "grey_spawnking_walk3"
+    ],
+    "subwalk": [
+      "grey_king_walk0",
+      "grey_king_walk1",
+      "grey_king_walk2",
+      "grey_king_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 45172,
+    "count": 1,
+    "gold": 266,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 1,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "grey",
+    "submodel": "grey",
+    "walk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "subwalk": [
+      "grey_anim_walk0",
+      "grey_anim_walk1",
+      "grey_anim_walk2",
+      "grey_anim_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 162526,
+    "count": 1,
+    "gold": 266,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "regenkinggrey",
+    "submodel": "regenkinggrey",
+    "walk": [
+      "grey_regenking_walk0",
+      "grey_regenking_walk1",
+      "grey_regenking_walk2",
+      "grey_regenking_walk3"
+    ],
+    "subwalk": [
+      "grey_regenking_walk0",
+      "grey_regenking_walk1",
+      "grey_regenking_walk2",
+      "grey_regenking_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 164912,
+    "count": 1,
+    "gold": 266,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 824,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 108111,
+    "count": 1,
+    "gold": 280,
+    "frequency": 1500,
+    "speed": 0.75,
+    "flying": true,
+    "height": 2,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "regenkinggrey",
+    "submodel": "regenkinggrey",
+    "walk": [
+      "grey_regenking_walk0",
+      "grey_regenking_walk1",
+      "grey_regenking_walk2",
+      "grey_regenking_walk3"
+    ],
+    "subwalk": [
+      "grey_regenking_walk0",
+      "grey_regenking_walk1",
+      "grey_regenking_walk2",
+      "grey_regenking_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 208905,
+    "count": 1,
+    "gold": 280,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 1044,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "flyinggrey",
+    "submodel": "flyinggrey",
+    "walk": [
+      "flyinggrey"
+    ],
+    "subwalk": [
+      "flyinggrey"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 158929,
+    "count": 1,
+    "gold": 280,
+    "frequency": 1500,
+    "speed": 0.75,
+    "flying": true,
+    "height": 2,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "kinggrey",
+    "submodel": "kinggrey",
+    "walk": [
+      "grey_king_walk0",
+      "grey_king_walk1",
+      "grey_king_walk2",
+      "grey_king_walk3"
+    ],
+    "subwalk": [
+      "grey_king_walk0",
+      "grey_king_walk1",
+      "grey_king_walk2",
+      "grey_king_walk3"
+    ],
+    "deathsounds": [
+      "death1",
+      "death2",
+      "death3"
+    ],
+    "size": 2,
+    "health": 282093,
+    "count": 1,
+    "gold": 280,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  },
+  {
+    "model": "greyemperor",
+    "submodel": "greyemperor",
+    "walk": [
+      "grey_emperor_walk0",
+      "grey_emperor_walk1",
+      "grey_emperor_walk2",
+      "grey_emperor_walk3"
+    ],
+    "subwalk": [
+      "grey_emperor_walk0",
+      "grey_emperor_walk1",
+      "grey_emperor_walk2",
+      "grey_emperor_walk3"
+    ],
+    "deathsounds": [
+      "emperordeath"
+    ],
+    "size": 2,
+    "health": 299710,
+    "count": 1,
+    "gold": 280,
+    "frequency": 1200,
+    "speed": 0.75,
+    "flying": false,
+    "height": 0,
+    "offset": 0.5,
+    "spawn": 0,
+    "regen": 0,
+    "armor": 0,
+    "boss": true,
+    "walkanimfactor": 1
+  }
+]

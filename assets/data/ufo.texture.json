@@ -1,0 +1,6 @@
+{
+  "type": "pvr",
+  "file": "ufo",
+  "mag": "linear",
+  "min": "linear_mipmap_nearest"
+}

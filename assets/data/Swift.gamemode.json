@@ -1,0 +1,12 @@
+{
+  "waves": "Winterlands",
+  "logoatlas": "Swift",
+  "logoatlastrans": "Swift",
+  "shortdescription": "Twisted Turrets",
+  "description": "Mow down the foe as it winds through these fields.",
+  "tech": "Insane",
+  "map": "Swift",
+  "difficulty": 5,
+  "lifes": 10,
+  "money": 95
+}

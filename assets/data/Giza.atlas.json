@@ -1,0 +1,19 @@
+{
+  "name": "Giza",
+  "material": "Giza",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Giza",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

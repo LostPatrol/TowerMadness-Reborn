@@ -1,0 +1,19 @@
+{
+  "name": "Singularity",
+  "material": "Singularity",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Singularity",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

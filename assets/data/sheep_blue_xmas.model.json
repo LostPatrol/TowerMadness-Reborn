@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "sheep_blue_xmas": {
+      "vbo": "sheep_xmas",
+      "material": "sheep_blue",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

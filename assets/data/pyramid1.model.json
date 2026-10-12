@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "pyramid1": {
+      "vbo": "pyramid1",
+      "material": "pyramid",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

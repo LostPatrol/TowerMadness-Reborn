@@ -1,0 +1,12 @@
+{
+  "waves": "Enigma",
+  "logoatlas": "Enigma",
+  "logoatlastrans": "Enigma",
+  "shortdescription": "A twisted puzzle",
+  "description": "Can you find the solution?",
+  "tech": "Insane",
+  "map": "Enigma",
+  "difficulty": 5,
+  "lifes": 10,
+  "money": 100
+}

@@ -1,0 +1,12 @@
+{
+  "waves": "BarnYard",
+  "logoatlas": "BarnYard",
+  "logoatlastrans": "BarnYard",
+  "tech": "Insane",
+  "shortdescription": "Farmer's Revenge",
+  "description": "                                          The aliens have traveled deep onto the farm. You must repel them!",
+  "map": "BarnYard",
+  "lifes": 10,
+  "difficulty": 5,
+  "money": 150
+}

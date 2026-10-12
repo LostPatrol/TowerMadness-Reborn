@@ -1,0 +1,19 @@
+{
+  "name": "Snowflake",
+  "material": "Snowflake",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Snowflake",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

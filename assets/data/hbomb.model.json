@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "hbomb": {
+      "vbo": "hbomb",
+      "material": "hbomb",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

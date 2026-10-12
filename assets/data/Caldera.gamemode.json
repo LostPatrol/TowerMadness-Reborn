@@ -1,0 +1,12 @@
+{
+  "waves": "Caldera",
+  "logoatlas": "Caldera",
+  "logoatlastrans": "Caldera",
+  "shortdescription": "The Hot Zone",
+  "description": "A tense battle in a dangerous setting.",
+  "tech": "Insane",
+  "map": "Caldera",
+  "difficulty": 2,
+  "lifes": 10,
+  "money": 100
+}

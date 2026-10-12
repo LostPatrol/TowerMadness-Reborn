@@ -1,0 +1,12 @@
+{
+  "waves": "Creeps",
+  "logoatlas": "Creeps",
+  "logoatlastrans": "Creeps",
+  "shortdescription": "Crooked Corpse",
+  "description": "Repel the alien force as it winds past the bodies of the fallen.",
+  "tech": "Insane",
+  "map": "Creeps",
+  "difficulty": 5,
+  "lifes": 10,
+  "money": 100
+}

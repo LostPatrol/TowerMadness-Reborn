@@ -1,0 +1,8 @@
+{
+  "Avocado": {
+    "tex": "Avocado",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

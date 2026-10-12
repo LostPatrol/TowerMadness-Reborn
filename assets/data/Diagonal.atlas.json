@@ -1,0 +1,19 @@
+{
+  "name": "Diagonal",
+  "material": "Diagonal",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Diagonal",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

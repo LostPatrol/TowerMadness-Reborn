@@ -1,0 +1,19 @@
+{
+  "name": "MoonWalk",
+  "material": "MoonWalk",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "MoonWalk",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

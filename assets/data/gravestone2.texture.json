@@ -1,0 +1,6 @@
+{
+  "type": "pvr",
+  "file": "gravestone2",
+  "mag": "linear",
+  "min": "linear_mipmap_nearest"
+}

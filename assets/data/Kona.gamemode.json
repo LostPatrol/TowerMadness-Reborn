@@ -1,0 +1,12 @@
+{
+  "waves": "Snake",
+  "logoatlas": "Kona",
+  "logoatlastrans": "Kona",
+  "shortdescription": "Creatures Cove",
+  "description": "Wipe out the invaders before they get to the flock.",
+  "tech": "Insane",
+  "map": "Kona",
+  "difficulty": 8,
+  "lifes": 10,
+  "money": 110
+}

@@ -1,0 +1,146 @@
+{
+  "nuke": {
+    "file": "nuke",
+    "channel": "important"
+  },
+  "critterbossdeath": {
+    "comment_file": "critterbossdeath",
+    "channel": "game"
+  },
+  "emperordeath": {
+    "file": "emperordeath",
+    "channel": "game"
+  },
+  "death1": {
+    "file": "death1",
+    "channel": "game"
+  },
+  "death2": {
+    "file": "death2",
+    "channel": "game"
+  },
+  "death3": {
+    "comment_file": "death3",
+    "channel": "game"
+  },
+  "crittadeath1": {
+    "file": "crittadeath",
+    "channel": "game"
+  },
+  "crittadeath2": {
+    "comment_file": "crittadeath2",
+    "channel": "game"
+  },
+  "crittadeath3": {
+    "comment_file": "crittadeath3",
+    "channel": "game"
+  },
+  "explosion1": {
+    "file": "explosion1",
+    "channel": "game"
+  },
+  "explosion2": {
+    "file": "explosion2",
+    "channel": "game"
+  },
+  "explosion3": {
+    "file": "explosion3",
+    "channel": "game"
+  },
+  "explosion4": {
+    "file": "explosion4",
+    "channel": "game"
+  },
+  "fire_mortar": {
+    "file": "mortarfire",
+    "channel": "game"
+  },
+  "fire_laser1": {
+    "file": "laser1",
+    "channel": "game"
+  },
+  "fire_laser2": {
+    "file": "laser2",
+    "channel": "game"
+  },
+  "fire_laser3": {
+    "file": "laser3",
+    "channel": "game"
+  },
+  "fire_plasma1": {
+    "file": "plasmafire1",
+    "channel": "game"
+  },
+  "missile_launch1": {
+    "file": "missilelaunch1",
+    "channel": "game"
+  },
+  "missile_launch2": {
+    "file": "missilelaunch2",
+    "channel": "game"
+  },
+  "missile_launch3": {
+    "file": "missilelaunch3",
+    "channel": "game"
+  },
+  "missile_launch4": {
+    "file": "missilelaunch4",
+    "channel": "game"
+  },
+  "missile_explode1": {
+    "file": "missileexplode1",
+    "channel": "game"
+  },
+  "missile_explode2": {
+    "file": "missileexplode2",
+    "channel": "game"
+  },
+  "missile_explode3": {
+    "file": "missileexplode3",
+    "channel": "game"
+  },
+  "missile_explode4": {
+    "file": "missileexplode4",
+    "channel": "game"
+  },
+  "railgun": {
+    "file": "railgunfire",
+    "channel": "game"
+  },
+  "lightning1": {
+    "file": "lightning",
+    "channel": "game"
+  },
+  "lightning2": {
+    "file": "lightning2",
+    "channel": "game"
+  },
+  "lightning3": {
+    "file": "lightning3",
+    "channel": "game"
+  },
+  "flamethrower": {
+    "file": "flamethrower",
+    "channel": "game_looping"
+  },
+  "flamethrower_tail": {
+    "file": "flamethrower_tail",
+    "channel": "game"
+  },
+  "sheep1": {
+    "comment_file": "cutesheep",
+    "channel": "game"
+  },
+  "sheep2": {
+    "comment_file": "cutesheep2",
+    "channel": "game"
+  },
+  "sheep3": {
+    "comment_file": "cutesheep3",
+    "channel": "game"
+  },
+  "sheep4": {
+    "comment_file": "cutesheep4",
+    "channel": "game"
+  }
+}

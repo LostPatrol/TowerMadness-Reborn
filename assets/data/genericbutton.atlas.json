@@ -1,0 +1,52 @@
+{
+  "name": "genericbutton",
+  "material": "uialphaelements",
+  "width": 256,
+  "height": 256,
+  "subtextures": [
+    {
+      "name": "buttonleft",
+      "size": [
+        8,
+        32
+      ],
+      "position": [
+        0,
+        192
+      ]
+    },
+    {
+      "name": "buttonmiddle",
+      "size": [
+        8,
+        32
+      ],
+      "position": [
+        8,
+        192
+      ]
+    },
+    {
+      "name": "buttonright",
+      "size": [
+        8,
+        32
+      ],
+      "position": [
+        16,
+        192
+      ]
+    },
+    {
+      "name": "profilebutton",
+      "size": [
+        224,
+        32
+      ],
+      "position": [
+        0,
+        120
+      ]
+    }
+  ]
+}

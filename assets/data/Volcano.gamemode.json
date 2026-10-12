@@ -1,0 +1,12 @@
+{
+  "waves": "Volcano",
+  "logoatlas": "Volcano",
+  "logoatlastrans": "Volcano",
+  "shortdescription": "Mutton's Inferno",
+  "description": "                                        Challenge awaits at the base of the volcano.",
+  "tech": "Insane",
+  "map": "Volcano",
+  "difficulty": 9,
+  "lifes": 10,
+  "money": 110
+}

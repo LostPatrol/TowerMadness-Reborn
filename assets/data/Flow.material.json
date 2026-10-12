@@ -1,0 +1,8 @@
+{
+  "Flow": {
+    "tex": "Flow",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

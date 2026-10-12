@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "ui_logo": {
+      "vbo": "ui_logo",
+      "material": "uialphaelements",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

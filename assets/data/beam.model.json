@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "beam": {
+      "vbo": "beam",
+      "material": "beam",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

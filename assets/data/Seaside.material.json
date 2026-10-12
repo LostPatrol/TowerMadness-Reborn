@@ -1,0 +1,8 @@
+{
+  "Seaside": {
+    "tex": "Seaside",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "Maxwell",
+  "material": "Maxwell",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Maxwell",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

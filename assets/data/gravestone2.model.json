@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "gravestone2": {
+      "vbo": "gravestone2",
+      "material": "gravestone2",
+      "transformation": [
+        0.0139,
+        0,
+        0,
+        0,
+        0,
+        0.0139,
+        0,
+        0,
+        0,
+        0,
+        0.0139,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

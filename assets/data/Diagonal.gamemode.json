@@ -1,0 +1,12 @@
+{
+  "waves": "Diagonal",
+  "logoatlas": "Diagonal",
+  "logoatlastrans": "Diagonal",
+  "shortdescription": "Across the Plane",
+  "description": "Protect the innocent sheep at the heart of this field.",
+  "tech": "Insane",
+  "map": "Diagonal",
+  "difficulty": 7,
+  "lifes": 10,
+  "money": 125
+}

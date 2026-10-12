@@ -1,0 +1,19 @@
+{
+  "name": "Invasion",
+  "material": "Invasion",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Invasion",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

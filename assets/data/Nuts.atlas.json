@@ -1,0 +1,19 @@
+{
+  "name": "Nuts",
+  "material": "Nuts",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Nuts",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

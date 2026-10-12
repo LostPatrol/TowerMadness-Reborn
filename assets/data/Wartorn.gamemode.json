@@ -1,0 +1,12 @@
+{
+  "waves": "SuddenDeath",
+  "logoatlas": "Wartorn",
+  "logoatlastrans": "Wartorn",
+  "shortdescription": "Landing Zone",
+  "description": "                                            They'll be coming at you from all sides.",
+  "tech": "Insane",
+  "map": "Wartorn",
+  "difficulty": 10,
+  "lifes": 5,
+  "money": 110
+}

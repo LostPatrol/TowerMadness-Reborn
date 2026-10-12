@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "mortar_3": {
+      "vbo": "mortar_a",
+      "material": "mortar_3",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

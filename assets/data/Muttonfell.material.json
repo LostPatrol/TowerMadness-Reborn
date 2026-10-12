@@ -1,0 +1,8 @@
+{
+  "Muttonfell": {
+    "tex": "Muttonfell",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

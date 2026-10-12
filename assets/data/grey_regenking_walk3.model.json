@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "grey_king_walk3": {
+      "vbo": "grey_king_walk3",
+      "material": "regengrey",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

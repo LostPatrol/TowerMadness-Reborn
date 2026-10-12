@@ -1,0 +1,19 @@
+{
+  "name": "Dune",
+  "material": "Dune",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Dune",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

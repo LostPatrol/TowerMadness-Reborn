@@ -1,0 +1,12 @@
+{
+  "waves": "Delphi",
+  "logoatlas": "Delphi",
+  "logoatlastrans": "Delphi",
+  "shortdescription": "A visit to the Oracle",
+  "description": "Can you defend the temple?",
+  "tech": "Insane",
+  "map": "Delphi",
+  "difficulty": 7,
+  "lifes": 10,
+  "money": 50
+}

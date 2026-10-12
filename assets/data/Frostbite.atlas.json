@@ -1,0 +1,19 @@
+{
+  "name": "Frostbite",
+  "material": "Frostbite",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Frostbite",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

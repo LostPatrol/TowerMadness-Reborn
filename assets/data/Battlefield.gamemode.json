@@ -1,0 +1,12 @@
+{
+  "waves": "Battlefield",
+  "logoatlas": "Battlefield",
+  "logoatlastrans": "Battlefield",
+  "shortdescription": "The Pitted Land",
+  "description": "Build towers where you can to keep the enemy from reaching the goal.",
+  "tech": "Insane",
+  "map": "Battlefield",
+  "difficulty": 6,
+  "lifes": 10,
+  "money": 110
+}

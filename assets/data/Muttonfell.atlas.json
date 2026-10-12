@@ -1,0 +1,19 @@
+{
+  "name": "Muttonfell",
+  "material": "Muttonfell",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Muttonfell",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

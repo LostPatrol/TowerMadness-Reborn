@@ -1,0 +1,6 @@
+{
+  "type": "pvr",
+  "file": "deadtree",
+  "mag": "linear",
+  "min": "linear_mipmap_nearest"
+}

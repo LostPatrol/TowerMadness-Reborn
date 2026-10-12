@@ -1,0 +1,8 @@
+{
+  "Newton": {
+    "tex": "Newton",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

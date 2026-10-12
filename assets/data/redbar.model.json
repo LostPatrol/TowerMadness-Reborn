@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "redbar": {
+      "vbo": "rect",
+      "material": "redbar",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

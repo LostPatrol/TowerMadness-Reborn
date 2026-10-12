@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "healthbar": {
+      "vbo": "rect",
+      "material": "healthbar",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

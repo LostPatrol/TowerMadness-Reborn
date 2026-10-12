@@ -1,0 +1,6 @@
+{
+  "type": "pvr",
+  "file": "basetile_atlas",
+  "mag": "linear",
+  "min": "linear_mipmap_linear"
+}

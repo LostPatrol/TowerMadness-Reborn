@@ -1,0 +1,8 @@
+{
+  "Lime": {
+    "tex": "Lime",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

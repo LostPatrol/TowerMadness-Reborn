@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "flyinggrey": {
+      "vbo": "flyinggrey",
+      "material": "flyinggrey",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

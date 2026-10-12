@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "lock": {
+      "vbo": "rect",
+      "material": "lock",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

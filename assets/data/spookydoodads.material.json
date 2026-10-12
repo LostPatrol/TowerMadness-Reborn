@@ -1,0 +1,47 @@
+{
+  "ghostalien": {
+    "tex": "ghostalien",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "gravestone": {
+    "tex": "gravestone",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "gravestone2": {
+    "tex": "gravestone2",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "gravestone3": {
+    "tex": "gravestone3",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "deadtree": {
+    "tex": "deadtree",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "Chance": {
+    "tex": "Chance",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

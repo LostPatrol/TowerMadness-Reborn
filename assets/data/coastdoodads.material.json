@@ -1,0 +1,47 @@
+{
+  "coast_rock": {
+    "tex": "coast_rock",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "coast_hut": {
+    "tex": "coast_hut",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "coast_palmtree": {
+    "tex": "coast_palmtree",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "coast_moai": {
+    "tex": "coast_moai",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "coast_cropcircle": {
+    "tex": "coast_cropcircle",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  }
+}

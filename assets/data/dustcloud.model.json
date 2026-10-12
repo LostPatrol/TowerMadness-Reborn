@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "dustcloud": {
+      "vbo": "dustcloud",
+      "material": "dustcloud",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

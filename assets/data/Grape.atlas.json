@@ -1,0 +1,19 @@
+{
+  "name": "Grape",
+  "material": "Grape",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Grape",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

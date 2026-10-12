@@ -1,0 +1,8 @@
+{
+  "Magma": {
+    "tex": "Magma",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

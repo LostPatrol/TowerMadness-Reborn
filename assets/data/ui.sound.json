@@ -1,0 +1,14 @@
+{
+  "defeat": {
+    "comment_file": "defeat",
+    "channel": "ui"
+  },
+  "victory": {
+    "comment_file": "victory",
+    "channel": "ui"
+  },
+  "achievement": {
+    "file": "achievement",
+    "channel": "ui"
+  }
+}

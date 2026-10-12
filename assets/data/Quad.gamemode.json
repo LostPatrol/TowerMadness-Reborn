@@ -1,0 +1,12 @@
+{
+  "waves": "Quad",
+  "logoatlas": "Quad",
+  "logoatlastrans": "Quad",
+  "shortdescription": "Four Corners",
+  "description": "Halt the alien advance.",
+  "tech": "Insane",
+  "map": "Quad",
+  "difficulty": 2,
+  "lifes": 10,
+  "money": 120
+}

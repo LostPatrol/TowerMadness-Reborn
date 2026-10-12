@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "landmineC": {
+      "vbo": "landmineC",
+      "material": "landmineC",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        -0.25,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

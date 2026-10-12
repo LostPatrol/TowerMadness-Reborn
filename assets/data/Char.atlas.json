@@ -1,0 +1,19 @@
+{
+  "name": "Char",
+  "material": "Char",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Char",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

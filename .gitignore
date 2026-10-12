@@ -1,0 +1,9 @@
+# Keep generated builds, analysis tools, and original packages outside source history.
+/build/
+/release/
+/third_party/
+/agent/codex/
+/agent/grok/
+/*.apk
+*.user
+*.log

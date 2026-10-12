@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "ui_profileselector": {
+      "vbo": "ui_profileselector",
+      "material": "uialphaelements",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

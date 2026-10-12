@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "largelock": {
+      "vbo": "rect",
+      "material": "largelock",
+      "transformation": [
+        128,
+        0,
+        0,
+        0,
+        0,
+        128,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

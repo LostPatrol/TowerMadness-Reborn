@@ -1,0 +1,19 @@
+{
+  "name": "wavepreviewtabs",
+  "material": "wavepreviewtabs",
+  "width": 64,
+  "height": 16,
+  "subtextures": [
+    {
+      "name": "queued",
+      "size": [
+        32,
+        16
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

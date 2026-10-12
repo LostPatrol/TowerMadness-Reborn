@@ -1,0 +1,6 @@
+{
+  "type": "pvr",
+  "file": "hbomb",
+  "mag": "linear",
+  "min": "linear_mipmap_linear"
+}

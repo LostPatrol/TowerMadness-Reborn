@@ -1,0 +1,12 @@
+{
+  "waves": "Frostbite",
+  "logoatlas": "Frostbite",
+  "logoatlastrans": "Frostbite",
+  "shortdescription": "Our Darkest Days",
+  "description": "Will your strategies survive the aliens' icy wrath?",
+  "tech": "Hard",
+  "map": "Frostbite",
+  "difficulty": 6,
+  "lifes": 10,
+  "money": 100
+}

@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "railspiral": {
+      "vbo": "railspiral",
+      "material": "railspiral",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

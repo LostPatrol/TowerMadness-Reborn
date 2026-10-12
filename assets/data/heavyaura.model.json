@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "heavyaura": {
+      "vbo": "rect",
+      "material": "heavyaura",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

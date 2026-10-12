@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "grey_anim_walk1_xmas": {
+      "vbo": "grey_anim_walk1_xmas",
+      "material": "grey",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

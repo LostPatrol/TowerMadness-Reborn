@@ -1,0 +1,19 @@
+{
+  "name": "MysteryMarsh",
+  "material": "MysteryMarsh",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "MysteryMarsh",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

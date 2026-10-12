@@ -1,0 +1,12 @@
+{
+  "waves": "Sparta",
+  "logoatlas": "Arena",
+  "logoatlastrans": "Arena",
+  "shortdescription": "The Coliseum",
+  "description": "At the center of these battlegrounds lie the defenseless flock.",
+  "tech": "Insane",
+  "map": "Arena",
+  "difficulty": 7,
+  "lifes": 10,
+  "money": 100
+}

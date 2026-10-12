@@ -1,0 +1,17 @@
+{
+  "Diagonal": {
+    "tex": "Diagonal",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  },
+  "columns": {
+    "tex": "columns",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "railgun_6": {
+      "vbo": "railgun_d",
+      "material": "railgun_6",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

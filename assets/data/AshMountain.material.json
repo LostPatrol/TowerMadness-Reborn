@@ -1,0 +1,43 @@
+{
+  "tr_lava": {
+    "tex": "tr_lava",
+    "blend": "alpha",
+    "toffset": [
+      0,
+      0
+    ],
+    "tscale": [
+      1,
+      1
+    ],
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "bt_lava": {
+    "tex": "bt_lava",
+    "toffset": [
+      0,
+      0
+    ],
+    "tscale": [
+      1,
+      1
+    ],
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "AshMountain": {
+    "tex": "AshMountain",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

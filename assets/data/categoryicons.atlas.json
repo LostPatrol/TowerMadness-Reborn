@@ -1,0 +1,52 @@
+{
+  "name": "categoryicons",
+  "material": "categoryicons",
+  "width": 128,
+  "height": 128,
+  "subtextures": [
+    {
+      "name": "ballistic",
+      "size": [
+        64,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "lightning",
+      "size": [
+        64,
+        64
+      ],
+      "position": [
+        64,
+        0
+      ]
+    },
+    {
+      "name": "energy",
+      "size": [
+        64,
+        64
+      ],
+      "position": [
+        0,
+        64
+      ]
+    },
+    {
+      "name": "special",
+      "size": [
+        64,
+        64
+      ],
+      "position": [
+        64,
+        64
+      ]
+    }
+  ]
+}

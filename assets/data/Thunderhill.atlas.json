@@ -1,0 +1,19 @@
+{
+  "name": "Thunderhill",
+  "material": "Thunderhill",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Thunderhill",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

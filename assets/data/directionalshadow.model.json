@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "directionalshadow": {
+      "vbo": "directionalshadow",
+      "material": "directionalshadow",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0.001,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

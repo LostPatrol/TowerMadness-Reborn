@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "unlockbox": {
+      "vbo": "unlockbox",
+      "material": "unlockbox",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

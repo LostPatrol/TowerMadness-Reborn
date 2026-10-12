@@ -1,0 +1,8 @@
+{
+  "Thunderhill": {
+    "tex": "Thunderhill",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

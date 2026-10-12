@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "spawnkinggrey": {
+      "vbo": "spawnkinggrey",
+      "material": "grey",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

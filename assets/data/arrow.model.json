@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "arrow": {
+      "vbo": "rect",
+      "material": "arrow",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

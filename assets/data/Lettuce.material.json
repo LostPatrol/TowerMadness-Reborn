@@ -1,0 +1,8 @@
+{
+  "Lettuce": {
+    "tex": "Lettuce",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

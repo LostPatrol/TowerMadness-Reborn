@@ -1,0 +1,6 @@
+{
+  "type": "pvr",
+  "file": "blueflash",
+  "mag": "linear",
+  "min": "linear_mipmap_linear"
+}

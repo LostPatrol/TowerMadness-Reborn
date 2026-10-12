@@ -1,0 +1,12 @@
+{
+  "waves": "Pantheon",
+  "logoatlas": "Pantheon",
+  "logoatlastrans": "Pantheon",
+  "shortdescription": "The Deadly Distraction",
+  "description": "Be clever to survive the Pantheon by wisely placing a lure.",
+  "tech": "Insane",
+  "map": "Pantheon",
+  "difficulty": 5,
+  "lifes": 10,
+  "money": 75
+}

@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "blast": {
+      "vbo": "rect",
+      "material": "blast",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

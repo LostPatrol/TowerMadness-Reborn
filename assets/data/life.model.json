@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "life": {
+      "vbo": "rect",
+      "material": "life",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

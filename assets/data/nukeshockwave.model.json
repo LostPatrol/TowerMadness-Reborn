@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "nukeshockwave": {
+      "vbo": "rangecircle",
+      "material": "nukeshockwave",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

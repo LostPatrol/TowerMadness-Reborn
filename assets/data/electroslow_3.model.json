@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "electroslow_3": {
+      "vbo": "electroslow_b",
+      "material": "electroslow_3",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

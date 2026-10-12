@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "kinggrey": {
+      "vbo": "kinggrey",
+      "material": "grey",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

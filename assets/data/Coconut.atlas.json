@@ -1,0 +1,19 @@
+{
+  "name": "Coconut",
+  "material": "Coconut",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Coconut",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

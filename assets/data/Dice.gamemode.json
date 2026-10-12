@@ -1,0 +1,12 @@
+{
+  "waves": "SuddenDeath",
+  "logoatlas": "Dice",
+  "logoatlastrans": "Dice",
+  "shortdescription": "There are six sides",
+  "description": "                                            Six Battles. One Map.",
+  "tech": "Insane",
+  "map": "Dice",
+  "difficulty": 10,
+  "lifes": 5,
+  "money": 110
+}

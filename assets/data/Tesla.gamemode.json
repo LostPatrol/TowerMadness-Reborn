@@ -1,0 +1,12 @@
+{
+  "waves": "Tesla",
+  "logoatlas": "Tesla",
+  "logoatlastrans": "Tesla",
+  "shortdescription": "Genius",
+  "description": "Defend the frosted coily path.",
+  "tech": "Insane",
+  "map": "Tesla",
+  "difficulty": 2,
+  "lifes": 10,
+  "money": 100
+}

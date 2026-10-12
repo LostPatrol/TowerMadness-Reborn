@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "smokepuff": {
+      "vbo": "3plane",
+      "material": "smokepuff",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

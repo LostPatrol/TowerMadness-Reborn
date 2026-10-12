@@ -1,0 +1,19 @@
+{
+  "name": "Micro",
+  "material": "Micro",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Micro",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

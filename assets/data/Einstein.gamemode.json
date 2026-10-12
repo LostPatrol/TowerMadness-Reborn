@@ -1,0 +1,12 @@
+{
+  "waves": "Einstein",
+  "logoatlas": "Einstein",
+  "logoatlastrans": "Einstein",
+  "shortdescription": "Relativity",
+  "description": "The aliens have come far, but you must stop them from achieving their goal.",
+  "tech": "Insane",
+  "map": "Einstein",
+  "difficulty": 9,
+  "lifes": 10,
+  "money": 150
+}

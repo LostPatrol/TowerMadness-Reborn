@@ -1,0 +1,12 @@
+{
+  "waves": "Barricade",
+  "logoatlas": "Barricade",
+  "logoatlastrans": "Barricade",
+  "tech": "Insane",
+  "shortdescription": "Block the Pen",
+  "description": "                                          Keep the aliens at bay in this windy open field maze.",
+  "map": "Barricade",
+  "lifes": 10,
+  "difficulty": 3,
+  "money": 150
+}

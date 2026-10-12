@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "flak_4": {
+      "vbo": "flak_base",
+      "material": "flak_4",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

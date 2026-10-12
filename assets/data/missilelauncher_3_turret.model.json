@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "missilelauncher_3_turret": {
+      "vbo": "missilelauncher_b",
+      "material": "missilelauncher_3",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

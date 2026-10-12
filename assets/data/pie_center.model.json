@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "pie_center": {
+      "vbo": "pie_center",
+      "material": "piemenu",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

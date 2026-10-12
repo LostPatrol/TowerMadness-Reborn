@@ -1,0 +1,6 @@
+{
+  "type": "pvr",
+  "file": "tomatogun_i",
+  "mag": "linear",
+  "min": "linear_mipmap_nearest"
+}

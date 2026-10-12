@@ -1,0 +1,12 @@
+{
+  "waves": "Corridor",
+  "logoatlas": "Corridor",
+  "logoatlastrans": "Corridor",
+  "shortdescription": "Light the Path",
+  "description": "                                      Send your enemies down the most challenging route.",
+  "tech": "Insane",
+  "map": "Corridor",
+  "difficulty": 8,
+  "lifes": 10,
+  "money": 80
+}

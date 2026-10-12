@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "obelisk": {
+      "vbo": "obelisk",
+      "material": "obelisk",
+      "transformation": [
+        0.75,
+        0,
+        0,
+        0,
+        0,
+        0.75,
+        0,
+        0,
+        0,
+        0,
+        0.75,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

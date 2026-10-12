@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "grey_spawn_walk1": {
+      "vbo": "grey_spawn_walk1",
+      "material": "grey",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "piemenubackclose",
+  "material": "piemenubackclose",
+  "width": 32,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "back",
+      "size": [
+        32,
+        32
+      ],
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "close",
+      "size": [
+        32,
+        32
+      ],
+      "position": [
+        0,
+        32
+      ]
+    }
+  ]
+}

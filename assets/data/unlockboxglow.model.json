@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "unlockboxglow": {
+      "vbo": "unlockboxglow",
+      "material": "unlockboxglow",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

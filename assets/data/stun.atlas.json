@@ -1,0 +1,52 @@
+{
+  "name": "stun",
+  "material": "stun",
+  "width": 64,
+  "height": 256,
+  "subtextures": [
+    {
+      "name": "stun_0",
+      "size": [
+        64,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "stun_1",
+      "size": [
+        64,
+        64
+      ],
+      "position": [
+        0,
+        64
+      ]
+    },
+    {
+      "name": "heat",
+      "size": [
+        64,
+        64
+      ],
+      "position": [
+        0,
+        128
+      ]
+    },
+    {
+      "name": "speedup",
+      "size": [
+        64,
+        64
+      ],
+      "position": [
+        0,
+        192
+      ]
+    }
+  ]
+}

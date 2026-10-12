@@ -1,0 +1,6 @@
+{
+  "type": "pvr",
+  "file": "moondoodads",
+  "mag": "linear",
+  "min": "linear_mipmap_nearest"
+}

@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "sheep_anim_graze1_xmas": {
+      "vbo": "sheep_anim_graze1_xmas",
+      "material": "sheep",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

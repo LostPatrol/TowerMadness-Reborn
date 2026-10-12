@@ -1,0 +1,8 @@
+{
+  "Caldera": {
+    "tex": "Caldera",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

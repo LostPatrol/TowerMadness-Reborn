@@ -1,0 +1,12 @@
+{
+  "waves": "Fimbulvinter",
+  "logoatlas": "Fimbulvinter",
+  "logoatlastrans": "Fimbulvinter",
+  "shortdescription": "The Neverending Frost",
+  "description": "The battle will be hard fought on these chilly lands.",
+  "tech": "Hard",
+  "map": "Fimbulvinter",
+  "difficulty": 2,
+  "lifes": 10,
+  "money": 170
+}

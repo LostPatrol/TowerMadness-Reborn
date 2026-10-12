@@ -1,0 +1,12 @@
+{
+  "waves": "Cemetery",
+  "logoatlas": "Cemetery",
+  "logoatlastrans": "Cemetery",
+  "shortdescription": "Burial Grounds",
+  "description": "Send the aliens to their final resting place here.",
+  "tech": "Insane",
+  "map": "Cemetery",
+  "difficulty": 5,
+  "lifes": 10,
+  "money": 100
+}

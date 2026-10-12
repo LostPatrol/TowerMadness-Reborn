@@ -1,0 +1,19 @@
+{
+  "name": "Barricade",
+  "material": "Barricade",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Barricade",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

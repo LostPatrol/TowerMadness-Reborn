@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "selection": {
+      "vbo": "rect",
+      "material": "selection",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

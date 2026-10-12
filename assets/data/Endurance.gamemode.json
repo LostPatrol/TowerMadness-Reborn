@@ -1,0 +1,12 @@
+{
+  "waves": "Endurance",
+  "logoatlas": "Endurance",
+  "logoatlastrans": "Endurance",
+  "shortdescription": "The coming of the Armada",
+  "description": "Will your defenses endure the hordes of aliens?",
+  "tech": "Insane",
+  "map": "Endurance",
+  "difficulty": 10,
+  "lifes": 10,
+  "money": 100
+}

@@ -1,0 +1,8 @@
+{
+  "Corridor": {
+    "tex": "Corridor",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

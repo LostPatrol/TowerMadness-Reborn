@@ -1,0 +1,6 @@
+{
+  "type": "pvr",
+  "file": "railspiral",
+  "mag": "linear",
+  "min": "linear_mipmap_nearest"
+}

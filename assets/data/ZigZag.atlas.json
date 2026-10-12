@@ -1,0 +1,19 @@
+{
+  "name": "ZigZag",
+  "material": "ZigZag",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "ZigZag",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

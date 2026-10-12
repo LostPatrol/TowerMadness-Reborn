@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "electroboost_1": {
+      "vbo": "electroboost_a",
+      "material": "electroboost_1",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

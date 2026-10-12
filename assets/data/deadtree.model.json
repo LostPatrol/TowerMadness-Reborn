@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "deadtree": {
+      "vbo": "deadtree",
+      "material": "deadtree",
+      "transformation": [
+        0.0139,
+        0,
+        0,
+        0,
+        0,
+        0.0139,
+        0,
+        0,
+        0,
+        0,
+        0.0139,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

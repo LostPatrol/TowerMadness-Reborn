@@ -1,0 +1,8 @@
+{
+  "Enigma": {
+    "tex": "Enigma",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

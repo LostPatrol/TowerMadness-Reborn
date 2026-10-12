@@ -1,0 +1,8 @@
+{
+  "Battlefield": {
+    "tex": "Battlefield",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

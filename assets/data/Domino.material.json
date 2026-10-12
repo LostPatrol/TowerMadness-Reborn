@@ -1,0 +1,8 @@
+{
+  "Domino": {
+    "tex": "Domino",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

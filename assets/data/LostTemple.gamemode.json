@@ -1,0 +1,12 @@
+{
+  "waves": "Sparta",
+  "logoatlas": "LostTemple",
+  "logoatlastrans": "LostTemple",
+  "shortdescription": "Pillars of Defense",
+  "description": "Protect the temple from the four-pronged attack.",
+  "tech": "Insane",
+  "map": "LostTemple",
+  "difficulty": 7,
+  "lifes": 10,
+  "money": 120
+}

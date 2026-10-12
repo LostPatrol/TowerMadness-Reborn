@@ -1,0 +1,19 @@
+{
+  "name": "Dice",
+  "material": "Dice",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Dice",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

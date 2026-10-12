@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "alert": {
+      "vbo": "rect",
+      "material": "alert",
+      "transformation": [
+        32,
+        0,
+        0,
+        0,
+        0,
+        32,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

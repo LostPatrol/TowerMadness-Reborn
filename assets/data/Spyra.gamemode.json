@@ -1,0 +1,12 @@
+{
+  "waves": "Spyra",
+  "logoatlas": "Spyra",
+  "logoatlastrans": "Spyra",
+  "shortdescription": "Defense of the Sanctuary",
+  "description": "Nestled deep in Spyra's center, the sheep are counting on you.",
+  "tech": "Insane",
+  "map": "Spyra",
+  "difficulty": 7,
+  "lifes": 10,
+  "money": 100
+}

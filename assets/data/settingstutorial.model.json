@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "settingstutorial": {
+      "vbo": "rect",
+      "material": "settingstutorial",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

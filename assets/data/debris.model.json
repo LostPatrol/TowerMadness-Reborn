@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "debris": {
+      "vbo": "3plane",
+      "material": "debris",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

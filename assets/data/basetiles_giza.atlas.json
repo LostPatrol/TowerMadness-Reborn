@@ -1,0 +1,41 @@
+{
+  "name": "basetiles_giza",
+  "material": "basetiles_giza",
+  "width": 256,
+  "height": 256,
+  "subtextures": [
+    {
+      "name": "grass",
+      "size": [
+        60,
+        60
+      ],
+      "position": [
+        10,
+        10
+      ]
+    },
+    {
+      "name": "forest",
+      "size": [
+        60,
+        60
+      ],
+      "position": [
+        80,
+        80
+      ]
+    },
+    {
+      "name": "mud",
+      "size": [
+        60,
+        60
+      ],
+      "position": [
+        150,
+        150
+      ]
+    }
+  ]
+}

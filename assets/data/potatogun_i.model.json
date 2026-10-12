@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "potatogun_i": {
+      "vbo": "potatogun_a",
+      "material": "potatogun_i",
+      "transformation": [
+        2,
+        0,
+        0,
+        0,
+        0,
+        2,
+        0,
+        0,
+        0,
+        0,
+        2,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

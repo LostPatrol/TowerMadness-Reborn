@@ -1,0 +1,12 @@
+{
+  "waves": "Arcade",
+  "logoatlas": "Arcade",
+  "logoatlastrans": "Arcade",
+  "shortdescription": "The Alien Mark",
+  "description": "                                             A familiar foe rises again.",
+  "tech": "Insane",
+  "map": "Arcade",
+  "difficulty": 5,
+  "lifes": 10,
+  "money": 105
+}

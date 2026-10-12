@@ -1,0 +1,8 @@
+{
+  "Undulation": {
+    "tex": "Undulation",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

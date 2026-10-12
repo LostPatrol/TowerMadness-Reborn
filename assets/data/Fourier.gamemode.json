@@ -1,0 +1,12 @@
+{
+  "waves": "Fourier",
+  "logoatlas": "Fourier",
+  "logoatlastrans": "Fourier",
+  "shortdescription": "The Frequency Domain",
+  "description": "The space for your defenses will be limited.",
+  "tech": "Insane",
+  "map": "Fourier",
+  "difficulty": 5,
+  "lifes": 10,
+  "money": 135
+}

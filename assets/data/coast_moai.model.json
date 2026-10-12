@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "coast_moai": {
+      "vbo": "coast_moai",
+      "material": "coast_moai",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

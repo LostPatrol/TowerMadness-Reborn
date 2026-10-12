@@ -1,0 +1,12 @@
+{
+  "waves": "Snowflake",
+  "logoatlas": "Normandy",
+  "logoatlastrans": "Normandy",
+  "shortdescription": "Sheep Day",
+  "description": "Defend against the impending assault",
+  "tech": "Insane",
+  "map": "Normandy",
+  "difficulty": 2,
+  "lifes": 10,
+  "money": 115
+}

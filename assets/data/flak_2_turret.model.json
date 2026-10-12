@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "flak_2_turret": {
+      "vbo": "flak_a",
+      "material": "flak_2",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

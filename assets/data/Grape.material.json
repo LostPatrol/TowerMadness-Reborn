@@ -1,0 +1,8 @@
+{
+  "Grape": {
+    "tex": "Grape",
+    "cull": "none",
+    "depthmask": 0,
+    "blend": "alpha"
+  }
+}

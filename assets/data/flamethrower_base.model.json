@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "flamethrower_base": {
+      "vbo": "flamethrower_base",
+      "material": "flamethrower",
+      "transformation": [
+        0.5,
+        0,
+        0,
+        0,
+        0,
+        0.5,
+        0,
+        0,
+        0,
+        0,
+        0.5,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

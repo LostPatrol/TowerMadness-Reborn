@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "bluebar": {
+      "vbo": "rect",
+      "material": "bluebar",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "waves": "Icegarden",
+  "logoatlas": "Icegarden",
+  "logoatlastrans": "Icegarden",
+  "shortdescription": "The Frozen Fortress",
+  "description": "Victory hinges on your mastery of the garden paths.",
+  "tech": "Hard",
+  "map": "Icegarden",
+  "difficulty": 2,
+  "lifes": 10,
+  "money": 150
+}

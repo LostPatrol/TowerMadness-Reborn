@@ -1,0 +1,19 @@
+{
+  "name": "Enigma",
+  "material": "Enigma",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "Enigma",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}

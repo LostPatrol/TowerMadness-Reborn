@@ -1,0 +1,26 @@
+{
+  "geosets": {
+    "ui_sidetab": {
+      "vbo": "ui_sidetab",
+      "material": "uielements",
+      "transformation": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  }
+}

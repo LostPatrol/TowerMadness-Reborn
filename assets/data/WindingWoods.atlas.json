@@ -1,0 +1,19 @@
+{
+  "name": "WindingWoods",
+  "material": "WindingWoods",
+  "width": 256,
+  "height": 64,
+  "subtextures": [
+    {
+      "name": "WindingWoods",
+      "size": [
+        256,
+        64
+      ],
+      "position": [
+        0,
+        0
+      ]
+    }
+  ]
+}
