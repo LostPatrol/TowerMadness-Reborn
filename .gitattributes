@@ -1,0 +1,5 @@
+# Keep generated JSON and source text reproducible across Windows checkouts.
+* text=auto eol=lf
+*.png binary
+*.mesh binary
+*.ogg binary
