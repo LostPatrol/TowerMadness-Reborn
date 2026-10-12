@@ -59,8 +59,10 @@ PlainPlane 是唯一使用 `Easy.tech` 的 gamemode，初始金币 50、羊 10�
 
 202/202 VBO 的载荷长度、属性布局、有限顶点、索引范围均通过；201 个 XYZUV/u16 三角形，1 个 XYUV/u8 strip。321 model、122 material、148 atlas、118 map、116 gamemode、89 waves、4 tech、2 sound 均可转换成标准 JSON。工具只修复尾逗号与原 `font.atlas` 缺少的数组闭合符，并逐文件记录修复。
 
-420/422 PNG 的签名、chunk 边界、CRC、IDAT 解压通过。`vg_button_mute_plain.png`、`vg_button_mute_selected.png` 是广告 SDK 使用的 Apple CgBI 非标准 PNG，明确列为异常，标准资源转换不支持其 raw-deflate/BGRA 像素。36/36 `.caf` 实为 Ogg Vorbis，页边界与识别包通过；33 个 44100Hz、3 个 22050Hz。未进行音频播放或解码，未声称已完成全部资源的视觉检查。
+420/422 PNG 的签名、chunk 边界、CRC、IDAT 解压通过。`vg_button_mute_plain.png`、`vg_button_mute_selected.png` 是广告 SDK 使用的 Apple CgBI 非标准 PNG，明确列为异常，标准资源转换不支持其 raw-deflate/BGRA 像素。36/36 `.caf` 实为 Ogg Vorbis，33 个44100Hz、3 个22050Hz；原生音频模块已离线解码并验证PCM，未打开播放设备。全部资源加载的运行入口为`--resource-test`，实际声音／手机画面对照仍未验证。
 
 116/116 gamemode 的显式 JSON 引用，加已知通用地表、羊、UFO、beam、skybox、塔座资源，均依赖闭合。清单按被引用的材质/音效键遍历，避免把容器内未使用条目混入某关卡。静态闭合不等于全部原生动态加载路径已恢复。
 
-全局仍有 6 个未被这些关卡引用的缺失边：`moon_skybox.texture`、cube 的 `default` 材质、`blaster.texture`、`tomato.texture`、`walnutgun.texture`、`mapmenumodes.texture`。清单保留它们。单独的 `Grape.pvr`、界面 XIB 和 HTML 等仅列入原文件清单，不转换、不作为最小关卡运行入口。
+静态清单保留6个包内缺失边；其中cube的`default`已确认是`PGL_init`内置`checkerboard`材质、UV缩放8，运行加载器按该原始定义实现。另外5个未引用旧边为`moon_skybox.texture`、`blaster.texture`、`tomato.texture`、`walnutgun.texture`、`mapmenumodes.texture`，不伪造缺失文件。没有`tex`的材质按`PGL_setMaterial`作为纯色；纹理引用须继续读取`texture.file`，例如woodmapboxshadow实际使用uialphaelements。证据见`agent/codex/p7-material-evidence`及`p7-material-parser`。
+
+单独的 `Grape.pvr`、界面 XIB 和 HTML 等仅列入原文件清单，不转换、不作为原生单人运行入口。

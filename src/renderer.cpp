@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <fstream>
 #include <map>
+#include <random>
 #include <set>
 #include <stdexcept>
 #include <utility>
@@ -197,6 +198,7 @@ struct Renderer::Impl {
 #undef GL_ENTRY
 
     struct Texture { GLuint id = 0; int width = 0, height = 0; bool translucent = false; };
+    Texture whiteImage;
     struct Mesh {
         GLuint vao = 0, vbo = 0;
         GLsizei count = 0;
@@ -315,9 +317,18 @@ void main() {
     }
     // Cache decoded PNG files by their original resource reference.
     Texture& texture(const std::string& name) {
+        // PGL_setMaterial disables texturing for a material without a tex property.
+        if (name.empty()) return whiteImage;
         auto found = textures.find(name);
         if (found != textures.end()) return found->second;
         return textures.emplace(name,uploadTexture(decodePng(root/name),true)).first->second;
+    }
+    // Texture descriptors may alias another image; material names are not filenames.
+    std::string textureFile(const Json& material) {
+        if (!material.contains("tex")) return "";
+        const std::string name = material.at("tex").get<std::string>();
+        const Json descriptor = readJson(root / "data" / (name + ".texture.json"));
+        return "textures/" + descriptor.at("file").get<std::string>() + ".pvr.png";
     }
     // Upload immutable triangle vertices while retaining source material names.
     Mesh uploadMesh(const std::vector<Vertex>& vertices, std::string textureName) {
@@ -350,7 +361,7 @@ void main() {
                   GL_TRIANGLES, hudMatrix(static_cast<float>(width), static_cast<float>(height)), color, image);
     }
     // Cache font pixels at the current DPI and present labels at logical size.
-    void text(const HudText& label) {
+    void text(const HudText& label, float maximumWidth = 0) {
         if (label.text.empty()) return;
         const float dpi = static_cast<float>(pixelHeight) / height;
         const int fontHeight = std::max(12, static_cast<int>(18 * dpi));
@@ -364,7 +375,9 @@ void main() {
             found = labels.emplace(key, uploadTexture(rasterText(label.text, fontHeight), false)).first;
         }
         const Texture& image = found->second;
-        quad(label.x, label.y, image.width / dpi, image.height / dpi, label.color, image.id);
+        // Preserve complete tower names without drawing across neighboring buttons.
+        const float scale = maximumWidth > 0 ? std::min(1.0f,maximumWidth / (image.width / dpi)) : 1.0f;
+        quad(label.x, label.y, image.width / dpi * scale, image.height / dpi * scale, label.color, image.id);
     }
     // Load converted original map and mesh data; defined alongside export schema.
     void loadMap(const std::filesystem::path& mapFile);
@@ -436,7 +449,7 @@ Renderer::Impl::Model& Renderer::Impl::model(const std::string& name) {
                                         v.u*scale.at(0)+offset.at(0),v.v*scale.at(1)+offset.at(1)});
                 }
             }
-            Mesh mesh = uploadMesh(vertices,"textures/"+material.at("tex").get<std::string>()+".pvr.png");
+            Mesh mesh = uploadMesh(vertices,textureFile(material));
             mesh.blend = material.value("blend",std::string{});
             mesh.depthWrite = material.value("depthmask",1) != 0;
             meshes.emplace(meshKey,std::move(mesh));
@@ -448,6 +461,8 @@ Renderer::Impl::Model& Renderer::Impl::model(const std::string& name) {
 
 // Place original map doodads and texture atlas terrain on the doubled navigation grid.
 void Renderer::Impl::loadMap(const std::filesystem::path& mapFile) {
+    // PGL_init parses this built-in JSON before loading the packaged material files.
+    materials["default"] = {{"tex","checkerboard"},{"tscale",{8.0f,8.0f}}};
     for (const auto& entry : std::filesystem::directory_iterator(root/"data")) {
         const std::string filename = entry.path().filename().string();
         if (!filename.ends_with(".material.json")) continue;
@@ -457,7 +472,8 @@ void Renderer::Impl::loadMap(const std::filesystem::path& mapFile) {
     const Json map = readJson(mapFile);
     const int columns = map.at("width").get<int>(), rows = map.at("height").get<int>();
     mapWidth = static_cast<float>(columns*2); mapHeight = static_cast<float>(rows*2);
-    const Json atlas = readJson(root/"data"/"basetiles.atlas.json");
+    const Json atlas = readJson(root/"data"/(map.value("basetileAtlas",std::string("basetiles")) + ".atlas.json"));
+    const auto& tileMaterial = materials.at(atlas.at("material").get<std::string>());
     std::map<std::string,Json> regions;
     for (const auto& region : atlas.at("subtextures")) regions[region.at("name").get<std::string>()] = region;
     std::vector<Vertex> ground;
@@ -469,17 +485,117 @@ void Renderer::Impl::loadMap(const std::filesystem::path& mapFile) {
         const Json& region = regions.at(regionName);
         const float u0 = region.at("position").at(0).get<float>()/atlasWidth;
         // Atlas positions use a bottom origin; original model UVs already target top-down PNG pixels.
-        const float v0 = 1-region.at("position").at(1).get<float>()/atlasHeight;
+        const float v0 = 1-(region.at("position").at(1).get<float>()+
+                           region.at("size").at(1).get<float>())/atlasHeight;
         const float u1 = u0+region.at("size").at(0).get<float>()/atlasWidth;
-        const float v1 = v0-region.at("size").at(1).get<float>()/atlasHeight;
+        const float v1 = v0+region.at("size").at(1).get<float>()/atlasHeight;
         const float x0 = static_cast<float>(x*2), y0 = static_cast<float>(y*2);
         ground.insert(ground.end(),{{x0,y0,0,0,0,1,u0,v0},{x0+2,y0,0,0,0,1,u1,v0},
                                    {x0+2,y0+2,0,0,0,1,u1,v1},{x0,y0,0,0,0,1,u0,v0},
                                    {x0+2,y0+2,0,0,0,1,u1,v1},{x0,y0+2,0,0,0,1,u0,v1}});
     }
-    meshes.emplace("$ground",uploadMesh(ground,"textures/basetile_atlas.pvr.png"));
+    meshes.emplace("$ground",uploadMesh(ground,textureFile(tileMaterial)));
     models["$ground"].parts.push_back({"$ground",Mat4::identity(),{}});
     terrain.push_back({"$ground"});
+    const Json transitionAtlas = readJson(root/"data"/(map.value("transitionAtlas",std::string("transitions")) + ".atlas.json"));
+    const auto& transitionMaterial = materials.at(transitionAtlas.at("material").get<std::string>());
+    std::map<std::string,Json> transitionRegions;
+    for (const auto& region : transitionAtlas.at("subtextures")) transitionRegions[region.at("name").get<std::string>()] = region;
+    std::vector<Vertex> transitions;
+    const float transitionWidth = transitionAtlas.at("width").get<float>();
+    const float transitionHeight = transitionAtlas.at("height").get<float>();
+    // Native overlays disable depth testing; a small lift preserves their order in the core renderer.
+    constexpr float transitionLift = 0.002f;
+    // MAP_prepareTransitions uses left, top, right, bottom bits in this order.
+    constexpr std::array<Vec2,4> neighbors{{{-1,0},{0,1},{1,0},{0,-1}}};
+    // Diagonal order follows the same clockwise traversal from the top-left corner.
+    constexpr std::array<Vec2,4> diagonals{{{-1,1},{1,1},{1,-1},{-1,-1}}};
+    // Select the native terrain code, treating off-map cells as absent.
+    const auto terrainAt = [&](int x, int y) {
+        return x < 0 || y < 0 || x >= columns || y >= rows ? -1 : map.at("terrain").at(y*columns+x).get<int>();
+    };
+    // Append one original atlas region, rotating only its UV corners.
+    const auto overlay = [&](const std::string& name, float x0, float y0, float x1, float y1,
+                             int rotation, float z) {
+        const Json& region = transitionRegions.at(name);
+        const float u0 = region.at("position").at(0).get<float>()/transitionWidth;
+        const float u1 = u0+region.at("size").at(0).get<float>()/transitionWidth;
+        const float v1 = 1-region.at("position").at(1).get<float>()/transitionHeight;
+        const float v0 = v1-region.at("size").at(1).get<float>()/transitionHeight;
+        const std::array<Vec2,4> uv{{{u0,v0},{u1,v0},{u1,v1},{u0,v1}}};
+        const std::array<Vec2,4> positions{{{x0,y0},{x1,y0},{x1,y1},{x0,y1}}};
+        // Native quads split across the bottom-left to top-right diagonal.
+        constexpr std::array<int,6> indices{0,1,2,0,2,3};
+        for (const int index : indices) {
+            const Vec2 point = positions[index], coordinate = uv[(index+rotation)%4];
+            transitions.push_back({point.x,point.y,z,0,0,1,coordinate.x,coordinate.y});
+        }
+    };
+    for (int higher = 1; higher <= 2; ++higher) {
+        const std::string prefix = higher == 1 ? "grass_transition_" : "forest_transition_";
+        for (int x = 0; x < columns; ++x) for (int y = 0; y < rows; ++y) {
+            if (terrainAt(x,y) >= higher) continue;
+            int mask = 0;
+            for (int side = 0; side < 4; ++side)
+                if (terrainAt(x+static_cast<int>(neighbors[side].x),y+static_cast<int>(neighbors[side].y)) == higher)
+                    mask |= 1 << side;
+            const float x0 = static_cast<float>(x*2), y0 = static_cast<float>(y*2);
+            const float z = transitionLift*static_cast<float>(higher);
+            // Opposite edges use two left regions; adjacent edges share a native combined region.
+            if (mask == 5 || mask == 10) {
+                for (int side = 0; side < 4; ++side)
+                    if ((mask & (1 << side)) != 0) overlay(prefix+"left",x0,y0,x0+2,y0+2,side,z);
+            } else if (mask != 0) {
+                // Canonical native masks are left=1, lefttop=3, lefttopright=7, surround=15.
+                constexpr std::array<int,4> canonical{1,3,7,15};
+                constexpr std::array<const char*,4> suffix{"left","lefttop","lefttopright","surround"};
+                bool emitted = false;
+                for (int shape = 0; shape < 4 && !emitted; ++shape) for (int rotation = 0; rotation < 4; ++rotation) {
+                    const int rotated = ((canonical[shape] << rotation) | (canonical[shape] >> (4-rotation))) & 15;
+                    if (rotated == mask) {
+                        overlay(prefix+suffix[shape],x0,y0,x0+2,y0+2,rotation,z);
+                        emitted = true;
+                        break;
+                    }
+                }
+            }
+            for (int corner = 0; corner < 4; ++corner) {
+                // A diagonal region is suppressed when either adjoining edge already covers it.
+                const int adjacent = (1 << corner) | (1 << ((corner+1)%4));
+                if ((mask & adjacent) != 0 ||
+                    terrainAt(x+static_cast<int>(diagonals[corner].x),y+static_cast<int>(diagonals[corner].y)) != higher) continue;
+                const Json& region = transitionRegions.at(prefix+"corner");
+                const Json& base = regions.at("grass");
+                const float cornerWidth = 2*region.at("size").at(0).get<float>()/base.at("size").at(0).get<float>();
+                const float cornerHeight = 2*region.at("size").at(1).get<float>()/base.at("size").at(1).get<float>();
+                const bool right = corner == 1 || corner == 2, top = corner < 2;
+                const float left = right ? x0+2-cornerWidth : x0;
+                const float bottom = top ? y0+2-cornerHeight : y0;
+                overlay(prefix+"corner",left,bottom,left+cornerWidth,bottom+cornerHeight,corner,z);
+            }
+        }
+    }
+    if (!transitions.empty()) {
+        Mesh transitionMesh = uploadMesh(transitions,textureFile(transitionMaterial));
+        transitionMesh.blend = transitionMaterial.value("blend",std::string("alpha"));
+        transitionMesh.depthWrite = false;
+        meshes.emplace("$transitions",std::move(transitionMesh));
+        models["$transitions"].parts.push_back({"$transitions",Mat4::identity(),resourceColor(transitionMaterial)});
+        terrain.push_back({"$transitions"});
+    }
+    // MAP_alloc supplies these models; an explicit empty array disables procedural trees.
+    const std::vector<std::string> treeModels = map.value("treeModels",std::vector<std::string>{"grove1","grove2","grove3","grove4","grove5"});
+    // sync_initRand/sync_lrand48 implement MT19937 with seed zero for map decorations.
+    std::mt19937 treeRandom(0);
+    // Native MAP_prepareTrees displaces each axis by (sync_frand48-.5)*.47.
+    constexpr float treeJitter = 0.47f;
+    for (int x = 0; x < columns; ++x) for (int y = 0; y < rows; ++y) {
+        if (terrainAt(x,y) != 2 || treeModels.empty()) continue;
+        const std::string& name = treeModels[treeRandom()%treeModels.size()];
+        const float jitterX = (static_cast<float>(treeRandom())*0x1p-32f-0.5f)*treeJitter;
+        const float jitterY = (static_cast<float>(treeRandom())*0x1p-32f-0.5f)*treeJitter;
+        terrain.push_back({name,{x*2.0f+1+jitterX,y*2.0f+1+jitterY,0}});
+    }
     size_t ordinal = 0;
     for (const auto& doodad : map.at("doodads")) {
         Model placed = model(doodad.at("model").get<std::string>());
@@ -518,6 +634,7 @@ bool Renderer::initialize(SDL_Window* window, const std::filesystem::path& root,
         r.GenVertexArrays(1, &r.scratchVao); r.GenBuffers(1, &r.scratchVbo);
         r.BindVertexArray(r.scratchVao); r.BindBuffer(GL_ARRAY_BUFFER, r.scratchVbo); r.vertexLayout();
         r.whiteTexture = r.uploadTexture({1,1,{255,255,255,255},false}, false).id;
+        r.whiteImage = {r.whiteTexture,1,1,false};
         r.ActiveTexture(GL_TEXTURE0);
         glEnable(GL_DEPTH_TEST); glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         // Original exported meshes include two-sided sprites and unknown winding.
@@ -528,6 +645,21 @@ bool Renderer::initialize(SDL_Window* window, const std::filesystem::path& root,
     } catch (const std::exception& e) {
         r.error = e.what(); SDL_LogError(SDL_LOG_CATEGORY_RENDER, "%s", r.error.c_str());
         return false;
+    }
+}
+
+// Keep rendering in physical pixels and input/HUD in SDL logical pixels.
+bool Renderer::changeMap(const std::filesystem::path& mapFile) {
+    auto& r = *impl_;
+    try {
+        for (auto& [name, mesh] : r.meshes) {
+            r.DeleteBuffers(1,&mesh.vbo); r.DeleteVertexArrays(1,&mesh.vao);
+        }
+        for (auto& [name, image] : r.textures) glDeleteTextures(1,&image.id);
+        r.meshes.clear(); r.models.clear(); r.textures.clear(); r.terrain.clear(); r.materials.clear();
+        r.error.clear(); r.resourceWarnings.clear(); r.loadMap(mapFile); resetCamera(); return true;
+    } catch (const std::exception& error) {
+        r.error = error.what(); return false;
     }
 }
 
@@ -600,7 +732,7 @@ void Renderer::draw(const SceneView& scene) {
                            button.selected ? Color{0.24f,0.49f,0.24f,0.96f} : Color{0.09f,0.13f,0.18f,0.96f};
         r.quad(button.x, button.y, button.width, button.height, fill);
         r.text({button.text,button.x+7,button.y+(button.height-22)/2,
-                button.enabled ? Color{} : Color{0.5f,0.5f,0.5f,1}});
+                button.enabled ? Color{} : Color{0.5f,0.5f,0.5f,1}},button.width - 14);
     }
     for (const auto& label : scene.texts) r.text(label);
     glDepthMask(GL_TRUE); SDL_GL_SwapWindow(r.window);
@@ -629,6 +761,37 @@ std::optional<Vec2> Renderer::project(Vec3 world) const {
     const auto clip = transform(r.viewProjection(),{world.x,world.y,world.z,1});
     if (clip[3] <= 0) return std::nullopt;
     return Vec2{(clip[0]/clip[3]+1)*0.5f*r.width,(1-clip[1]/clip[3])*0.5f*r.height};
+}
+
+// Pan within a generous map margin without restricting ordinary exploration.
+bool Renderer::verifyResources(const std::filesystem::path& output) {
+    auto& r = *impl_;
+    Json report;
+    report["textures"] = Json::array(); report["models"] = Json::array();
+    int failures = 0;
+    for (const auto& file : std::filesystem::directory_iterator(r.root / "textures")) {
+        if (file.path().extension() != ".png") continue;
+        try {
+            const Pixels pixels = decodePng(file.path());
+            report["textures"].push_back({{"name",file.path().filename().string()},{"width",pixels.width},{"height",pixels.height},{"loaded",true}});
+        } catch (const std::exception& error) {
+            ++failures; report["textures"].push_back({{"name",file.path().filename().string()},{"loaded",false},{"error",error.what()}});
+        }
+    }
+    for (const auto& file : std::filesystem::directory_iterator(r.root / "data")) {
+        const std::string name = file.path().filename().string();
+        if (!name.ends_with(".model.json")) continue;
+        try {
+            const auto& model = r.model(name.substr(0,name.size() - std::string(".model.json").size()));
+            for (const auto& part : model.parts) r.texture(r.meshes.at(part.mesh).texture);
+            report["models"].push_back({{"name",name},{"loaded",true}});
+        } catch (const std::exception& error) {
+            ++failures; report["models"].push_back({{"name",name},{"loaded",false},{"error",error.what()}});
+        }
+    }
+    report["failures"] = failures; report["allLoaded"] = failures == 0;
+    std::ofstream(output / "resource-load-checks.json") << report.dump(2);
+    return failures == 0;
 }
 
 // Pan within a generous map margin without restricting ordinary exploration.

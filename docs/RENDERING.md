@@ -12,7 +12,15 @@
 - `assets/data/*.material.json`: original texture reference, UV offset/scale, RGBA tint, blend, and depth-mask settings. Alpha and the two additive blend modes are supported. Transparent parts are rendered after opaque parts, sorted by instance distance, without depth writes.
 - `assets/textures/<stem>.pvr.png`: original PNG pixels decoded with Windows WIC. Original mesh UVs target top-down image rows and are retained. Atlas region positions instead use an image-bottom origin, so terrain V coordinates are converted when generating terrain vertices. The real atlas, UFO, barn, and crop circles verified this distinction in rendered screenshots.
 
-Terrain has no standalone VBO. The renderer builds two-unit quads from the original terrain array and `basetiles.atlas.json`, using the native `MAP_alloc` mapping `0=mud`, `1=grass`, `2=forest`. Map doodad matrices are composed with model geoset matrices rather than replacing their scale.
+Native `PGL_init` creates the built-in `default` material with `checkerboard` texture and UV scale 8 before packaged materials load. The renderer follows that order. Materials without a `tex` field use white texture samples multiplied by their original RGBA tint, matching the native untextured material path.
+
+Terrain has no standalone packaged VBO. The renderer builds two-unit quads from the original terrain array and the map's `basetileAtlas` (default `basetiles`), using the native `MAP_alloc` mapping `0=mud`, `1=grass`, `2=forest`. Within each atlas region, world Y=0 uses `(atlasHeight-positionY-sizeY)/atlasHeight`; world Y=2 uses `(atlasHeight-positionY)/atlasHeight`, as recovered from `MAP_prepareRendering`.
+
+`transitionAtlas` defaults to `transitions`. Higher terrain adds the original left/lefttop/lefttopright/surround regions onto lower terrain, with native UV rotations and separate opposing-edge quads. Diagonal corner regions are omitted when either adjoining edge covers them. The native renderer disables depth testing for these ground overlays; the desktop renderer lifts them by 0.002 units per terrain layer to keep depth testing for scene geometry.
+
+Every forest tile receives one original grove model in column-major order. `treeModels` defaults to `grove1` through `grove5`; an explicit empty list disables trees. Native `sync_initRand` is MT19937 seeded with zero: each tree consumes one model-selection value followed by X/Y jitter values, translated to tile center plus `(float(random)/2^32-0.5)*0.47`. Original geoset transforms are retained. These rules come from `MAP_alloc`, `MAP_prepareTrees`, and `MAP_renderTrees`; focused static exports are in `agent/codex/rules-evidence/map-visuals*`.
+
+Map doodad matrices are composed with model geoset matrices rather than replacing their scale.
 
 ## Coordinates and desktop input
 
@@ -24,6 +32,6 @@ HUD labels are UTF-8 strings rasterized with Windows GDI into alpha textures at 
 
 ## Fidelity limits
 
-The current shader adds simple ambient/directional lighting. It does not reconstruct the original shadow renderer, terrain transition overlays, skybox, or particle lifecycle. Geoset local transforms are retained, but runtime articulated hierarchy has not been recovered. Original geometry animation frames can be rendered by supplying the chosen frame model name; frame selection and timing belong to the simulation/application. Transparent sorting is per instance rather than per triangle, so intersecting translucent geometry can still differ.
+The current shader adds simple ambient/directional lighting. It does not reconstruct the original shadow renderer, skybox, or particle lifecycle. Geoset local transforms are retained, but runtime articulated hierarchy has not been recovered. Original geometry animation frames can be rendered by supplying the chosen frame model name; frame selection and timing belong to the simulation/application. Transparent sorting is per instance rather than per triangle, so intersecting translucent geometry can still differ. Transition shape selection and tree placement have static native evidence; no Android device comparison has yet verified their appearance.
 
 Face culling is disabled until native winding and material-cull behavior have been visually verified. No original model is replaced by a cube or other placeholder. Missing model/material/PNG errors are logged and exposed through `Renderer::error`; remaining scene objects continue rendering.

@@ -41,6 +41,7 @@ struct HudButton {
     float x = 0, y = 0, width = 0, height = 0;
     bool selected = false;
     bool enabled = true;
+    int action = -1;
 };
 
 struct SceneView {
@@ -63,6 +64,8 @@ public:
     // Create a core 3.3 context and load the converted original map assets.
     bool initialize(SDL_Window* window, const std::filesystem::path& assetsRoot,
                     const std::filesystem::path& mapFile);
+    // Replace the board and its GPU resources when the player changes levels.
+    bool changeMap(const std::filesystem::path& mapFile);
     // Refresh logical and drawable sizes from SDL after resize or DPI changes.
     void resize();
     // Render map, simulation models, world lines, and desktop HUD, then present.
@@ -79,6 +82,8 @@ public:
     void resetCamera();
     // Save the presented framebuffer as PNG without changing scene rendering.
     bool capture(const std::filesystem::path& path);
+    // Load every prepared texture and model, retaining per-resource failures in a report.
+    bool verifyResources(const std::filesystem::path& output);
     // Return a human-readable initialization failure or resource warning.
     const std::string& error() const;
     // Describe the actual driver and core context used by the renderer.
