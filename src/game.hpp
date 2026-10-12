@@ -62,6 +62,10 @@ struct Beam {
     // Preserve the recovered muzzle or chain height and weapon family for rendering.
     float fromZ = 0;
     std::string kind;
+    // Snapshot the original effect pose and type before damage removes its target.
+    std::string sourceType;
+    int bornAt = 0;
+    float heading = 0, elevation = 0, length = 0, radius = 0;
 };
 struct Ufo {
     // States follow landing, releasing, departure, and idle lifecycle phases.
@@ -87,6 +91,8 @@ struct Effect {
     std::string kind;
     // Visual age uses simulation time without changing damage or random state.
     int bornAt = 0;
+    std::string sourceType;
+    float heading = 0, elevation = 0;
 };
 struct WaveCounter { int remaining = 0, bonus = 0; };
 enum class Outcome { Preparing, Running, Won, Lost };

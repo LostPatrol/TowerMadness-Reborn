@@ -9,9 +9,9 @@ Windows x64原生C++20重建已进入P8首轮交互与表现开发基线，游�
 
 运行入口release/TowerMadness.exe；发布ZIP含SDL3.dll、assets、许可和中文README。12类武器分别实现beam、plasma、railgun、homing、mortar、flak、flamethrower、lightning、mine、slow、boost、bait，读取四套tech及原禁用/升级配置。116有限模式对应116地图；四战役按胜利进度解锁，其余112通过明确的桌面资源库开放，不能称为原作全部已解锁。DividedAttention胜利解锁Hard及无限；MuttonsFolly胜利解锁Insane。三无限难度和沙盒使用当前地图。
 
-中文菜单/HUD、原塔图标、浏览/建造/选中状态、合法预览/取消、详情升级对比与精确退款、暂停、1/2/4倍速、重开确认及胜负结算已接入。Game终局拒绝建/升/售/发波；按钮和键盘共用desktopInput，镜头事件经desktopEvent隔离菜单/模态/详情/建造栏，失焦清理拖动。Esc依次取消确认/菜单/建造/详情，再暂停；退出有明确按钮。战场矩形同时用于绘制、投影和拾取，900×700时也不让HUD遮住出生点和羊圈。
+中文菜单/HUD、原塔图标、浏览/建造/选中状态、合法预览/取消、详情升级对比与精确退款、暂停、1/2/4倍速、重开确认及胜负结算已接入。关卡浏览使用独立Game及原地图GL缩略图，明确开始后才替换当前局；显示真实科技/波数/资金/成绩及保存摘要，胜利后记录新解锁并可直接下一战役。Game终局拒绝建/升/售/发波；按钮和键盘共用desktopInput，镜头事件经desktopEvent隔离菜单/模态/详情/建造栏，失焦清理拖动。Esc依次取消确认/菜单/建造/详情，再暂停；退出有明确按钮。战场矩形同时用于绘制、投影和拾取，900×700时也不让HUD遮住出生点和羊圈。修改入口docs/FRONTEND.md。
 
-Profile和完整局内状态位于LocalAppData/TowerMadness-Reborn/profile.json；带版本、临时文件替换、损坏文件备份，保存实体、投射物、UFO、状态、计分、活动波计数及MT19937。菜单/重开确认冻结仿真，30秒及退出自动保存。声音默认两项音量0，绝不初始化设备；原36Ogg已离线解码，用户自行调高音量后才可打开音频。
+Profile和完整局内状态位于LocalAppData/TowerMadness-Reborn/profile.json；带版本、临时文件替换、损坏文件备份，保存实体、投射物、UFO、状态、计分、活动波计数及MT19937。菜单/重开确认冻结仿真，30秒及退出自动保存。requestExit共用窗口关闭/菜单退出：保存失败保留当前局，再次明确退出才丢弃未保存进度，手动保存成功清除失败状态。声音默认两项音量0，绝不初始化设备；原36Ogg已离线解码，用户自行调高音量后才可打开音频。
 
 Android包com.limbicsoftware.towermadnesszero，minSdk9/targetSdk17。既有静态基线仅armeabi，新增对照包仅x86。核心libverde.so是Apportable Objective-C/iOS移植，非Unity；ARM库4324动态函数符号，Ghidra识别10390函数。保留数据库供定向导出，不把伪代码当可编译源码。
 
@@ -35,11 +35,13 @@ PlainPlane地形11×16、导航22×32，每tile2单位。terrain0可走不可建
 
 Game::buildBlockReason/upgradeBlockReason/sellBlockReason与命令共用，试放只复制导航格并调用原距离场，不修改message/资金/占位/RNG；sellRefund保留原全额/75%截断与已排期金额。计时HUD使用nextWaveDelayMs/earlyWaveBonus，不另算规则。
 
-Beam携带原炮口/链击XYZ及攻击kind；Effect携带bornAt，并有death/split/sheepLeak纯表现事件。原beam/lightning/fireball/plasma/smoke/shockwave PNG通过SceneView世界精灵/线带接入。塔炮口模型朝本地-Y，绘制yaw=heading+90°、pitch=-elevation，body离地0.25，炮座仍在0；turret绕原rotationoffset俯仰。Game::towerElevation与muzzle共用原目标/固定角。首关真实激光mesh-tip与攻击起点检查差距0。炮塔朝向平滑和特殊塔动画仍待恢复。
+Beam携带原炮口/链击XYZ、攻击kind、塔类型、出生时间及发射时heading/elevation/length/radius；Effect携带bornAt/塔类型/炮口姿态，并有death/split/sheepLeak纯表现事件。原beam2/railspiral/2plane、等级色、双层闪电atlas、plasma四帧/炮口火光、火焰、弹坑、普通爆炸和四层核爆已按静态公式接入；地雷III核爆保留地雷弹坑参数，plasma命中无通用爆炸，flak高度复用原已消费第三个战斗RNG样本。规格及适配差异见docs/COMBAT_VISUALS.md。塔炮口模型朝本地-Y，绘制yaw=heading+90°、pitch=-elevation，body离地0.25，炮座仍在0；turret绕原rotationoffset俯仰。Game::towerElevation与muzzle共用原目标/固定角。首关真实激光mesh-tip与攻击起点检查差距0。炮塔朝向平滑和特殊塔动画仍待恢复。
 
 Enemy::visualHeadingDegrees直接绘制，不另加90°；行走帧为timeMs/(nativeSlot+trunc(walkanimfactor*trunc(150/speed)))，仅generation==1选subwalk。独立1024循环slot、stun刷新冻结时间、尸体float32三秒倒计时及完整冻结姿态存入可选session.animation扩展，旧/坏视觉扩展降级而保留有效核心。原死亡分段翻转/下沉/缩放及RGB变暗、非飞行directionalshadow模型和护甲aura已按静态证据接入；修改入口docs/ANIMATION.md。尸体仅供绘制和slot占位，不参与战斗/胜负。分裂初始yaw和死亡随机角使用近似，尚未插入原combat RNG消费序列。
 
-粒子宽度/消隐/排列、塔接地shadowblob、投射物完整轨迹俯仰及血条/状态环仍是桌面近似。所有表现用仿真时钟，不消耗战斗随机数；短暂effect不保存，冻结尸体及动画状态保存。
+Renderer新增非均匀scale、UVscale/offset及point-size billboard换算；视觉hash与战斗RNG分离，闪电每实际呈现一帧换两个不同atlas行。mapPreview使用同一场景路径离屏512×288，恢复活跃地图/相机/GL状态，最多缓存16张。火焰fireball采用additive，状态环用线而不把环VBO纹理直接当quad。
+
+所有表现仍用仿真时钟而非原realtime；视觉hash不等于lrand48/drand48，point-size以桌面战场宽度换算、原屏幕字段未标定。导弹多层命中/原trail、flak早期blast、条件式核爆2D闪光、特殊塔动画、塔接地shadowblob及血条/状态辅助仍未完成或近似。短暂effect不保存，冻结尸体及动画状态保存。
 
 ## 工具与验证条件
 
@@ -55,7 +57,7 @@ GUI验收注意：Profile::userDirectory使用SHGetKnownFolderPath，覆盖LOCAL
 
 本机RX9070XT已通过22项规则/保存检查、116模式原资金自然开局、116地图实际GL绘制、420PNG/321模型完整加载、36Ogg离线解码。PlainPlane普通50金币操作自然26波保住10羊，鼠标键盘重放胜利/重开/自然失败，15/144FPS调度一致。1280×900和1000×700拾取通过。发布ZIP解压到中文含空格目录、从C:/Windows/Temp及仅Windows PATH启动，菜单和保存继续通过。仍只测试一台Windows，非真正干净OS。
 
-P8首轮原资金50金币、生产SDL输入重放自然26波保住10羊（523200ms、235击杀、最终1422分）及自然失败成立；23项规则/保存检查、三窗口布局和116地图绘制通过。测试和截图只证明本机当前实现，不构成原作等价或人类可用性最终验收；12武器的表现代码已分类，实际视觉覆盖尚未逐类完成。
+P8首轮原资金50金币、生产SDL输入重放自然26波保住10羊（523200ms、235击杀、最终1422分）及自然失败成立；23项规则/保存检查、三窗口布局和116地图绘制通过。生产菜单/预览不弃局或改相机、胜利解锁/下一战役/重复胜利及真实保存失败保留当前局通过。--visual-test在原10000金币沙盒合法API建塔/发波覆盖12基础类别及5高级形态的17个真实事件和GL截图，不改资金/HP/波/RNG；高级塔直建不等于UI升级路径。测试和截图只证明本机当前实现，不构成原作等价或人类可用性最终验收。
 
 没有真机；项目内Android对照环境与版本路线见docs/ANDROID_REFERENCE.md。旧QEMU2+API24 Play x86已进入Android主屏，但adb仍未认证，尚未安装该设备的x86原游戏；用户已手动允许调试，不能凭此描述transport或游戏成功。没有启用WHPX、改Windows系统功能或重启Windows。行走/死亡/敌人投影有静态实现，动态保真未验；精确炮塔平滑、天空镜头/粒子、羊被抓完整收尾和原手机UI未恢复。桌面持续2/4倍速不同于原临时2倍20秒。完整活动链/多诱饵堵路及同刻排序仍有差异。116关并未全部自然通关；长时高压无限局、跨机器、高DPI跨显示器和实际声音播放未验。购买验证与广告仍排除。
 

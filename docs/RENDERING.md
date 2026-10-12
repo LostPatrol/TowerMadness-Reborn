@@ -3,7 +3,7 @@
 
 `src/renderer.cpp` owns one SDL3 OpenGL 3.3 core context. It uses shader programs, vertex array objects, and vertex buffers; it has no fixed-function fallback. The application owns the SDL window and input. Audio is never initialized by this renderer.
 
-`Renderer::initialize(window, assetsRoot, mapFile)` loads the original map, material dictionaries, atlas terrain, and model descriptors. `SceneView` supplies simulation objects, world-space lines, selected cells, labels, and buttons. `draw` also presents the window. `capture` reads the presented framebuffer into a PNG for visual validation.
+`Renderer::initialize(window, assetsRoot, mapFile)` loads the original map, material dictionaries, atlas terrain, and model descriptors. `SceneView` supplies simulation objects, world-space lines, selected cells, labels, buttons, and images. `draw` also presents the window. `capture` reads the presented framebuffer into a PNG for visual validation. `mapPreview` draws the same terrain, trees, and doodads to a 512×288 framebuffer, restores live map/camera/GL state, and caches at most 16 thumbnails.
 
 ## Resource interface
 
@@ -38,7 +38,11 @@ HUD labels are UTF-8 strings rasterized with Windows GDI into alpha textures at 
 
 ## Fidelity limits
 
-The current shader adds simple ambient/directional lighting. Tower contact uses shadowblob with approximate size and opacity; non-flying enemies use the recovered directionalshadow model transform and material. Enemy armor auras, original status tint and frozen death geometry are supplied by main.cpp; animation formulas and limits are in ANIMATION.md. Renderable.animationTransform composes after instance yaw/scale and before packaged geoset transforms; overrideMaterialColor matches native color replacement for enemy bodies. Unlit world sprites/ribbons reuse beam, lightning, fireball, plasma, smoke and shockwave bitmaps; widths, fades and particle placement remain desktop approximations. Beam endpoints retain recovered XYZ muzzle/chain coordinates. Projectile pitch follows its complete velocity. Wounded health bars and status rings are desktop readability aids.
+The current shader adds simple ambient/directional lighting. Tower contact uses shadowblob with approximate size and opacity; non-flying enemies use the recovered directionalshadow model transform and material. Enemy armor auras, original status tint and frozen death geometry are supplied by main.cpp; animation formulas and limits are in ANIMATION.md. Renderable.animationTransform composes after instance yaw/scale and before packaged geoset transforms; overrideMaterialColor replaces RGBA, clamps it, and switches additive materials to ordinary alpha blend when override alpha is below one, as recovered from PGL_renderGeosets.
+
+Combat effects now use original beam2/railspiral/2plane geometry, atlas rows, tier colors, recovered lifetimes, muzzle flashes, crater, ordinary explosion and four-layer nuclear geometry. Plasma and fireball use recovered point-size parameters converted to desktop billboards. Renderable.textureScale/textureOffset compose effect atlas/animated UVs with packaged UVs. Presented-frame visual hashes choose distinct lightning rows without consuming combat RNG; offscreen previews do not advance this counter. Full formulas and remaining differences are in COMBAT_VISUALS.md.
+
+Effects still use simulation time rather than recovered native realtime; independent hashes do not reproduce lrand48/drand48 sequences, and point-size mapping uses desktop board width pending native screen-field calibration. Homing impact/trail, early flak blast, special support/bait animation and several cleanup cues remain incomplete or approximate. Projectile pitch follows its complete velocity. Wounded health bars and line-based status rings are desktop readability aids.
 
 Ordinary tower meshes face local negative Y: yaw is desktop heading+90 degrees, pitch is negative recovered elevation, and body height is 0.25 above the separate ground base. Articulated turrets pitch around rotationoffset. Game::towerElevation is shared with muzzle geometry; production input replay verifies the original laser mesh tip against the actual shot origin. Enemy bodies use original smoothed yaw directly without this tower offset.
 

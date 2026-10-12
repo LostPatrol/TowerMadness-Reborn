@@ -23,7 +23,9 @@ constexpr float MinimumAimDistance = 0.001f;
 // H Bomb's pre-damage heat addition saturates the original heat cap.
 constexpr float MaximumHeat = 2.0f;
 // Desktop explosion lifetime is visual only and does not defer damage.
-constexpr int ExplosionVisualMs = 400;
+constexpr int ExplosionVisualMs = 1000, NukeVisualMs = 4000;
+// Original mortar impact ground damage outlives its explosion.
+constexpr int CraterVisualMs = 5000, NukeCraterVisualMs = 10000;
 // A half turn maps desktop direction radians to the original tower yaw frame.
 constexpr float HalfPi = 1.57079633f;
 
@@ -179,8 +181,13 @@ void Game::updateProjectiles() {
             }
             radiusDamage(projectile.position.x, projectile.position.y, projectile.splash, projectile.damage, projectile.source);
         }
-        effects.push_back({projectile.position, projectile.splash, timeMs + ExplosionVisualMs,
-            projectile.kind == "plasma" ? "plasma" : nuclear ? "nuke" : projectile.kind, timeMs});
+        // Original plasma hits apply damage/status without a generic impact explosion.
+        if (projectile.kind != "plasma") {
+            effects.push_back({projectile.position,projectile.splash,timeMs + (nuclear ? NukeVisualMs : ExplosionVisualMs),
+                nuclear ? "nuke" : projectile.kind,timeMs,projectile.source.type});
+            if (projectile.kind == "mortar") effects.push_back({projectile.position,projectile.splash * (nuclear ? 0.5f : 0.75f),
+                timeMs + (nuclear ? NukeCraterVisualMs : CraterVisualMs),"groundDamage",timeMs,projectile.source.type});
+        }
         releaseChildren();
     }
     projectiles.erase(std::remove_if(projectiles.begin(), projectiles.end(), [](const Projectile& value) {

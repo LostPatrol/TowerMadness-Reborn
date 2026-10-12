@@ -75,6 +75,13 @@ inline Mat4 rotationY(float radians) {
     return matrix;
 }
 
+// Preserve the independent radial and longitudinal scales of original effect meshes.
+inline Mat4 scaleMatrix(Vec3 scale) {
+    Mat4 matrix = Mat4::identity();
+    matrix.v[0] = scale.x; matrix.v[5] = scale.y; matrix.v[10] = scale.z;
+    return matrix;
+}
+
 // Build a perspective projection using radians and a positive near distance.
 inline Mat4 perspective(float fov, float aspect, float nearPlane, float farPlane) {
     Mat4 m;

@@ -36,6 +36,10 @@ constexpr float kMinimumDistance = 12.0f;
 constexpr float kMaximumDistance = 100.0f;
 // A small offset prevents diagnostic lines from fighting the terrain depth.
 constexpr float kOverlayHeight = 0.06f;
+// Menu thumbnails use a fixed resolution independent of window density.
+constexpr int kPreviewWidth = 512, kPreviewHeight = 288;
+// Keep browsing a large catalog bounded without rebuilding the current selection.
+constexpr std::size_t kPreviewCacheLimit = 16;
 // Vertex inputs retain original geometry, normals, and UV coordinates.
 struct Vertex { float x, y, z, nx, ny, nz, u, v; };
 
@@ -168,6 +172,8 @@ struct Renderer::Impl {
     float distance = 48;
     GLuint program = 0, scratchVao = 0, scratchVbo = 0, whiteTexture = 0;
     GLint mvpUniform = -1, modelUniform = -1, tintUniform = -1, unlitUniform = -1;
+    GLint uvTransformUniform = -1;
+    std::uint32_t visualFrame = 0;
 
     // Every modern entry point is loaded after the owning context becomes current.
 #define GL_ENTRY(type, name) type name = nullptr
@@ -199,6 +205,11 @@ struct Renderer::Impl {
     GL_ENTRY(PFNGLUNIFORM1IPROC, Uniform1i);
     GL_ENTRY(PFNGLACTIVETEXTUREPROC, ActiveTexture);
     GL_ENTRY(PFNGLGENERATEMIPMAPPROC, GenerateMipmap);
+    GL_ENTRY(PFNGLGENFRAMEBUFFERSPROC, GenFramebuffers);
+    GL_ENTRY(PFNGLBINDFRAMEBUFFERPROC, BindFramebuffer);
+    GL_ENTRY(PFNGLDELETEFRAMEBUFFERSPROC, DeleteFramebuffers);
+    GL_ENTRY(PFNGLFRAMEBUFFERTEXTURE2DPROC, FramebufferTexture2D);
+    GL_ENTRY(PFNGLCHECKFRAMEBUFFERSTATUSPROC, CheckFramebufferStatus);
 #undef GL_ENTRY
 
     struct Texture { GLuint id = 0; int width = 0, height = 0; bool translucent = false; };
@@ -214,6 +225,7 @@ struct Renderer::Impl {
     struct Model { std::vector<ModelPart> parts; };
     std::map<std::string, Texture> textures;
     std::map<std::string, Texture> labels;
+    std::map<std::string, Texture> previews;
     std::map<std::string, Mesh> meshes;
     std::map<std::string, Model> models;
     std::map<std::string, Json> materials;
@@ -249,6 +261,8 @@ struct Renderer::Impl {
         LOAD(LinkProgram); LOAD(GetProgramiv); LOAD(GetProgramInfoLog); LOAD(DeleteProgram);
         LOAD(UseProgram); LOAD(GetUniformLocation); LOAD(UniformMatrix4fv); LOAD(Uniform4f);
         LOAD(Uniform1i); LOAD(ActiveTexture); LOAD(GenerateMipmap);
+        LOAD(GenFramebuffers); LOAD(BindFramebuffer); LOAD(DeleteFramebuffers);
+        LOAD(FramebufferTexture2D); LOAD(CheckFramebufferStatus);
 #undef LOAD
     }
     // Compile one core shader and surface the driver's complete diagnostic.
@@ -270,9 +284,10 @@ layout(location=1) in vec3 normal;
 layout(location=2) in vec2 uv;
 uniform mat4 mvp;
 uniform mat4 model;
+uniform vec4 uvTransform;
 out vec2 texcoord;
 out vec3 surfaceNormal;
-void main() { gl_Position=mvp*vec4(position,1); texcoord=uv; surfaceNormal=mat3(model)*normal; }
+void main() { gl_Position=mvp*vec4(position,1); texcoord=uv*uvTransform.xy+uvTransform.zw; surfaceNormal=mat3(model)*normal; }
 )";
         const char* fragmentSource = R"(#version 330 core
 in vec2 texcoord;
@@ -300,6 +315,7 @@ void main() {
         UseProgram(program);
         mvpUniform = GetUniformLocation(program, "mvp"); modelUniform = GetUniformLocation(program, "model");
         tintUniform = GetUniformLocation(program, "tint"); unlitUniform = GetUniformLocation(program, "unlit");
+        uvTransformUniform = GetUniformLocation(program, "uvTransform");
         Uniform1i(GetUniformLocation(program, "image"), 0);
     }
     // Describe one interleaved original-mesh vertex to the core profile.
@@ -327,6 +343,7 @@ void main() {
     Texture& texture(const std::string& name) {
         // PGL_setMaterial disables texturing for a material without a tex property.
         if (name.empty()) return whiteImage;
+        if (name.starts_with("$preview:")) return previews.at(name);
         auto found = textures.find(name);
         if (found != textures.end()) return found->second;
         Json descriptor = Json::object();
@@ -369,11 +386,12 @@ void main() {
         vertexLayout(); return mesh;
     }
     // Set per-draw camera, object tint, and lighting without fixed-function calls.
-    void uniforms(const Mat4& projection, const Mat4& model, Color color, bool unlit) {
+    void uniforms(const Mat4& projection, const Mat4& model, Color color, bool unlit, Vec2 uvScale = {1,1}, Vec2 uvOffset = {}) {
         const Mat4 mvp = projection * model;
         UniformMatrix4fv(mvpUniform, 1, GL_FALSE, mvp.v.data());
         UniformMatrix4fv(modelUniform, 1, GL_FALSE, model.v.data());
         Uniform4f(tintUniform, color.r, color.g, color.b, color.a); Uniform1i(unlitUniform, unlit);
+        Uniform4f(uvTransformUniform,uvScale.x,uvScale.y,uvOffset.x,uvOffset.y);
     }
     // Stream small diagnostic and HUD primitives through one reusable buffer.
     void primitive(const std::vector<Vertex>& vertices, GLenum mode, const Mat4& projection,
@@ -434,6 +452,7 @@ void main() {
             SDL_GL_MakeCurrent(window, context);
             for (auto& [name, image] : textures) glDeleteTextures(1, &image.id);
             for (auto& [name, image] : labels) glDeleteTextures(1, &image.id);
+            for (auto& [name, image] : previews) glDeleteTextures(1, &image.id);
             for (auto& [name, mesh] : meshes) {
                 if (DeleteBuffers) DeleteBuffers(1, &mesh.vbo);
                 if (DeleteVertexArrays) DeleteVertexArrays(1, &mesh.vao);
@@ -452,7 +471,10 @@ void main() {
 Renderer::Impl::Model& Renderer::Impl::model(const std::string& name) {
     auto existing = models.find(name);
     if (existing != models.end()) return existing->second;
-    const Json descriptor = readJson(root / "data" / (name+".model.json"));
+    // Native lightning and muzzle flashes load the original 2plane VBO directly.
+    const Json descriptor = name.starts_with("$effect:")
+        ? Json{{"geosets",{{"effect",{{"vbo","2plane"},{"material",name.substr(8)}}}}}}
+        : readJson(root / "data" / (name+".model.json"));
     Model result;
     for (const auto& [partName, geo] : descriptor.at("geosets").items()) {
         const std::string vboName = geo.at("vbo").get<std::string>();
@@ -727,18 +749,24 @@ void Renderer::setBoardViewport(float x, float y, float width, float height) {
     r.viewportHeight = std::clamp(height,1.0f,r.height - r.viewportY);
 }
 
-// Render opaque meshes first and sorted translucent parts without depth writes.
+// Present the same scene path used to generate original-map menu thumbnails.
 void Renderer::draw(const SceneView& scene) {
+    drawScene(scene,true);
+}
+
+// Render opaque meshes first and sorted translucent parts without depth writes.
+void Renderer::drawScene(const SceneView& scene, bool present) {
     auto& r = *impl_;
     if (!r.context || !r.program) return;
-    resize();
+    if (present) resize();
+    if (present) ++r.visualFrame;
     glViewport(0, 0, r.pixelWidth, r.pixelHeight);
     glClearColor(0.14f, 0.23f, 0.3f, 1); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     const float dpiX = static_cast<float>(r.pixelWidth) / r.width,dpiY = static_cast<float>(r.pixelHeight) / r.height;
     glViewport(static_cast<int>(std::lround(r.viewportX * dpiX)),static_cast<int>(std::lround((r.height - r.viewportY - r.boardHeight()) * dpiY)),
                static_cast<int>(std::lround(r.boardWidth() * dpiX)),static_cast<int>(std::lround(r.boardHeight() * dpiY)));
     r.UseProgram(r.program); glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);
-    struct DrawPart { Impl::Mesh* mesh; Impl::Texture* texture; Mat4 transform; Color tint; float distance; bool unlit; };
+    struct DrawPart { Impl::Mesh* mesh; Impl::Texture* texture; Mat4 transform; Color tint; float distance; bool unlit; Vec2 uvScale,uvOffset; bool overrideColor; };
     std::vector<DrawPart> opaque, transparent;
     // Keep individual broken resources visible as diagnostics while rendering the rest.
     const auto append = [&](const Renderable& object) {
@@ -747,10 +775,20 @@ void Renderer::draw(const SceneView& scene) {
             for (const auto& part : model.parts) {
                 auto& mesh = r.meshes.at(part.mesh);
                 auto& texture = r.texture(mesh.texture);
-                const Color tint = object.overrideMaterialColor ? object.tint : Color{part.tint.r*object.tint.r, part.tint.g*object.tint.g,
+                const Color tint = object.overrideMaterialColor ? Color{std::clamp(object.tint.r,0.0f,1.0f),std::clamp(object.tint.g,0.0f,1.0f),
+                    std::clamp(object.tint.b,0.0f,1.0f),std::clamp(object.tint.a,0.0f,1.0f)} : Color{part.tint.r*object.tint.r, part.tint.g*object.tint.g,
                                  part.tint.b*object.tint.b, part.tint.a*object.tint.a};
                 const Mat4 transform = modelMatrix(object.position, object.rotation, object.scale, object.pitch, object.pitchPivot) * object.animationTransform * part.transform;
-                DrawPart draw{&mesh, &texture, transform, tint, dot(object.position-r.eye(),object.position-r.eye()),object.unlit};
+                Vec2 uvScale = object.textureScale, uvOffset = object.textureOffset;
+                if (object.atlasFrames > 1) {
+                    // Separate visual hashing never samples the combat random engine.
+                    const std::uint32_t sample = (r.visualFrame + object.visualSeed) * 0x9e3779b9u;
+                    const int first = static_cast<int>((sample >> 16) % object.atlasFrames);
+                    const int frame = object.atlasLayer == 0 ? first : (first + 1 + sample % (object.atlasFrames - 1)) % object.atlasFrames;
+                    uvScale.y = 1.0f / object.atlasFrames;
+                    uvOffset.y = static_cast<float>(object.atlasFrames - 1 - frame) / object.atlasFrames;
+                }
+                DrawPart draw{&mesh, &texture, transform, tint, dot(object.position-r.eye(),object.position-r.eye()),object.unlit,uvScale,uvOffset,object.overrideMaterialColor};
                 (!mesh.blend.empty() || !mesh.depthWrite || texture.translucent || tint.a < 1 ? transparent : opaque).push_back(draw);
             }
         } catch (const std::exception& e) { r.warning(e.what()); }
@@ -772,10 +810,11 @@ void Renderer::draw(const SceneView& scene) {
     glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);
     const auto render = [&](const DrawPart& part) {
         // Original effect materials distinguish additive and alpha-weighted additive light.
-        const GLenum sourceBlend = part.mesh->blend == "additive" ? GL_ONE : GL_SRC_ALPHA;
-        const GLenum destinationBlend = part.mesh->blend.starts_with("additive") ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA;
+        const bool alphaOverride = part.overrideColor && part.tint.a < 1;
+        const GLenum sourceBlend = !alphaOverride && part.mesh->blend == "additive" ? GL_ONE : GL_SRC_ALPHA;
+        const GLenum destinationBlend = !alphaOverride && part.mesh->blend.starts_with("additive") ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA;
         glBlendFunc(sourceBlend,destinationBlend);
-        r.uniforms(camera, part.transform, part.tint, part.unlit);
+        r.uniforms(camera, part.transform, part.tint, part.unlit,part.uvScale,part.uvOffset);
         glBindTexture(GL_TEXTURE_2D, part.texture->id); r.BindVertexArray(part.mesh->vao);
         glDrawArrays(GL_TRIANGLES, 0, part.mesh->count);
     };
@@ -794,7 +833,17 @@ void Renderer::draw(const SceneView& scene) {
     for (const auto& part : transparent) render(part);
     const Vec3 forward = normalized(r.target - r.eye()),horizontal = normalized(cross(forward,{0,0,1})),vertical = cross(horizontal,forward);
     for (const auto& sprite : scene.sprites) if (!sprite.ground) {
-        const Vec3 across = horizontal * (sprite.width / 2),up = vertical * (sprite.height / 2);
+        float width = sprite.width, height = sprite.height;
+        if (sprite.pointSizeParameter > 0) {
+            const float cameraDistance = std::sqrt(dot(sprite.position - r.eye(),sprite.position - r.eye()));
+            const auto clip = transform(camera,{sprite.position.x,sprite.position.y,sprite.position.z,1});
+            if (clip[3] <= 0 || cameraDistance <= 0) continue;
+            // Convert native pixel size to a billboard at this exact projected depth.
+            constexpr float NativeScreenWidth = 320;
+            const float pixels = sprite.pointSizeParameter / cameraDistance * r.boardWidth() / NativeScreenWidth;
+            width = height = pixels * clip[3] * (2 * std::tan(kCameraFov / 2)) / r.boardHeight();
+        }
+        const Vec3 across = horizontal * (width / 2),up = vertical * (height / 2);
         r.worldQuad(sprite.position - across + up,sprite.position + across + up,
                     sprite.position + across - up,sprite.position - across - up,
                     sprite.texture,sprite.color,sprite.additive);
@@ -819,6 +868,15 @@ void Renderer::draw(const SceneView& scene) {
     glViewport(0,0,r.pixelWidth,r.pixelHeight);
     for (const auto& panel : scene.panels)
         r.quad(panel.x,panel.y,panel.width,panel.height,panel.color);
+    for (const auto& image : scene.images) {
+        if (image.texture.empty()) continue;
+        try {
+            const auto& texture = r.texture(image.texture);
+            // Framebuffer images have bottom-up UVs; PNG controls remain top-down.
+            if (image.texture.starts_with("$preview:")) r.quad(image.x,image.y + image.height,image.width,-image.height,image.color,texture.id);
+            else r.quad(image.x,image.y,image.width,image.height,image.color,texture.id);
+        } catch (const std::exception& error) { r.warning(error.what()); }
+    }
     float mouseX = 0, mouseY = 0;
     const SDL_MouseButtonFlags mouseButtons = SDL_GetMouseState(&mouseX,&mouseY);
     // Preserve an inset for icons and readable labels within each button.
@@ -860,7 +918,63 @@ void Renderer::draw(const SceneView& scene) {
                    textWidth,button.y+button.height-textY);
     }
     for (const auto& label : scene.texts) r.text(label);
-    glDepthMask(GL_TRUE); SDL_GL_SwapWindow(r.window);
+    glDepthMask(GL_TRUE);
+    if (present) SDL_GL_SwapWindow(r.window);
+}
+
+// Borrow map resources for one offscreen render, then restore the exact live board.
+std::string Renderer::mapPreview(const std::string& mapName) {
+    auto& r = *impl_;
+    const std::string key = "$preview:" + mapName;
+    if (r.previews.contains(key)) return key;
+    if (!r.context) return {};
+    auto meshes = std::move(r.meshes);
+    auto models = std::move(r.models);
+    auto materials = std::move(r.materials);
+    auto terrain = std::move(r.terrain);
+    const std::string skybox = r.skybox;
+    const Vec3 target = r.target;
+    const float distance = r.distance, mapWidth = r.mapWidth, mapHeight = r.mapHeight;
+    const std::array<float,4> board{r.viewportX,r.viewportY,r.viewportWidth,r.viewportHeight};
+    const std::array<int,4> sizes{r.width,r.height,r.pixelWidth,r.pixelHeight};
+    GLint framebuffer = 0, viewport[4]{}, drawBuffer = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING,&framebuffer); glGetIntegerv(GL_VIEWPORT,viewport); glGetIntegerv(GL_DRAW_BUFFER,&drawBuffer);
+    GLuint fbo = 0, color = 0, depth = 0;
+    bool generated = false;
+    try {
+        r.loadMap(r.root / "data" / (mapName + ".map.json"));
+        r.width = r.pixelWidth = kPreviewWidth; r.height = r.pixelHeight = kPreviewHeight;
+        r.viewportX = r.viewportY = 0; r.viewportWidth = kPreviewWidth; r.viewportHeight = kPreviewHeight;
+        resetCamera();
+        glGenTextures(1,&color); glBindTexture(GL_TEXTURE_2D,color);
+        glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,kPreviewWidth,kPreviewHeight,0,GL_RGBA,GL_UNSIGNED_BYTE,nullptr);
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR); glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE); glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+        glGenTextures(1,&depth); glBindTexture(GL_TEXTURE_2D,depth);
+        glTexImage2D(GL_TEXTURE_2D,0,GL_DEPTH_COMPONENT24,kPreviewWidth,kPreviewHeight,0,GL_DEPTH_COMPONENT,GL_UNSIGNED_INT,nullptr);
+        r.GenFramebuffers(1,&fbo); r.BindFramebuffer(GL_FRAMEBUFFER,fbo);
+        r.FramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,color,0);
+        r.FramebufferTexture2D(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,GL_TEXTURE_2D,depth,0);
+        if (r.CheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) throw std::runtime_error("Map preview framebuffer is incomplete.");
+        glDrawBuffer(GL_COLOR_ATTACHMENT0);
+        drawScene({},false);
+        generated = true;
+    } catch (const std::exception& error) { r.warning(error.what()); }
+    // Preview failure releases only borrowed resources; the playable map is retained.
+    for (auto& [name, mesh] : r.meshes) { r.DeleteBuffers(1,&mesh.vbo); r.DeleteVertexArrays(1,&mesh.vao); }
+    r.meshes = std::move(meshes); r.models = std::move(models); r.materials = std::move(materials); r.terrain = std::move(terrain);
+    r.skybox = skybox; r.target = target; r.distance = distance; r.mapWidth = mapWidth; r.mapHeight = mapHeight;
+    r.viewportX = board[0]; r.viewportY = board[1]; r.viewportWidth = board[2]; r.viewportHeight = board[3];
+    r.width = sizes[0]; r.height = sizes[1]; r.pixelWidth = sizes[2]; r.pixelHeight = sizes[3];
+    r.BindFramebuffer(GL_FRAMEBUFFER,framebuffer); glDrawBuffer(drawBuffer); glViewport(viewport[0],viewport[1],viewport[2],viewport[3]);
+    if (fbo) r.DeleteFramebuffers(1,&fbo);
+    if (depth) glDeleteTextures(1,&depth);
+    if (!generated) { if (color) glDeleteTextures(1,&color); return {}; }
+    if (r.previews.size() >= kPreviewCacheLimit) {
+        glDeleteTextures(1,&r.previews.begin()->second.id); r.previews.erase(r.previews.begin());
+    }
+    r.previews.emplace(key,Impl::Texture{color,kPreviewWidth,kPreviewHeight,false});
+    return key;
 }
 
 // Intersect a camera ray with Z=0 using the same basis as lookAt.

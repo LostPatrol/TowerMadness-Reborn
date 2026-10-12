@@ -12,7 +12,11 @@ constexpr float TurnFactor = 12.5f, FireTolerance = 0.08726646f, FullTurn = 6.28
 // Original line weapons extend one and a half configured targeting radii.
 constexpr float LineRangeFactor = 1.5f;
 // Desktop effect lifetime affects rendering only, never hit timing.
-constexpr int EffectLifetimeMs = 250, BeamLifetimeMs = 125;
+constexpr int EffectLifetimeMs = 1000, BeamLifetimeMs = 100;
+// Recovered effect lifetimes, adapted to the existing simulation clock.
+constexpr int LightningLifetimeMs = 200, RailLifetimeMs = 2000, FlameLifetimeMs = 500, MuzzleFlashLifetimeMs = 130;
+// Native ground damage remains after the ordinary or nuclear explosion.
+constexpr int CraterLifetimeMs = 5000, NukeLifetimeMs = 4000, FlakLifetimeMs = 2000;
 // Desktop death and split cues approximate the original particle presentation only.
 constexpr int DeathVisualMs = 600;
 // Cue radii are visual world units, independent of the enemy hit rules.
@@ -137,32 +141,51 @@ void Game::fire(Tower& tower, Enemy* target) {
             slow(enemy,weapon.at("factor").get<float>(),weapon.at("slowduration").get<int>());
             stun(enemy,weapon.at("stunduration").get<int>());
         }
-        effects.push_back({{x,y,0.15f},radius,timeMs + EffectLifetimeMs,kind,timeMs}); tower.consumed = true; return;
+        const bool nuclear = kind == "mine" && definition.at("upgrades").empty();
+        effects.push_back({{x,y,0},radius,timeMs + (nuclear ? NukeLifetimeMs : EffectLifetimeMs),nuclear ? "nuke" : kind,timeMs,tower.type});
+        if (kind == "mine") effects.push_back({{x,y,0},radius * 0.75f,timeMs + CraterLifetimeMs,"groundDamage",timeMs,tower.type});
+        tower.consumed = true; return;
     }
     if (!target) return;
     if (weapon.contains("firesounds") && !weapon.at("firesounds").empty()) soundEvents.push_back(weapon.at("firesounds")[0].get<std::string>());
     const auto& wave = waveFor(*target);
     const Vec3 endpoint = hitPoint(*target,wave),origin = muzzle(tower);
+    const float elevation = towerElevation(tower);
+    // Native beam/slow targets exclude the projectile hit point's quarter-unit offset.
+    const Vec3 visualEndpoint{endpoint.x,endpoint.y,endpoint.z - 0.25f};
+    const auto emitBeam = [&](Vec3 from, Vec3 to, int lifetime, float length = 0) {
+        const Vec3 delta = to - from;
+        Beam beam{from.x,from.y,to.x,to.y,to.z,timeMs + lifetime,from.z,kind};
+        beam.bornAt = timeMs; beam.sourceType = tower.type; beam.radius = weapon.value("radius",0.0f);
+        beam.length = length > 0 ? length : std::sqrt(dot(delta,delta));
+        beam.heading = tower.heading + FullTurn / 4; beam.elevation = elevation;
+        if (kind == "lightning") {
+            beam.heading = std::atan2(delta.y,delta.x) + FullTurn / 4;
+            // The original chain computes elevation against its full 3D length.
+            beam.elevation = std::atan2(delta.z,beam.length);
+        }
+        beams.push_back(std::move(beam));
+    };
     if (kind == "beam") {
         damage(*target,tower,static_cast<int>(baseDamage * tower.damageBoost * target->heat));
         if (wave.value("armor",0) != 4) target->heat = std::min(MaximumHeat,target->heat + HeatPerHit);
-        beams.push_back({origin.x,origin.y,endpoint.x,endpoint.y,endpoint.z,timeMs + BeamLifetimeMs,origin.z,kind});
+        emitBeam(origin,visualEndpoint,BeamLifetimeMs);
     } else if (kind == "railgun" || kind == "flamethrower") {
         lineDamage(x,y,target->x,target->y,definition.at("range").get<float>() * LineRangeFactor,weapon.at("radius").get<float>(),boosted,tower);
         if (kind == "flamethrower" && wave.value("armor",0) != 4) target->heat = std::min(MaximumHeat,target->heat + HeatPerHit);
         const float angle = std::atan2(target->y - y,target->x - x),length = definition.at("range").get<float>() * LineRangeFactor;
         // Render from the recovered muzzle; line damage retains the original tower-center rule.
-        beams.push_back({origin.x,origin.y,x + std::cos(angle) * length,y + std::sin(angle) * length,
-            endpoint.z,timeMs + BeamLifetimeMs,origin.z,kind});
+        emitBeam(origin,{x + std::cos(angle) * length,y + std::sin(angle) * length,visualEndpoint.z},
+            kind == "railgun" ? RailLifetimeMs : FlameLifetimeMs,kind == "railgun" ? length : definition.at("range").get<float>());
     } else if (kind == "flak") {
         const float tx = target->x + randomFloat() - 0.5f,ty = target->y + randomFloat() - 0.5f;
-        randomFloat(); // The original consumes a third combat RNG sample for explosion height.
+        const float heightSample = randomFloat();
         radiusDamage(tx,ty,weapon.at("splash").get<float>(),static_cast<int>(baseDamage),tower);
-        effects.push_back({{tx,ty,endpoint.z},weapon.at("splash").get<float>(),timeMs + EffectLifetimeMs,kind,timeMs});
+        effects.push_back({{tx,ty,wave.value("height",0.0f) + heightSample - 0.25f},weapon.at("splash").get<float>(),timeMs + FlakLifetimeMs,kind,timeMs,tower.type});
     } else if (kind == "slow") {
         for (auto& enemy : enemies) if (planar(target->x,target->y,enemy.x,enemy.y) < weapon.at("splash").get<float>())
             slow(enemy,weapon.at("factor").get<float>(),weapon.at("duration").get<int>());
-        beams.push_back({origin.x,origin.y,endpoint.x,endpoint.y,endpoint.z,timeMs + BeamLifetimeMs,origin.z,kind});
+        emitBeam(origin,visualEndpoint,LightningLifetimeMs);
     } else if (kind == "lightning") {
         // Original chain height samples span 0.5..1; Tesla pull decays by powers of 2.5.
         constexpr float ChainHeightMinimum = 0.5f, ChainHeightSpan = 0.5f, PullDecayBase = 2.5f;
@@ -178,7 +201,7 @@ void Game::fire(Tower& tower, Enemy* target) {
         hit.insert(current->id);
         damage(*current,tower,static_cast<int>(baseDamage));
         const Vec3 firstPoint{current->x,current->y,wave.value("height",0.0f) + wave.value("offset",0.0f) + ChainHeightSpan * randomFloat()};
-        beams.push_back({origin.x,origin.y,firstPoint.x,firstPoint.y,firstPoint.z,timeMs + BeamLifetimeMs,origin.z,kind});
+        emitBeam(origin,firstPoint,LightningLifetimeMs);
         if (attracts > 0) pull(*current,attracts);
         // Retain float damage between jumps; only each delivered hit is truncated to integer HP.
         float remainingDamage = baseDamage;
@@ -204,7 +227,7 @@ void Game::fire(Tower& tower, Enemy* target) {
             const float attenuation = std::max(0.0f,1 - std::sqrt(dot(difference,difference)) / range);
             hit.insert(next->id);
             damage(*next,tower,static_cast<int>(remainingDamage * attenuation));
-            beams.push_back({previous.x,previous.y,point.x,point.y,point.z,timeMs + BeamLifetimeMs,previous.z,kind});
+            emitBeam(previous,point,LightningLifetimeMs);
             if (attracts > 0) pull(*next,static_cast<float>(2 * static_cast<double>(attracts) / std::pow(static_cast<double>(PullDecayBase),jump)));
             remainingDamage *= attenuation;
             current = next;
@@ -215,6 +238,11 @@ void Game::fire(Tower& tower, Enemy* target) {
         for (int muzzleIndex = 0; muzzleIndex < muzzles; ++muzzleIndex) for (int shot = 0; shot < volley; ++shot) {
             Projectile projectile; projectile.source = tower; projectile.target = target->id; projectile.kind = kind;
             projectile.position = muzzle(tower,muzzleIndex); projectile.bornAt = timeMs;
+            if (kind == "plasma" || kind == "mortar") {
+                Effect flash{projectile.position,0,timeMs + MuzzleFlashLifetimeMs,kind == "plasma" ? "plasmaFlash" : "mortarFlash",timeMs,tower.type};
+                flash.heading = tower.heading + FullTurn / 4; flash.elevation = elevation;
+                effects.push_back(std::move(flash));
+            }
             projectile.damage = static_cast<int>(baseDamage * tower.damageBoost / (muzzles * volley));
             projectile.speed = weapon.value("speed",1.0f); projectile.splash = weapon.value("splash",0.0f);
             projectile.endpoint = endpoint;

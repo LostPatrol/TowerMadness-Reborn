@@ -39,8 +39,8 @@ Profile::Profile(const std::filesystem::path& directory) : directory_(directory)
             || !settings.value("volume",nlohmann::json(0.0f)).is_number()
             || !settings.value("musicVolume",nlohmann::json(0.0f)).is_number()) throw std::runtime_error("Invalid saved settings");
         data.update(loaded);
-    } catch (const std::exception& error) {
-        warning = "Progress could not be read: " + std::string(error.what());
+    } catch (const std::exception&) {
+        warning = "存档读取失败，已保留损坏副本；可开始新游戏。";
         // Retain the damaged input before later successful progress writes replace it.
         std::error_code ignored;
         std::filesystem::copy_file(directory_ / "profile.json",directory_ / "profile.damaged.json",
@@ -59,8 +59,8 @@ bool Profile::save() {
         if (!MoveFileExW(temporary.c_str(),(directory_ / "profile.json").c_str(),MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
             throw std::runtime_error("Cannot replace profile.json, Windows error " + std::to_string(GetLastError()));
         warning.clear(); return true;
-    } catch (const std::exception& error) {
-        warning = "Progress could not be saved: " + std::string(error.what()); return false;
+    } catch (const std::exception&) {
+        warning = "保存失败，请检查存档目录权限或磁盘空间。"; return false;
     }
 }
 

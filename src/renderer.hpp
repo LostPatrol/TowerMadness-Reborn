@@ -3,6 +3,7 @@
 
 #include "math.hpp"
 #include <filesystem>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -27,6 +28,10 @@ struct Renderable {
     Vec3 pitchPivot{};
     Mat4 animationTransform = Mat4::identity();
     bool overrideMaterialColor = false, unlit = false;
+    Vec2 textureScale{1,1}, textureOffset{};
+    // Lightning chooses two distinct atlas strips on each presented frame.
+    int atlasFrames = 0, atlasLayer = 0;
+    std::uint32_t visualSeed = 0;
 };
 
 struct RenderLine {
@@ -40,6 +45,8 @@ struct RenderSprite {
     float width = 1, height = 1;
     Color color{};
     bool ground = false, additive = false;
+    // Native point sprites scale this parameter by viewport width and camera distance.
+    float pointSizeParameter = 0;
 };
 
 struct RenderRibbon {
@@ -72,6 +79,12 @@ struct HudPanel {
     Color color{};
 };
 
+struct HudImage {
+    std::string texture;
+    float x = 0, y = 0, width = 0, height = 0;
+    Color color{};
+};
+
 struct SceneView {
     std::vector<Renderable> models;
     std::vector<RenderLine> lines;
@@ -82,6 +95,7 @@ struct SceneView {
     Color cellColor{0.2f,0.65f,1,1};
     std::vector<RenderSprite> sprites;
     std::vector<RenderRibbon> ribbons;
+    std::vector<HudImage> images;
 };
 
 class Renderer {
@@ -104,6 +118,8 @@ public:
     void setBoardViewport(float x, float y, float width, float height);
     // Render map, simulation models, world lines, and desktop HUD, then present.
     void draw(const SceneView& scene);
+    // Cache an actual original-map render without changing the live board or camera.
+    std::string mapPreview(const std::string& mapName);
     // Intersect a logical-pixel mouse position with the world ground plane.
     std::optional<Vec2> pick(float screenX, float screenY) const;
     // Project a world point to logical pixels for diagnostics and UI anchoring.
@@ -124,6 +140,8 @@ public:
     const std::string& graphicsInfo() const;
 
 private:
+    // Reuse the production scene path for window presentation and offscreen thumbnails.
+    void drawScene(const SceneView& scene, bool present);
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };

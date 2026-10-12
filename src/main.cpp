@@ -8,6 +8,7 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_opengl.h>
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -36,8 +37,8 @@ constexpr int ModeActionBase = 1000, EndlessActionBase = 2000, PaletteActionBase
 constexpr float DetailsWidth = 278, PaletteCardWidth = 168, PaletteRowHeight = 58;
 // HUD colors are shared by menu, battle, and modal panels.
 constexpr Color PanelColor{0.06f,0.10f,0.14f,0.96f}, AccentColor{0.55f,0.88f,0.62f,1};
-// Match the existing desktop beam event lifetime for presentation-only fading.
-constexpr float BeamFadeLifetimeMs = 125;
+// Original longitudinal effect meshes face +Z before their X-axis aim rotation.
+constexpr float EffectHalfPi = 1.57079633f, EffectPi = 3.14159265f;
 // Native death animation uses a three-second countdown split at thirty percent.
 constexpr float CorpseSeconds = 3, DeathFirstPhase = 0.3f, DeathLastPhase = 0.7f;
 // Original ENEMIES_draw hop literal differs slightly from mathematical pi.
@@ -48,8 +49,12 @@ constexpr Color EnemyStatusTint{0.7647059f,0.8509804f,1,1};
 struct Desktop {
     bool menu = true;
     bool restartConfirm = false, quitRequested = false, resultsDismissed = false;
+    bool exitSaveFailed = false;
     int page = 0, category = 0;
     std::string buildType;
+    std::string previewMode, menuMessage, completedMode;
+    std::vector<std::string> newUnlocks;
+    std::unique_ptr<Game> preview;
     std::vector<CatalogEntry> catalog;
     std::vector<std::string> visibleModes;
 };
@@ -218,6 +223,50 @@ void enemyShadow(SceneView& scene, const Enemy& enemy, const nlohmann::json& wav
     scene.models.back().unlit = true;
 }
 
+// Use a separate deterministic visual sample without consuming battle RNG.
+float visualRandom(std::uint32_t seed) {
+    seed ^= seed >> 16; seed *= 0x7feb352du;
+    seed ^= seed >> 15; seed *= 0x846ca68bu;
+    seed ^= seed >> 16;
+    return static_cast<float>(seed) * 0x1p-32f;
+}
+
+// Keep one effect's random width and direction stable throughout its lifetime.
+std::uint32_t visualSeed(int bornAt, Vec3 origin) {
+    return static_cast<std::uint32_t>(bornAt) ^ std::bit_cast<std::uint32_t>(origin.x)
+        ^ (std::bit_cast<std::uint32_t>(origin.y) * 31u) ^ std::bit_cast<std::uint32_t>(origin.z);
+}
+
+// Match recovered laser and rail tier colors rather than reusing one red ribbon.
+Color beamColor(const Beam& beam) {
+    const auto& type = beam.sourceType;
+    if (type == "Kilowatt Laser" || type == "Railgun I") return {1,0,0,1};
+    if (type == "Megawatt Laser" || type == "Railgun II") return {1,116.0f / 255,0,1};
+    if (type == "Gigawatt Laser" || type == "Railgun III") return {1,1,0,1};
+    if (type == "Terawatt Laser" || type == "Railgun IV") return {0,1,0,1};
+    if (beam.kind == "railgun" && type != "Railgun V") return {159.0f / 255,0,1,1};
+    return {0,0,1,1};
+}
+
+// Compose original effect meshes with explicit radial and longitudinal scale.
+Renderable& effectModel(SceneView& scene, const std::string& model, Vec3 position, Vec3 scale, Color color = {}, float yaw = 0, float pitch = 0) {
+    scene.models.push_back({model,position,yaw,1,color});
+    auto& object = scene.models.back();
+    object.pitch = pitch; object.animationTransform = scaleMatrix(scale);
+    object.overrideMaterialColor = true; object.unlit = true;
+    return object;
+}
+
+// Draw desktop status aids as actual circles rather than stretching a ring atlas into a quad.
+void statusRing(SceneView& scene, Vec3 center, float radius, Color color) {
+    constexpr int Segments = 48;
+    for (int segment = 0; segment < Segments; ++segment) {
+        const float a = segment * 2 * EffectPi / Segments, b = (segment + 1) * 2 * EffectPi / Segments;
+        scene.lines.push_back({center + Vec3{std::cos(a) * radius,std::sin(a) * radius,0},
+            center + Vec3{std::cos(b) * radius,std::sin(b) * radius,0},color});
+    }
+}
+
 // Assemble original mesh instances and the shared desktop command HUD.
 SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover, int speed, int windowWidth, int windowHeight) {
     SceneView scene;
@@ -229,8 +278,8 @@ SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover,
         const std::string kind = game.technology.at("weapons").at(definition.at("weapon").get<std::string>()).at("type").get<std::string>();
         if (!waiting && (kind == "boost" || tower.damageBoost > 1)) {
             const float radius = kind == "boost" ? definition.at("range").get<float>() : 1.1f;
-            scene.sprites.push_back({"nukeshockwave.pvr.png",{tower.x + 1.0f,tower.y + 1.0f,0.06f},radius * 2,radius * 2,
-                {0.35f,1,0.6f,0.18f + 0.06f * std::sin(game.timeMs * 0.006f)},true,true});
+            statusRing(scene,{tower.x + 1.0f,tower.y + 1.0f,0.06f},radius,
+                {0.35f,1,0.6f,0.4f + 0.1f * std::sin(game.timeMs * 0.006f)});
         }
         const bool directional = kind != "lightning" && kind != "boost" && kind != "mine" && kind != "bait" && tower.type != "Nuke" && tower.type != "H Bomb";
         const float yaw = directional ? tower.heading + TowerHeadingOffset : 0;
@@ -271,7 +320,7 @@ SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover,
         }
         if (enemy.stunMs > 0 || enemy.slowMs > 0) {
             const Color color = enemy.stunMs > 0 ? Color{0.72f,0.4f,1,0.65f} : Color{0.25f,0.85f,1,0.55f};
-            scene.sprites.push_back({"nukeshockwave.pvr.png",{enemy.x,enemy.y,0.055f},size * 1.9f,size * 1.9f,color,true,true});
+            statusRing(scene,{enemy.x,enemy.y,0.055f},size * 0.95f,color);
         }
     }
     for (const auto& corpse : game.corpses()) {
@@ -295,22 +344,41 @@ SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover,
     }
     for (const auto& ufo : game.ufos)
         if (ufo.state != Ufo::State::Idle) scene.models.push_back({"ufo",{ufo.x,ufo.y,ufo.z},0,1});
-    // Widths and fades are desktop approximations; attachment coordinates are recovered.
+    // Native models and age formulas retain the desktop simulation-clock adaptation.
     for (const auto& beam : game.beams) if (!ended(game)) {
-        const Vec3 from{beam.fromX,beam.fromY,beam.fromZ},to{beam.toX,beam.toY,beam.toZ};
-        const float alpha = std::clamp((beam.expiresAt - game.timeMs) / BeamFadeLifetimeMs,0.0f,1.0f);
-        if (beam.kind == "lightning") {
-            scene.ribbons.push_back({"lightning.pvr.png",from,to,0.45f,{0.6f,0.8f,1,alpha},(game.timeMs / 25) % 4,4});
-        } else if (beam.kind == "flamethrower") {
-            constexpr int FlamePuffs = 5;
-            const Vec3 direction = to - from;
-            for (int index = 0; index < FlamePuffs; ++index) {
-                const float phase = (index + 0.5f) / FlamePuffs,diameter = 0.3f + phase * 0.9f;
-                scene.sprites.push_back({"fireball.pvr.png",from + direction * phase,diameter,diameter,{1,0.85f,0.6f,alpha * (1 - phase)},false,true});
+        const Vec3 from{beam.fromX,beam.fromY,beam.fromZ};
+        const float u = std::clamp(static_cast<float>(game.timeMs - beam.bornAt) / std::max(1,beam.expiresAt - beam.bornAt),0.0f,1.0f);
+        const float pitch = EffectHalfPi - beam.elevation, length = beam.length;
+        const std::uint32_t seed = visualSeed(beam.bornAt,from);
+        if (beam.kind == "beam") {
+            effectModel(scene,"beam2",from,{0.5f * u,0.5f * u,length},beamColor(beam),beam.heading,pitch);
+        } else if (beam.kind == "railgun") {
+            const float remaining = (1 - u) * (1 - u) * (1 - u), progress = 1 - remaining;
+            if (u <= 0.1f) {
+                const float width = u * (0.5f * beam.radius + 6);
+                effectModel(scene,"beam2",from,{width,width,10 * u * length},{1,1,1,1 - 10 * u},beam.heading,pitch);
             }
-        } else {
-            const Color color = beam.kind == "slow" ? Color{0.2f,0.7f,1,alpha} : beam.kind == "railgun" ? Color{0.5f,1,0.7f,alpha} : Color{1,0.18f,0.08f,alpha};
-            scene.ribbons.push_back({"beam.pvr.png",from,to,beam.kind == "railgun" ? 0.12f : 0.07f,color});
+            Color color = beamColor(beam); color.a = 2 * remaining;
+            const float width = progress * (0.15f * beam.radius + 0.25f);
+            effectModel(scene,"railspiral",from,{width,width,(u <= 0.1f ? 10 * u : 1) * length},color,beam.heading,pitch);
+        } else if (beam.kind == "lightning" || beam.kind == "slow") {
+            const bool slow = beam.kind == "slow";
+            const bool tesla = !slow && game.technology.at("towers").at(beam.sourceType).value("istesla",0) != 0;
+            const float width = slow ? 0.35f + 0.15f * visualRandom(seed) : (0.75f + 0.25f * visualRandom(seed)) * std::clamp(0.25f * length,1.0f,2.5f);
+            for (int layer = 0; layer < 2; ++layer) {
+                const Color color = layer == 0 ? (tesla ? Color{1,1,136.0f / 255,1} : Color{195.0f / 255,217.0f / 255,1,1})
+                    : slow ? Color{64.0f / 255,150.0f / 255,238.0f / 255,1} : tesla ? Color{1,1,0,1} : Color{};
+                auto& object = effectModel(scene,tesla ? "$effect:lightning2" : "$effect:lightning",from,
+                    {width * (layer == 0 ? 1.25f : 1),width * (layer == 0 ? 1.25f : 1),length},color,beam.heading,pitch);
+                object.atlasFrames = 4; object.atlasLayer = layer; object.visualSeed = seed;
+            }
+        } else if (beam.kind == "flamethrower") {
+            const float phase = u * u * u, yaw = beam.heading - EffectHalfPi;
+            const Vec3 velocity{length * std::cos(beam.elevation) * std::cos(yaw) + visualRandom(seed + 3),
+                length * std::cos(beam.elevation) * std::sin(yaw) + visualRandom(seed + 2),length * std::sin(beam.elevation) + visualRandom(seed + 1)};
+            const float growth = 1 - std::pow(1 - 1.1f * phase,3.0f);
+            const float alpha = u < 0.2f ? u / 0.2f : u < 0.7f ? 1 : 1 - (u - 0.7f) / 0.3f;
+            scene.sprites.push_back({"fireball.pvr.png",from + velocity * phase,1,1,{1,1,1,alpha},false,true,128 + 1024 * growth});
         }
     }
     for (const auto& projectile : game.projectiles) {
@@ -318,7 +386,11 @@ SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover,
             scene.models.push_back({projectile.model,projectile.position,std::atan2(projectile.velocity.y,projectile.velocity.x) + TowerHeadingOffset,0.5f});
             scene.models.back().pitch = -std::atan2(projectile.velocity.z,std::hypot(projectile.velocity.x,projectile.velocity.y));
         }
-        if (projectile.kind == "plasma") scene.sprites.push_back({"plasmaball.pvr.png",projectile.position,0.5f,0.5f,{},false,true});
+        if (projectile.kind == "plasma") {
+            const int frame = static_cast<int>(game.timeMs * 0.01f) % 4;
+            scene.sprites.push_back({frame == 0 ? "plasmaball.pvr.png" : "plasmaball" + std::to_string(frame + 1) + ".pvr.png",projectile.position,1,1,{},false,false,
+                projectile.damage < 450 ? 164 + 0.2f * projectile.damage : 254});
+        }
         else scene.sprites.push_back({"smokepuff.pvr.png",projectile.previous,0.32f,0.32f,{0.85f,0.85f,0.85f,0.45f}});
     }
     for (const auto& effect : game.effects) if (!ended(game)) {
@@ -326,13 +398,45 @@ SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover,
         const float radius = effect.radius > 0 ? effect.radius : 0.4f,diameter = radius * (0.5f + age * 1.5f);
         if (effect.kind == "death") scene.sprites.push_back({"smokepuff.pvr.png",effect.position + Vec3{0,0,age * 0.7f},diameter,diameter,{0.65f,0.7f,0.6f,1 - age}});
         else if (effect.kind == "sheepLeak") scene.sprites.push_back({"life.pvr.png",effect.position + Vec3{0,0,age * 1.5f},1,1,{1,0.2f,0.2f,1 - age}});
-        else if (effect.kind == "plasma") scene.sprites.push_back({"plasmaball.pvr.png",effect.position,diameter,diameter,{0.5f,0.8f,1,1 - age},false,true});
+        else if (effect.kind == "plasmaFlash" || effect.kind == "mortarFlash") {
+            auto& object = effectModel(scene,"$effect:muzzlefx",effect.position,{0.5f * age,0.5f * age,age},{1,1,1,1 - age * age * age},effect.heading,EffectHalfPi - effect.elevation);
+            object.textureScale = {1,0.25f}; object.textureOffset = {0,effect.kind == "plasmaFlash" ? 0.5f : 0.75f};
+        } else if (effect.kind == "groundDamage") {
+            effectModel(scene,"crater",{effect.position.x,effect.position.y,0.02f},{radius,radius,1},{1,1,1,1 - age * age * age},visualRandom(visualSeed(effect.bornAt,effect.position)) * 2 * EffectPi);
+        } else if (effect.kind == "flak") {
+            const std::uint32_t seed = visualSeed(effect.bornAt,effect.position);
+            const float scale = (0.5f + visualRandom(seed)) * radius;
+            scene.sprites.push_back({visualRandom(seed + 1) < 0.5f ? "flakburst1.pvr.png" : "flakburst2.pvr.png",effect.position,1,1,{1,1,1,1 - age * age * age},false,false,
+                (age < 0.1f ? 2560 * age : 256 + 128 * age) * scale});
+        } else if (effect.kind == "nuke") {
+            const float yaw = visualRandom(visualSeed(effect.bornAt,effect.position)) * 2 * EffectPi;
+            const bool hydrogen = effect.sourceType == "H Bomb";
+            const Vec3 ground{effect.position.x,effect.position.y,0};
+            if (age < 0.333f) effectModel(scene,"nukeshockwave",ground + Vec3{0,0,0.13f},{0.1f + 28 * age,0.1f + 28 * age,1},{1,1,1,1 - 3 * age});
+            if (age < 0.5f) effectModel(scene,"debris",ground + Vec3{0,0,0.08f},{1,1,1},{1,1,1,1 - 2 * age}).scale = 0.7f * radius * std::sin(EffectPi * age);
+            const float dust = 2 * radius * std::sin(EffectPi * age / 2);
+            effectModel(scene,"nukedust",ground + Vec3{0,0,0.08f},{dust,dust,dust},{68.0f / 255,68.0f / 255,68.0f / 255,age < 0.5f ? 4 * age * age : 2 - 2 * age});
+            const float light = std::sin(std::sqrt(EffectPi * EffectPi * age));
+            auto& cloud = effectModel(scene,hydrogen ? "mushroomcloud_hbomb" : "mushroomcloud",ground,{2 + age,2 + age,0.1f + 5 * age},{light,light,light,1},
+                yaw + (hydrogen ? 2 * EffectPi * (0.5f - 0.5f * std::cos(age * 3.141592502593994f)) : 0));
+            const float uvScale = 1 - 0.7f * (1 - age);
+            cloud.textureScale = {uvScale,uvScale}; cloud.textureOffset = {(1 - uvScale) / 2,(1 - uvScale) / 2};
+        }
         else if (effect.kind == "bait" || effect.kind == "split")
-            scene.sprites.push_back({"nukeshockwave.pvr.png",{effect.position.x,effect.position.y,0.07f},diameter,diameter,{0.65f,0.3f,1,1 - age},true,true});
-        else {
+            effectModel(scene,"rangecircle",{effect.position.x,effect.position.y,0.07f},{diameter,diameter,1},{0.65f,0.3f,1,1 - age});
+        else if (effect.kind == "mine" || effect.kind == "mortar") {
+            const Vec3 ground{effect.position.x,effect.position.y,0};
+            const float a = radius * (1 - 10 * age) + 0.7f * radius * (10 * age), b = 0.1f * radius * (1 - age) + radius * age;
+            if (age <= 0.1f) {
+                effectModel(scene,"blast",ground + Vec3{0,0,0.02f},{4 * a,4 * a,4 * a},{1,1,1,1 - 10 * age});
+                effectModel(scene,"flash",ground + Vec3{0,0,0.3f},{a,a,a},{1,1,1,1 - 10 * age});
+            }
+            if (age < 0.5f) effectModel(scene,"rangecircle",ground + Vec3{0,0,0.2f},{4 * b,4 * b,1},{1,1,1,1 - 2 * age});
+            effectModel(scene,"dustcone",ground + Vec3{0,0,0.02f},{2 * age * radius,2 * age * radius,std::sin(EffectPi * age) * radius},
+                {17.0f / 255,17.0f / 255,17.0f / 255,1 - age * age * age});
+        } else {
             scene.sprites.push_back({"fireball.pvr.png",effect.position,diameter,diameter,{1,0.8f,0.6f,1 - age},false,true});
             scene.sprites.push_back({"smokepuff.pvr.png",effect.position + Vec3{0,0,age},diameter,diameter,{0.85f,0.8f,0.75f,(1 - age) * 0.55f}});
-            if (effect.kind == "nuke") scene.sprites.push_back({"nukeshockwave.pvr.png",{effect.position.x,effect.position.y,0.07f},diameter * 2,diameter * 2,{1,0.85f,0.6f,1 - age},true});
         }
     }
     if (hover) scene.selectedCell = Vec2{static_cast<float>(hover->x),static_cast<float>(hover->y)};
@@ -390,6 +494,57 @@ bool campaignAvailable(const CatalogEntry& entry, const Profile& profile) {
     return false;
 }
 
+// Apply the same progression gate to previews, start buttons, and keyboard actions.
+bool modeAvailable(const std::string& id, const Desktop& desktop, const Profile& profile) {
+    if (id.starts_with("Endless:") || id.starts_with("Sandbox:"))
+        return profile.data.at("completed").contains("DividedAttention");
+    const auto entry = std::find_if(desktop.catalog.begin(),desktop.catalog.end(),[&](const CatalogEntry& value) { return value.id == id; });
+    return entry != desktop.catalog.end() && (!entry->selectableKnown || campaignAvailable(*entry,profile));
+}
+
+// Return the immediate campaign successor without changing any unlock rules.
+std::string nextCampaign(const std::string& id) {
+    if (id == "PlainPlane") return "DividedAttention";
+    if (id == "DividedAttention") return "MuttonsFolly";
+    if (id == "MuttonsFolly") return "Madness";
+    return {};
+}
+
+// Record completion once and retain only unlocks newly earned by this match.
+void desktopCompletion(const Game& game, Desktop& desktop, Profile& profile) {
+    if (game.outcome != Outcome::Won) { desktop.completedMode.clear(); desktop.newUnlocks.clear(); return; }
+    if (desktop.completedMode == game.modeId) return;
+    const bool first = !profile.data.at("completed").contains(game.modeId);
+    desktop.completedMode = game.modeId; desktop.newUnlocks.clear();
+    if (first) {
+        const std::string next = nextCampaign(game.modeId);
+        if (!next.empty()) desktop.newUnlocks.push_back(levelName(next));
+        if (game.modeId == "PlainPlane") desktop.newUnlocks.push_back("进阶科技");
+        if (game.modeId == "DividedAttention") desktop.newUnlocks.push_back("困难科技 / 无限挑战 / 沙盒");
+        if (game.modeId == "MuttonsFolly") desktop.newUnlocks.push_back("疯狂科技");
+    }
+    profile.complete(game.modeId,game.lives,game.finalScore());
+}
+
+// Describe the real saved session without loading it or changing the current match.
+std::string savedSummary(const Profile& profile) {
+    if (!profile.data.contains("session")) return "暂无保存的游戏";
+    const auto& session = profile.data.at("session");
+    if (!session.is_object()) return "保存内容无法读取";
+    try {
+        const int outcome = session.value("outcome",0);
+        const std::string state = outcome == 2 ? "胜利" : outcome == 3 ? "失败" : session.value("paused",false) ? "暂停" : outcome == 0 ? "准备" : "战斗中";
+        return levelName(session.value("mode",std::string("PlainPlane"))) + " · 第" + std::to_string(session.value("wavesSent",0)) + "波 · " + state;
+    } catch (const std::exception&) { return "保存内容无法读取 · 可开始新关卡"; }
+}
+
+// Load preview metadata separately so browsing never replaces the live defense.
+void selectPreview(Desktop& desktop, const std::string& id) {
+    desktop.previewMode = id; desktop.preview.reset(); desktop.menuMessage.clear();
+    try { desktop.preview = std::make_unique<Game>(executableDirectory() / "assets",id); }
+    catch (const std::exception& error) { desktop.menuMessage = "关卡预览无法载入：" + std::string(error.what()); }
+}
+
 // Show a compact, consistent desktop HUD while reusing the original scene and art.
 SceneView desktopScene(Renderer& renderer, const Game& game, Desktop& desktop, const Profile& profile, int selectedId,
                        std::optional<Cell> hover, int speed, int width, int height) {
@@ -407,11 +562,10 @@ SceneView desktopScene(Renderer& renderer, const Game& game, Desktop& desktop, c
         scene.buttons = {{"战役",32,166,130,36,desktop.category == 0,true,20},
                          {"附加关卡",172,166,130,36,desktop.category == 1,true,21},
                          {"无限挑战",312,166,130,36,desktop.category == 2,true,22},
-                         {"返回当前局",width - 262.0f,166,220,36,false,true,10},
-                         {"继续保存的游戏",width - 262.0f,214,220,40,false,profile.data.contains("session"),12}};
-        scene.buttons.push_back({"音效 " + std::to_string(static_cast<int>(profile.data.at("settings").value("volume",0.0f) * 100)) + "%",width - 262.0f,280,220,36,false,true,16});
-        scene.buttons.push_back({"音乐 " + std::to_string(static_cast<int>(profile.data.at("settings").value("musicVolume",0.0f) * 100)) + "%",width - 262.0f,326,220,36,false,true,17});
-        scene.buttons.push_back({"退出游戏",width - 262.0f,height - 104.0f,220,36,false,true,18});
+                         {"返回当前局",width - 372.0f,166,340,36,false,true,10}};
+        scene.buttons.push_back({"音效 " + std::to_string(static_cast<int>(profile.data.at("settings").value("volume",0.0f) * 100)) + "%",width - 372.0f,110,164,36,false,true,16});
+        scene.buttons.push_back({"音乐 " + std::to_string(static_cast<int>(profile.data.at("settings").value("musicVolume",0.0f) * 100)) + "%",width - 196.0f,110,164,36,false,true,17});
+        scene.buttons.push_back({desktop.exitSaveFailed ? "仍然退出（未保存）" : "退出游戏",width - 372.0f,height - 80.0f,340,36,false,true,18});
         desktop.visibleModes.clear();
         if (desktop.category == 0) desktop.visibleModes = {"PlainPlane","DividedAttention","MuttonsFolly","Madness"};
         else if (desktop.category == 1)
@@ -425,16 +579,36 @@ SceneView desktopScene(Renderer& renderer, const Game& game, Desktop& desktop, c
             const int index = desktop.page * ModesPerPage + row;
             if (index >= static_cast<int>(desktop.visibleModes.size())) break;
             const std::string& id = desktop.visibleModes[index];
-            const auto found = std::find_if(desktop.catalog.begin(),desktop.catalog.end(),[&](const CatalogEntry& entry) { return entry.id == id; });
-            const bool allowed = desktop.category == 1 || (desktop.category == 0 && found != desktop.catalog.end() && campaignAvailable(*found,profile))
-                || (desktop.category == 2 && profile.data.at("completed").contains("DividedAttention"));
+            const bool allowed = modeAvailable(id,desktop,profile);
             const std::string label = levelName(id) + (profile.data.at("completed").contains(id) ? " · 已完成" : allowed ? "" : " · 未解锁");
-            scene.buttons.push_back({label,32,220 + row * rowHeight,width - 326.0f,rowHeight - 3,false,allowed,ModeActionBase + index});
+            scene.buttons.push_back({label,32,220 + row * rowHeight,width - 420.0f,rowHeight - 3,desktop.previewMode == id,true,ModeActionBase + index});
         }
+        if (!desktop.visibleModes.empty() && std::find(desktop.visibleModes.begin(),desktop.visibleModes.end(),desktop.previewMode) == desktop.visibleModes.end())
+            selectPreview(desktop,desktop.visibleModes[desktop.page * ModesPerPage]);
+        const float previewX = width - 372.0f;
+        if (desktop.preview) {
+            const Game& preview = *desktop.preview;
+            const std::string thumbnail = renderer.mapPreview(preview.mode.at("map").get<std::string>());
+            if (!thumbnail.empty()) scene.images.push_back({thumbnail,previewX + 36,220,268,151});
+            else scene.texts.push_back({"地图预览暂时不可用",previewX,286,{1,0.72f,0.5f,1},18});
+            scene.texts.push_back({levelName(desktop.previewMode),previewX,382,AccentColor,22});
+            const std::string tech = preview.mode.at("tech").get<std::string>();
+            scene.texts.push_back({"科技 " + std::string(tech == "Easy" ? "普通" : tech == "Medium" ? "进阶" : tech == "Hard" ? "困难" : "疯狂") +
+                " · " + (preview.endless ? "无限波次" : std::to_string(preview.waves.size()) + "波"),previewX,414,{},18});
+            scene.texts.push_back({"初始 " + std::to_string(preview.money) + " 金币 · " + std::to_string(preview.lives) + " 只羊",previewX,442,{},18});
+            const auto& completed = profile.data.at("completed");
+            const std::string best = completed.contains(desktop.previewMode) ? "最佳 " + std::to_string(completed.at(desktop.previewMode).value("score",0)) + " 分 · " +
+                std::to_string(completed.at(desktop.previewMode).value("sheep",0)) + " 只羊" : "最佳成绩：尚未完成";
+            scene.texts.push_back({best,previewX,470,{},18});
+            const bool allowed = modeAvailable(desktop.previewMode,desktop,profile);
+            scene.buttons.push_back({allowed ? "开始所选关卡" : "完成前一战役后解锁",previewX,502,340,38,false,allowed,27});
+        }
+        scene.buttons.push_back({"继续保存的游戏",previewX,552,340,36,false,profile.data.contains("session"),12});
+        scene.texts.push_back({savedSummary(profile),previewX,594,{0.8f,0.85f,0.9f,1},16});
         scene.buttons.push_back({"上一页",32,height - 100.0f,120,36,false,desktop.page > 0,14});
         scene.buttons.push_back({"下一页",162,height - 100.0f,120,36,false,desktop.page + 1 < pages,15});
         scene.texts.push_back({std::to_string(desktop.page + 1) + " / " + std::to_string(pages),302,height - 92.0f});
-        scene.texts.push_back({profile.warning.empty() ? "选择关卡，布置防御塔，保护羊群。" : profile.warning,32,height - 48.0f,{1,0.85f,0.5f,1}});
+        scene.texts.push_back({!profile.warning.empty() ? profile.warning : !desktop.menuMessage.empty() ? desktop.menuMessage : "浏览关卡后点击开始 · 当前局保持不变",32,height - 42.0f,{1,0.85f,0.5f,1},16});
         return scene;
     }
     scene.panels.push_back({0,0,static_cast<float>(width),104,PanelColor});
@@ -548,8 +722,9 @@ SceneView desktopScene(Renderer& renderer, const Game& game, Desktop& desktop, c
         // The modal replaces controls so no hidden button can receive its click.
         scene.buttons.clear();
         scene.panels.push_back({0,0,static_cast<float>(width),static_cast<float>(height),{0.01f,0.03f,0.05f,0.58f}});
-        const float x = (width - 460) / 2.0f,y = (height - 290) / 2.0f;
-        scene.panels.push_back({x,y,460,290,PanelColor});
+        const float modalHeight = ended(game) && !desktop.restartConfirm ? 390.0f : 290.0f;
+        const float x = (width - 460) / 2.0f,y = (height - modalHeight) / 2.0f;
+        scene.panels.push_back({x,y,460,modalHeight,PanelColor});
         // Modal text is appended last, after the normal interface text.
         scene.texts.clear();
         scene.texts.push_back({desktop.restartConfirm ? "重新开始这一关？" : ended(game) ? (game.outcome == Outcome::Won ? "羊群保卫成功！" : "羊群被带走了") : "暂停",x + 26,y + 24,AccentColor,28});
@@ -560,18 +735,36 @@ SceneView desktopScene(Renderer& renderer, const Game& game, Desktop& desktop, c
         } else if (ended(game)) {
             scene.texts.push_back({"总分 " + std::to_string(game.finalScore()) + "    剩余羊群 " + std::to_string(game.lives),x + 26,y + 82,{},22});
             scene.texts.push_back({"击杀 " + std::to_string(game.killed) + "    完成波次 " + std::to_string(game.wavesSent),x + 26,y + 118,{},18});
-            scene.buttons.push_back({"再试一次",x + 26,y + 166,190,38,false,true,23});
-            scene.buttons.push_back({"选择关卡",x + 244,y + 166,190,38,false,true,10});
-            scene.buttons.push_back({"查看战场",x + 26,y + 218,408,34,false,true,26});
+            const std::string next = game.outcome == Outcome::Won ? nextCampaign(game.modeId) : "";
+            scene.texts.push_back({desktop.newUnlocks.empty() ? (game.outcome == Outcome::Won ? "成绩已记录" : "调整防御布局，再来挑战") : "新解锁：" + desktop.newUnlocks.front(),x + 26,y + 153,AccentColor,18});
+            if (desktop.newUnlocks.size() > 1) scene.texts.push_back({desktop.newUnlocks[1],x + 26,y + 180,AccentColor,16});
+            if (!next.empty()) scene.buttons.push_back({"下一战役 · " + levelName(next),x + 26,y + 214,408,38,false,modeAvailable(next,desktop,profile),28});
+            else if (game.modeId == "Madness" && game.outcome == Outcome::Won) scene.texts.push_back({"战役全部完成 · 可继续无限挑战",x + 26,y + 214,AccentColor,18});
+            scene.buttons.push_back({"再试一次",x + 26,y + 266,190,38,false,true,23});
+            scene.buttons.push_back({"选择关卡",x + 244,y + 266,190,38,false,true,10});
+            scene.buttons.push_back({"查看战场",x + 26,y + 318,408,34,false,true,26});
         } else {
             scene.buttons.push_back({"继续游戏",x + 26,y + 86,408,38,false,true,1});
             scene.buttons.push_back({"重新开始",x + 26,y + 138,190,38,false,true,3});
             scene.buttons.push_back({"关卡 / 设置",x + 244,y + 138,190,38,false,true,10});
             scene.buttons.push_back({"保存",x + 26,y + 190,190,38,false,true,11});
-            scene.buttons.push_back({"退出游戏",x + 244,y + 190,190,38,false,true,18});
+            scene.buttons.push_back({desktop.exitSaveFailed ? "仍然退出（未保存）" : "退出游戏",x + 244,y + 190,190,38,false,true,18});
         }
+        if (!profile.warning.empty()) scene.texts.push_back({profile.warning,x + 26,y + modalHeight - 27,{1,0.62f,0.5f,1},14});
     }
     return scene;
+}
+
+// Report a failed exit save before an explicit second close discards unsaved progress.
+void requestExit(const Game& game, Desktop& desktop, Profile& profile, int speed) {
+    if (desktop.exitSaveFailed) { desktop.quitRequested = true; return; }
+    profile.data["session"] = game.saveState(); profile.data["lastMode"] = game.modeId;
+    profile.data["settings"]["speed"] = speed;
+    if (profile.save()) desktop.quitRequested = true;
+    else {
+        desktop.exitSaveFailed = true; desktop.menu = true; desktop.restartConfirm = false;
+        desktop.menuMessage = "保存失败。再次退出将放弃未保存的进度。";
+    }
 }
 
 // Dispatch buttons and keys through one production input path, respecting modal layers.
@@ -653,17 +846,23 @@ bool desktopInput(const SDL_Event& event, Game& game, Renderer& renderer, Deskto
         desktop.menu = !desktop.menu; desktop.restartConfirm = false; desktop.buildType.clear();
     } else if (action == 11) {
         profile.data["session"] = game.saveState(); profile.data["lastMode"] = game.modeId;
-        profile.data["settings"]["speed"] = speed; game.message = profile.save() ? "游戏已保存。" : profile.warning;
+        profile.data["settings"]["speed"] = speed;
+        if (profile.save()) { game.message = "游戏已保存。"; desktop.exitSaveFailed = false; }
+        else game.message = profile.warning;
+        desktop.menuMessage = game.message;
     } else if (action == 12 && profile.data.contains("session")) {
         try {
-            game.restoreState(profile.data.at("session"));
-            if (!renderer.changeMap(utf8Path(SDL_GetBasePath()) / "assets/data" / (game.mode.at("map").get<std::string>() + ".map.json")))
-                game.message = renderer.error();
+            Game restored = game;
+            restored.restoreState(profile.data.at("session"));
+            if (!renderer.changeMap(executableDirectory() / "assets/data" / (restored.mode.at("map").get<std::string>() + ".map.json"))) {
+                desktop.menuMessage = game.message = "地图载入失败：" + renderer.error(); return true;
+            }
+            game = std::move(restored);
             selectedId = -1; desktop.menu = false; desktop.restartConfirm = false; desktop.resultsDismissed = false;
             speed = profile.data.at("settings").value("speed",1);
             if (speed != 1 && speed != 2 && speed != 4) speed = 1;
-            desktop.buildType.clear();
-        } catch (const std::exception& error) { game.message = "无法继续保存的游戏：" + std::string(error.what()); }
+            desktop.buildType.clear(); desktop.completedMode.clear(); desktop.newUnlocks.clear(); desktop.menuMessage.clear();
+        } catch (const std::exception& error) { desktop.menuMessage = game.message = "无法继续保存的游戏：" + std::string(error.what()); }
     } else if (action == 14) --desktop.page;
     else if (action == 15) ++desktop.page;
     else if (action == 16 || action == 17) {
@@ -672,7 +871,7 @@ bool desktopInput(const SDL_Event& event, Game& game, Renderer& renderer, Deskto
         profile.data["settings"][setting] = before >= 1 ? 0 : before + 0.25f;
         if (audio) audio->setVolumes(profile.data["settings"].value("volume",0.0f),profile.data["settings"].value("musicVolume",0.0f));
         profile.save();
-    } else if (action == 18) desktop.quitRequested = true;
+    } else if (action == 18) requestExit(game,desktop,profile,speed);
     else if (action == 19) { desktop.buildType.clear(); selectedId = -1; }
     else if (action >= 20 && action <= 22) { desktop.category = action - 20; desktop.page = 0; }
     else if (action == 23) {
@@ -680,15 +879,21 @@ bool desktopInput(const SDL_Event& event, Game& game, Renderer& renderer, Deskto
     } else if (action == 24) desktop.restartConfirm = false;
     else if (action == 25) renderer.resetCamera();
     else if (action == 26) desktop.resultsDismissed = true;
-    else if (action >= ModeActionBase && action < EndlessActionBase) {
+    else if (action == 27 || action == 28) {
         try {
-            const std::string id = desktop.visibleModes.at(action - ModeActionBase);
-            game.loadMode(id);
-            if (!renderer.changeMap(utf8Path(SDL_GetBasePath()) / "assets/data" / (game.mode.at("map").get<std::string>() + ".map.json")))
-                game.message = renderer.error();
+            const std::string id = action == 28 ? nextCampaign(game.modeId) : desktop.previewMode;
+            if (id.empty() || !modeAvailable(id,desktop,profile) || (action == 28 && game.outcome != Outcome::Won)) return true;
+            Game next(executableDirectory() / "assets",id);
+            if (!renderer.changeMap(executableDirectory() / "assets/data" / (next.mode.at("map").get<std::string>() + ".map.json"))) {
+                desktop.menuMessage = game.message = "地图载入失败：" + renderer.error(); return true;
+            }
+            game = std::move(next);
             desktop.menu = false; selectedId = -1; speed = 1; desktop.restartConfirm = false; desktop.resultsDismissed = false; desktop.buildType.clear();
+            desktop.completedMode.clear(); desktop.newUnlocks.clear(); desktop.menuMessage.clear();
             profile.data["lastMode"] = id; profile.save();
-        } catch (const std::exception& error) { game.message = "无法载入关卡：" + std::string(error.what()); }
+        } catch (const std::exception& error) { desktop.menuMessage = game.message = "无法载入关卡：" + std::string(error.what()); }
+    } else if (action >= ModeActionBase && action < EndlessActionBase) {
+        selectPreview(desktop,desktop.visibleModes.at(action - ModeActionBase));
     } else if (action >= PaletteActionBase && action < UpgradeActionBase) {
         desktop.buildType = game.baseTowers().at(action - PaletteActionBase); selectedId = -1;
     } else if (action >= UpgradeActionBase) {
@@ -748,6 +953,12 @@ int desktopVerification(Renderer& renderer, SDL_Window* window, Game& game,
     };
     renderer.draw(desktopScene(renderer,game,desktop,profile,selected,std::nullopt,speed,width,height));
     renderer.capture(output / "level-menu.png");
+    // Exercise the menu at its minimum size, including the actual preview and start controls.
+    SDL_SetWindowSize(window,900,700); SDL_PumpEvents(); renderer.resize(); SDL_GetWindowSize(window,&width,&height);
+    renderer.draw(desktopScene(renderer,game,desktop,profile,selected,std::nullopt,speed,width,height));
+    renderer.capture(output / "level-menu-900x700.png");
+    SDL_SetWindowSize(window,1280,900); SDL_PumpEvents(); renderer.resize(); SDL_GetWindowSize(window,&width,&height);
+    renderer.draw(desktopScene(renderer,game,desktop,profile,selected,std::nullopt,speed,width,height));
     const auto cameraBefore = renderer.project({7.5f,10.5f,0});
     SDL_Event wheel{}; wheel.type = SDL_EVENT_MOUSE_WHEEL; wheel.wheel.y = 3;
     wheel.wheel.mouse_x = width / 2.0f; wheel.wheel.mouse_y = height / 2.0f; dispatch(wheel);
@@ -755,17 +966,37 @@ int desktopVerification(Renderer& renderer, SDL_Window* window, Game& game,
         throw std::runtime_error("Menu wheel changed the hidden camera.");
     report["menuBlocksCamera"] = true;
     button(21); // Open the explicit packaged library and select its first original mode.
+    const auto browsingBefore = game.saveState();
     button(ModeActionBase);
+    if (!desktop.menu || game.saveState() != browsingBefore || !desktop.preview) throw std::runtime_error("Browsing a preview replaced the current defense.");
+    report["previewPreservesCurrentGame"] = true;
+    renderer.draw(desktopScene(renderer,game,desktop,profile,selected,std::nullopt,speed,width,height));
+    renderer.capture(output / "level-preview.png");
+    button(27);
     if (desktop.menu || game.modeId == "PlainPlane") throw std::runtime_error("Packaged level selection did not reach play.");
+    button(0); for (int tick = 0; tick < 21; ++tick) game.tick(); button(1);
     button(11);
+    if (savedSummary(profile).find("第1波 · 暂停") == std::string::npos) throw std::runtime_error("The saved-game card omitted its real wave and pause state.");
     const auto before = game.saveState(); game.restart(); button(10); button(12);
     if (game.saveState() != before) throw std::runtime_error("Desktop save/continue altered the stored simulation.");
     report["selectionAndContinue"] = game.modeId;
     // Return to PlainPlane through campaign selection and exercise its ordinary game controls.
     button(10); button(20);
     const SceneView campaign = desktopScene(renderer,game,desktop,profile,selected,std::nullopt,speed,width,height);
+    button(ModeActionBase + 3);
+    const SceneView locked = desktopScene(renderer,game,desktop,profile,selected,std::nullopt,speed,width,height);
+    const auto start = std::find_if(locked.buttons.begin(),locked.buttons.end(),[](const HudButton& value) { return value.action == 27; });
+    if (start == locked.buttons.end() || start->enabled != modeAvailable("Madness",desktop,profile)) throw std::runtime_error("Preview start ignored its campaign gate.");
+    if (!start->enabled) {
+        const auto gatedState = game.saveState();
+        SDL_Event blocked{}; blocked.type = SDL_EVENT_MOUSE_BUTTON_DOWN; blocked.button.button = SDL_BUTTON_LEFT;
+        blocked.button.x = start->x + start->width / 2; blocked.button.y = start->y + start->height / 2; dispatch(blocked);
+        if (!desktop.menu || game.saveState() != gatedState) throw std::runtime_error("A locked preview started a campaign through its disabled button.");
+    }
+    report["previewRespectsCampaignGate"] = true;
     const auto plain = std::find(desktop.visibleModes.begin(),desktop.visibleModes.end(),"PlainPlane");
     button(ModeActionBase + static_cast<int>(plain - desktop.visibleModes.begin()));
+    button(27);
     if (game.modeId != "PlainPlane" || desktop.menu) throw std::runtime_error("Campaign selection failed.");
     renderer.draw(desktopScene(renderer,game,desktop,profile,selected,std::nullopt,speed,width,height)); renderer.capture(output / "desktop-game.png");
     const auto roots = game.baseTowers();
@@ -804,6 +1035,24 @@ int desktopVerification(Renderer& renderer, SDL_Window* window, Game& game,
     SDL_Event escape{}; escape.type = SDL_EVENT_KEY_DOWN; escape.key.key = SDLK_ESCAPE; dispatch(escape);
     if (desktop.restartConfirm || !game.towers.empty() || game.money != 50) throw std::runtime_error("Restart cancellation changed the match.");
     report["placementCancelSalePause"] = true;
+    // A real file in place of a profile directory forces a safe, isolated save failure.
+    const auto blockedDirectory = output / "exit-save-blocker";
+    { std::ofstream marker(blockedDirectory); marker << "Verification file, not a directory."; }
+    Profile failedProfile(blockedDirectory);
+    Desktop failedExit; failedExit.catalog = desktop.catalog;
+    const auto beforeExit = game.saveState();
+    SceneView exitScene = desktopScene(renderer,game,failedExit,failedProfile,-1,std::nullopt,speed,width,height);
+    const auto exitButton = std::find_if(exitScene.buttons.begin(),exitScene.buttons.end(),[](const HudButton& value) { return value.action == 18; });
+    SDL_Event quit{}; quit.type = SDL_EVENT_MOUSE_BUTTON_DOWN; quit.button.button = SDL_BUTTON_LEFT;
+    quit.button.x = exitButton->x + exitButton->width / 2; quit.button.y = exitButton->y + exitButton->height / 2;
+    desktopInput(quit,game,renderer,failedExit,failedProfile,exitScene,selected,speed,width,height);
+    if (failedExit.quitRequested || !failedExit.exitSaveFailed || failedProfile.warning.empty() || game.saveState() != beforeExit)
+        throw std::runtime_error("Failed exit save closed the window or changed the defense.");
+    exitScene = desktopScene(renderer,game,failedExit,failedProfile,-1,std::nullopt,speed,width,height);
+    renderer.draw(exitScene); renderer.capture(output / "exit-save-error.png");
+    desktopInput(quit,game,renderer,failedExit,failedProfile,exitScene,selected,speed,width,height);
+    if (!failedExit.quitRequested) throw std::runtime_error("Explicit unsaved exit was not available after the warning.");
+    report["exitSaveFailureKeepsGameUsable"] = true;
     // Render all 116 complete original maps using the real loader and OpenGL driver.
     report["maps"] = nlohmann::json::array();
     int failures = 0;
@@ -823,13 +1072,14 @@ int desktopVerification(Renderer& renderer, SDL_Window* window, Game& game,
 
 // Replay recorded legal commands through SDL mouse/key events and the real desktop handler.
 int inputVerification(Renderer& renderer, SDL_Window* window, Game& game, const std::filesystem::path& output) {
+    const auto assets = executableDirectory() / "assets";
     std::ifstream stream(output / "simulation-checks.json");
     if (!stream) throw std::runtime_error("Run --self-test before --input-test in the same output directory.");
     const auto simulation = nlohmann::json::parse(stream);
     const auto commands = simulation.at("defended15fps").at("commands");
     nlohmann::json results;
     int selectedId = -1,speed = 1;
-    Desktop desktop; desktop.menu = false;
+    Desktop desktop; desktop.menu = false; desktop.catalog = loadCatalog(assets);
     Profile profile(output / "input-profile");
     bool rightDrag = false;
     int width = 0,height = 0; SDL_GetWindowSize(window,&width,&height);
@@ -933,11 +1183,26 @@ int inputVerification(Renderer& renderer, SDL_Window* window, Game& game, const 
     results["deathPhaseScreenshots"] = deathSample == static_cast<int>(DeathSamplesMs.size());
     results["desktopVictory"] = game.snapshot();
     if (game.outcome != Outcome::Won || game.wavesSent != 26) throw std::runtime_error("The mouse/keyboard defense did not complete the original level.");
+    desktopCompletion(game,desktop,profile);
     renderer.draw(desktopScene(renderer,game,desktop,profile,selectedId,std::nullopt,speed,width,height));
     if (!renderer.capture(output / "desktop-victory.png")) throw std::runtime_error(renderer.error());
     const auto terminal = game.saveState(); key(SDLK_U); key(SDLK_DELETE);
     if (terminal != game.saveState()) throw std::runtime_error("Terminal keyboard actions changed the defense.");
     results["terminalKeysPreserveDefense"] = true;
+    // Use the naturally completed production replay to check real unlock and next-level flow.
+    desktopCompletion(game,desktop,profile);
+    if (!profile.data.at("completed").contains("PlainPlane") || !modeAvailable("DividedAttention",desktop,profile))
+        throw std::runtime_error("Natural victory did not record progress or unlock the next campaign.");
+    renderer.draw(desktopScene(renderer,game,desktop,profile,selectedId,std::nullopt,speed,width,height));
+    renderer.capture(output / "victory-unlock.png");
+    button(28);
+    if (game.modeId != "DividedAttention" || game.outcome != Outcome::Preparing || !game.towers.empty())
+        throw std::runtime_error("The real victory next-campaign button did not start a fresh defense.");
+    results["victoryNextCampaign"] = game.modeId;
+    game.restoreState(terminal); renderer.changeMap(assets / "data/PlainPlane.map.json");
+    desktopCompletion(game,desktop,profile);
+    if (!desktop.newUnlocks.empty()) throw std::runtime_error("An already recorded victory reported new unlocks again.");
+    results["repeatCompletionHasNoNewUnlocks"] = true;
     key(SDLK_R);
     if (game.outcome != Outcome::Won || !desktop.restartConfirm) throw std::runtime_error("Restart bypassed its confirmation.");
     button(23);
@@ -1018,6 +1283,61 @@ int benchmarkVerification(Renderer& renderer, SDL_Window* window, Game& game,
     return renderer.error().empty() ? 0 : 1;
 }
 
+// Exercise every weapon through original sandbox construction, waves, and scene rendering.
+int combatVisualVerification(Renderer& renderer, const std::filesystem::path& assets, const std::filesystem::path& output) {
+    Game catalog(assets,"Sandbox:Endless_Hard:PlainPlane");
+    auto types = catalog.baseTowers();
+    types.insert(types.end(),{"Nuke","H Bomb","Proximity Mine III","Tesla Coil","Railgun VI"});
+    Profile profile(output / "visual-profile");
+    nlohmann::json report{{"passed",true},{"scope","Isolated original sandbox runs with programmatic legal construction and dispatch. No funds, HP, wave parameters or combat RNG are altered. Advanced types are direct API construction, not UI upgrade walkthroughs. Screenshots verify Windows rendering, not Android equivalence or natural campaign wins."},{"cases",nlohmann::json::array()}};
+    for (const auto& type : types) {
+        nlohmann::json result{{"type",type},{"passed",false}};
+        try {
+            Game game(assets,"Sandbox:Endless_Hard:PlainPlane");
+            Desktop desktop; desktop.menu = false;
+            const auto& definition = game.technology.at("towers").at(type);
+            const std::string kind = game.technology.at("weapons").at(definition.at("weapon").get<std::string>()).at("type").get<std::string>();
+            result["kind"] = kind;
+            if (!game.build(7,10,type)) throw std::runtime_error(game.message);
+            const int selected = game.towers.front().id;
+            // Ordinary upper-field lasers keep the real infinite stream alive for air/support cases.
+            for (const Cell cell : {Cell{7,22},Cell{11,18},Cell{7,16}})
+                if (!game.build(cell.x,cell.y,"Terawatt Laser")) throw std::runtime_error(game.message);
+            if (kind == "boost" && !game.build(9,10,"Kilowatt Laser")) throw std::runtime_error(game.message);
+            for (int tick = 0; tick < 21; ++tick) game.tick();
+            if (!game.sendWave()) throw std::runtime_error(game.message);
+            bool observed = false;
+            // A bounded real wave run may fail honestly if its required effect never appears.
+            constexpr int MaximumVisualRunMs = 240000;
+            while (game.timeMs < MaximumVisualRunMs && !ended(game)) {
+                game.tick();
+                observed = std::any_of(game.beams.begin(),game.beams.end(),[&](const Beam& beam) { return beam.sourceType == type; })
+                    || std::any_of(game.projectiles.begin(),game.projectiles.end(),[&](const Projectile& projectile) { return projectile.source.id == selected; })
+                    || std::any_of(game.effects.begin(),game.effects.end(),[&](const Effect& effect) { return effect.sourceType == type; });
+                if (type == "Nuke" || type == "H Bomb" || type == "Proximity Mine III")
+                    observed = std::any_of(game.effects.begin(),game.effects.end(),[&](const Effect& effect) { return effect.sourceType == type && effect.kind == "nuke"; });
+                if (kind == "boost") observed = std::any_of(game.towers.begin(),game.towers.end(),[](const Tower& tower) { return tower.damageBoost > 1; });
+                if (observed) break;
+            }
+            if (!observed) throw std::runtime_error("No actual attack/support event before the natural run ended.");
+            const int sampleDelay = type == "Nuke" || type == "H Bomb" || type == "Proximity Mine III" ? 1000
+                : kind == "railgun" ? 250 : kind == "flamethrower" ? 400 : kind == "mortar" || kind == "homing" || kind == "plasma" ? 125 : 50;
+            for (int elapsed = 0; elapsed < sampleDelay && !ended(game); elapsed += SimulationStepMs) game.tick();
+            if (!renderer.changeMap(assets / "data/PlainPlane.map.json")) throw std::runtime_error(renderer.error());
+            renderer.setBoardViewport(0,108,990,paletteTop(game,1280,900) - 116); renderer.resetCamera(); renderer.zoom(2);
+            const SceneView scene = desktopScene(renderer,game,desktop,profile,selected,std::nullopt,1,1280,900);
+            renderer.draw(scene);
+            std::string filename = type;
+            std::replace(filename.begin(),filename.end(),' ','-'); filename += ".png";
+            if (!renderer.capture(output / filename) || !renderer.error().empty()) throw std::runtime_error(renderer.error());
+            result.update({{"passed",true},{"snapshot",game.snapshot()},{"modelCount",scene.models.size()},{"spriteCount",scene.sprites.size()},{"screenshot",filename}});
+        } catch (const std::exception& error) { result["failure"] = error.what(); report["passed"] = false; }
+        report["cases"].push_back(result);
+    }
+    std::ofstream(output / "combat-visual-checks.json") << report.dump(2);
+    return report.at("passed").get<bool>() ? 0 : 1;
+}
+
 // Verify actual GL rendering and picking at two drawable sizes without audio output.
 int graphicsSmoke(Renderer& renderer, SDL_Window* window, Game& game, const std::filesystem::path& output) {
     game.build(7,10); game.build(11,14); game.sendWave();
@@ -1059,10 +1379,10 @@ int main(int argc, char** argv) {
         const auto assets = directory / "assets";
         const bool selfTest = hasArgument(argc,argv,"--self-test"),smoke = hasArgument(argc,argv,"--smoke-test"),inputTest = hasArgument(argc,argv,"--input-test");
         const bool coverage = hasArgument(argc,argv,"--coverage-test"),audioTest = hasArgument(argc,argv,"--audio-test"),resourceTest = hasArgument(argc,argv,"--resource-test"),desktopTest = hasArgument(argc,argv,"--desktop-test");
-        const bool benchmark = hasArgument(argc,argv,"--benchmark-test");
+        const bool benchmark = hasArgument(argc,argv,"--benchmark-test"),visualTest = hasArgument(argc,argv,"--visual-test");
         std::filesystem::path output = directory / "verification";
         for (int index = 1; index + 1 < argc; ++index) if (std::string(argv[index]) == "--output") output = utf8Path(argv[index + 1]);
-        if (selfTest || smoke || inputTest || coverage || audioTest || resourceTest || desktopTest || benchmark) std::filesystem::create_directories(output);
+        if (selfTest || smoke || inputTest || coverage || audioTest || resourceTest || desktopTest || benchmark || visualTest) std::filesystem::create_directories(output);
         if (selfTest) return runSimulationChecks(assets,output);
         if (coverage) return runCoverageChecks(assets,output);
         if (audioTest) { Audio audio(assets); std::ofstream report(output / "audio-checks.txt"); return audio.verifyAll(report) ? 0 : 1; }
@@ -1087,6 +1407,7 @@ int main(int argc, char** argv) {
             else if (resourceTest) result = renderer.verifyResources(output) ? 0 : 1;
             else if (desktopTest) result = desktopVerification(renderer,window,game,assets,output);
             else if (benchmark) result = benchmarkVerification(renderer,window,game,output);
+            else if (visualTest) result = combatVisualVerification(renderer,assets,output);
             else {
                 Profile profile(Profile::userDirectory());
                 Desktop desktop; desktop.catalog = loadCatalog(assets);
@@ -1098,7 +1419,6 @@ int main(int argc, char** argv) {
                 double accumulator = 0;
                 Uint64 previous = SDL_GetTicksNS();
                 Uint64 lastSaveAt = SDL_GetTicks();
-                bool completionSaved = false;
                 while (running) {
                     int width = 0,height = 0; SDL_GetWindowSize(window,&width,&height);
                     float mouseX = 0,mouseY = 0; SDL_GetMouseState(&mouseX,&mouseY);
@@ -1109,7 +1429,7 @@ int main(int argc, char** argv) {
                     SceneView scene = desktopScene(renderer,game,desktop,profile,selectedId,hover,speed,width,height);
                     SDL_Event event;
                     while (SDL_PollEvent(&event)) {
-                        if (event.type == SDL_EVENT_QUIT) running = false;
+                        if (event.type == SDL_EVENT_QUIT) requestExit(game,desktop,profile,speed);
                         else if (event.type == SDL_EVENT_WINDOW_RESIZED || event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) renderer.resize();
                         else {
                             const int beforeTime = game.timeMs;
@@ -1132,8 +1452,7 @@ int main(int argc, char** argv) {
                             for (const auto& sound : game.soundEvents) audio.play(sound);
                         }
                     }
-                    if (game.outcome != Outcome::Won) completionSaved = false;
-                    if (game.outcome == Outcome::Won && !completionSaved) { profile.complete(game.modeId,game.lives,game.finalScore()); completionSaved = true; }
+                    desktopCompletion(game,desktop,profile);
                     // Keep at most one current session, saving every thirty real seconds and on exit.
                     constexpr Uint64 AutosaveIntervalMs = 30000;
                     if (SDL_GetTicks() - lastSaveAt > AutosaveIntervalMs && !desktop.menu) {

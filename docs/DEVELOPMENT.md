@@ -5,7 +5,9 @@
 
 `Desktop`在现有main.cpp中维护浏览、建造、详情、暂停/重开确认与结算状态。按钮和快捷键共用`desktopInput`，镜头事件统一经`desktopEvent`经过UI后处理。`Game::*BlockReason`返回空字符串表示可执行，实际命令与预览使用同一规则；试放只复制导航格，不能修改资金、状态或随机数。`sellRefund`提供真正的排期退款，不能用投资额替代。
 
-战场矩形由`paletteTop`和详情栏宽度确定，`Renderer::setBoardViewport`使绘制、投影和拾取共用该区域。`SceneView`提供面板、字号、图标、原PNG世界精灵和纹理线带；效果只读取仿真时间。炮口XYZ和攻击类别在Beam中，Effect保留生成时间用于消隐，纯视觉事件不进入存档。
+战场矩形由`paletteTop`和详情栏宽度确定，`Renderer::setBoardViewport`使绘制、投影和拾取共用该区域。`SceneView`提供面板、文字、图标、图片、原模型及世界精灵；效果读取仿真时间。Beam保存发射时炮口、朝向、俯仰、长度及塔类型，Effect保存出生时间和塔类型，纯视觉事件不进入存档。公式及适配差异见 COMBAT_VISUALS.md。
+
+外围流程见 FRONTEND.md。关卡浏览使用独立Game；Renderer::mapPreview以同一场景路径离屏绘制原地图，恢复当前地图、镜头和GL状态，最多缓存16张缩略图。生产退出统一经requestExit，保存失败不能直接丢弃当前局。
 
 | 要修改什么 | 修改入口 |
 | --- | --- |
@@ -42,11 +44,14 @@ $run.ExitCode
 | `--smoke-test` | 本机真实 GL、窗口缩放及坐标往返、场景截图 |
 | `--input-test` | 将 self-test 合法操作经 SDL 鼠标／键盘及生产输入处理重放，完成胜利、重开、失败 |
 | `--desktop-test` | 生产菜单选择、保存／继续、116地图实际绘制；只使用输出目录的测试 profile |
+| `--visual-test` | 12类基础武器及Nuke、H Bomb、Mine III、Tesla、Rail VI的17个原沙盒真实事件和GL截图 |
 | `--resource-test` | 420 PNG 和321模型及其材质／实际纹理文件加载 |
 | `--audio-test` | 36 Ogg 离线解码，绝不初始化声音设备 |
 | `--benchmark-test` | 依赖 self-test 操作记录；完整自然局及最繁忙场景的12000帧绘制、内存样本 |
 
 `input-test`和`benchmark-test`需先在同一输出目录运行`self-test`。验证入口不会读取真实用户 profile；交互模式才使用 LocalAppData。数值夹具不等于自然通关；116个模式的开局／绘制通过不等于全部自然通关。测试通过也不构成安卓动态等价或另一台 Windows 的兼容证明。
+
+`visual-test`通过公开Game API在原10000金币沙盒合法建塔、发波，等待实际发射/命中；不改资金、HP、波参数或战斗RNG。高级塔直接由API建造，不能将结果描述为UI升级路径验收。截图使用生产desktopScene和Renderer，逐类JSON明确记录时刻与范围。
 
 保存格式带版本，临时文件关闭后用 Windows 替换现有 profile。局内记录实体、活动波计数、UFO、投射物、状态、时钟及 MT19937；视觉 effect 重新进入后可省略。坏的局内保存由候选 Game 校验，失败不会覆盖当前局。
 
