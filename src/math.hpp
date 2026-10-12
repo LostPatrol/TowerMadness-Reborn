@@ -48,16 +48,31 @@ inline Mat4 operator*(const Mat4& a, const Mat4& b) {
     return result;
 }
 
-// Build a translation, Z-axis rotation, and uniform scale for a map object.
-inline Mat4 modelMatrix(Vec3 position, float rotation, float scale) {
+// Compose world translation, yaw, local pivot pitch, and uniform scale.
+inline Mat4 modelMatrix(Vec3 position, float rotation, float scale, float pitch = 0, Vec3 pivot = {}) {
     Mat4 m = Mat4::identity();
     const float cosine = std::cos(rotation) * scale;
     const float sine = std::sin(rotation) * scale;
     m.v[0] = cosine; m.v[1] = sine;
-    m.v[4] = -sine; m.v[5] = cosine;
-    m.v[10] = scale;
-    m.v[12] = position.x; m.v[13] = position.y; m.v[14] = position.z;
+    const float pitchCosine = std::cos(pitch), pitchSine = std::sin(pitch);
+    // Pitch is a conventional right-handed rotation around local X.
+    m.v[4] = -sine * pitchCosine; m.v[5] = cosine * pitchCosine; m.v[6] = scale * pitchSine;
+    m.v[8] = sine * pitchSine; m.v[9] = -cosine * pitchSine; m.v[10] = scale * pitchCosine;
+    const float pivotY = pivot.y * (1 - pitchCosine) + pivot.z * pitchSine;
+    const float pivotZ = pivot.z * (1 - pitchCosine) - pivot.y * pitchSine;
+    m.v[12] = position.x - std::sin(rotation) * pivotY;
+    m.v[13] = position.y + std::cos(rotation) * pivotY;
+    m.v[14] = position.z + pivotZ;
     return m;
+}
+
+// Build the local Y rotation used by the recovered enemy death transforms.
+inline Mat4 rotationY(float radians) {
+    Mat4 matrix = Mat4::identity();
+    const float cosine = std::cos(radians), sine = std::sin(radians);
+    matrix.v[0] = cosine; matrix.v[2] = -sine;
+    matrix.v[8] = sine; matrix.v[10] = cosine;
+    return matrix;
 }
 
 // Build a perspective projection using radians and a positive near distance.

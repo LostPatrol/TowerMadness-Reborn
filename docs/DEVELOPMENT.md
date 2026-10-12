@@ -3,6 +3,10 @@
 
 工程采用单窗口、40Hz 固定步长玩法及独立渲染。`Game`读取原配置，`Renderer`只读取场景视图；关卡切换释放旧地图 GPU 缓存。音频是独立可选模块，默认两项音量为零，不初始化音频设备。
 
+`Desktop`在现有main.cpp中维护浏览、建造、详情、暂停/重开确认与结算状态。按钮和快捷键共用`desktopInput`，镜头事件统一经`desktopEvent`经过UI后处理。`Game::*BlockReason`返回空字符串表示可执行，实际命令与预览使用同一规则；试放只复制导航格，不能修改资金、状态或随机数。`sellRefund`提供真正的排期退款，不能用投资额替代。
+
+战场矩形由`paletteTop`和详情栏宽度确定，`Renderer::setBoardViewport`使绘制、投影和拾取共用该区域。`SceneView`提供面板、字号、图标、原PNG世界精灵和纹理线带；效果只读取仿真时间。炮口XYZ和攻击类别在Beam中，Effect保留生成时间用于消隐，纯视觉事件不进入存档。
+
 | 要修改什么 | 修改入口 |
 | --- | --- |
 | 资源转换 | `tools/prepare-assets.mjs`，格式见 ASSETS.md |
@@ -45,3 +49,7 @@ $run.ExitCode
 `input-test`和`benchmark-test`需先在同一输出目录运行`self-test`。验证入口不会读取真实用户 profile；交互模式才使用 LocalAppData。数值夹具不等于自然通关；116个模式的开局／绘制通过不等于全部自然通关。测试通过也不构成安卓动态等价或另一台 Windows 的兼容证明。
 
 保存格式带版本，临时文件关闭后用 Windows 替换现有 profile。局内记录实体、活动波计数、UFO、投射物、状态、时钟及 MT19937；视觉 effect 重新进入后可省略。坏的局内保存由候选 Game 校验，失败不会覆盖当前局。
+
+开发期原作对照见[Android环境](ANDROID_REFERENCE.md)与[双APK基线](APK_BASELINES.md)。模拟器和下载包只放在agent/codex，发布EXE不依赖它们。
+
+敌人动画与死亡规格见[ANIMATION](ANIMATION.md)：Game维护原时间帧、平滑heading、独立slot及冻结corpse；main.cpp的deathTransform和enemyShadow负责原矩阵组装。可选session.animation保存这些状态，不能让纯表现使用战斗RNG或加入活动敌人/胜负计数。炮塔俯仰必须复用Game::towerElevation，避免模型与攻击炮口分离。

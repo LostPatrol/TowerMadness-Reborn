@@ -14,14 +14,41 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Ufo,state,wave,remaining,lastReleaseAt,pad,x,
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Projectile,position,velocity,waypoint,previous,origin,endpoint,source,kind,model,target,damage,bornAt,speed,splash,traveled,elapsed,elevation,speedMultiplier,waypointReached,active)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(WaveCounter,remaining,bonus)
 
+namespace {
+// Legacy saves retain radians but cannot recover their original allocation history.
+constexpr float LegacyDegreesPerRadian = 57.295784f;
+
+// Append optional animation fields without weakening strict core entity decoding.
+nlohmann::json enemyAnimation(const Enemy& enemy) {
+    return {{"slot",enemy.nativeSlot},{"headingDegrees",enemy.visualHeadingDegrees},
+        {"stunFrameTimeMs",enemy.stunFrameTimeMs},{"deathFrameTimeMs",enemy.deathFrameTimeMs}};
+}
+} // namespace
+
 // Save all simulation fields that affect the next tick; visual effects may expire on reload.
 nlohmann::json Game::saveState() const {
     std::ostringstream engine; engine << randomEngine_;
-    return {{"version",1},{"mode",modeId},{"timeMs",timeMs},{"money",money},{"lives",lives},
+    nlohmann::json state{{"version",1},{"mode",modeId},{"timeMs",timeMs},{"money",money},{"lives",lives},
         {"wavesSent",wavesSent},{"score",score},{"bonus",bonus},{"waveCounters",waveCounters_},{"killed",killed},{"leaked",leaked},{"spawned",spawned},
         {"paused",paused},{"outcome",static_cast<int>(outcome)},{"enemies",enemies},{"towers",towers},{"ufos",ufos},
         {"projectiles",projectiles},{"pendingChildren",pendingChildren_},{"waves",waves},{"grid",grid_},
         {"nextId",nextId_},{"lastWaveAt",lastWaveAt_},{"nextPad",nextPad_},{"lastBoostAt",lastBoostAt_},{"rng",engine.str()}};
+    for (std::size_t index = 0; index < enemies.size(); ++index)
+        state["enemies"][index]["animation"] = enemyAnimation(enemies[index]);
+    for (std::size_t index = 0; index < pendingChildren_.size(); ++index)
+        state["pendingChildren"][index]["animation"] = enemyAnimation(pendingChildren_[index]);
+    auto holds = nlohmann::json::array();
+    for (const auto& hold : enemySlotHolds_) {
+        nlohmann::json raw{{"slot",hold.slot},{"remainingSeconds",hold.remainingSeconds}};
+        if (hold.drawable) {
+            nlohmann::json enemy = hold.enemy;
+            enemy["animation"] = enemyAnimation(hold.enemy);
+            raw["corpse"] = {{"enemy",enemy},{"frame",hold.frame},{"deathAngleDegrees",hold.deathAngleDegrees}};
+        }
+        holds.push_back(std::move(raw));
+    }
+    state["animation"] = {{"nextSlot",nextEnemySlot_},{"slotHolds",holds}};
+    return state;
 }
 
 // Construct a valid candidate before replacing a working match with stored data.
@@ -44,6 +71,73 @@ void Game::restoreState(const nlohmann::json& state) {
     restored.waves = state.at("waves"); restored.grid_ = state.at("grid").get<std::vector<int>>();
     restored.nextId_ = state.at("nextId").get<int>(); restored.lastWaveAt_ = state.at("lastWaveAt").get<int>();
     restored.nextPad_ = state.at("nextPad").get<int>(); restored.lastBoostAt_ = state.at("lastBoostAt").get<int>();
+    // Animation extensions are optional; old or damaged visual data keeps the core match usable.
+    bool restoredAnimation = false;
+    if (state.contains("animation")) try {
+        const auto& animation = state.at("animation");
+        restored.nextEnemySlot_ = animation.at("nextSlot").get<int>();
+        if (restored.nextEnemySlot_ < 0 || restored.nextEnemySlot_ > NativeEnemySlotCount)
+            throw std::runtime_error("Invalid animation slot counter.");
+        // Rebuild occupancy, allowing -1 solely as the non-blocking visual fallback.
+        const auto occupy = [&](int slot) {
+            if (slot == -1) return;
+            if (slot < 0 || slot >= NativeEnemySlotCount || restored.enemySlots_[slot])
+                throw std::runtime_error("Invalid animation slot.");
+            restored.enemySlots_[slot] = true;
+        };
+        const auto restoreEnemyAnimation = [&](Enemy& enemy, const nlohmann::json& raw, bool claimSlot = true) {
+            const auto& visual = raw.at("animation");
+            enemy.nativeSlot = visual.at("slot").get<int>();
+            enemy.visualHeadingDegrees = visual.at("headingDegrees").get<float>();
+            enemy.stunFrameTimeMs = visual.at("stunFrameTimeMs").get<int>();
+            enemy.deathFrameTimeMs = visual.at("deathFrameTimeMs").get<int>();
+            if (!std::isfinite(enemy.visualHeadingDegrees)) throw std::runtime_error("Invalid animation heading.");
+            if (claimSlot) occupy(enemy.nativeSlot);
+        };
+        for (std::size_t index = 0; index < restored.enemies.size(); ++index)
+            restoreEnemyAnimation(restored.enemies[index],state.at("enemies").at(index));
+        for (std::size_t index = 0; index < restored.pendingChildren_.size(); ++index)
+            restoreEnemyAnimation(restored.pendingChildren_[index],state.at("pendingChildren").at(index));
+        for (const auto& raw : animation.at("slotHolds")) {
+            EnemyCorpse hold;
+            hold.slot = raw.at("slot").get<int>(); hold.remainingSeconds = raw.at("remainingSeconds").get<float>();
+            if (!std::isfinite(hold.remainingSeconds)) throw std::runtime_error("Invalid animation countdown.");
+            occupy(hold.slot);
+            // Older extensions retain occupancy without inventing a model or death pose.
+            if (raw.contains("corpse")) {
+                const auto& corpse = raw.at("corpse");
+                hold.enemy = corpse.at("enemy").get<Enemy>();
+                restoreEnemyAnimation(hold.enemy,corpse.at("enemy"),false);
+                hold.frame = corpse.at("frame").get<int>();
+                hold.deathAngleDegrees = corpse.at("deathAngleDegrees").get<float>();
+                if (hold.enemy.nativeSlot != hold.slot || hold.enemy.alive || hold.enemy.wave < 0
+                    || hold.enemy.wave >= static_cast<int>(restored.waves.size())
+                    || !std::isfinite(hold.enemy.x) || !std::isfinite(hold.enemy.y) || !std::isfinite(hold.deathAngleDegrees))
+                    throw std::runtime_error("Invalid saved visual corpse.");
+                const auto& wave = restored.waveFor(hold.enemy);
+                const auto& frames = hold.enemy.generation == 1 && wave.contains("subwalk") && !wave.at("subwalk").empty()
+                    ? wave.at("subwalk") : wave.at("walk");
+                if (hold.frame < 0 || (frames.empty() ? hold.frame != 0 : hold.frame >= static_cast<int>(frames.size())))
+                    throw std::runtime_error("Invalid saved corpse frame.");
+                hold.drawable = hold.enemy.generation >= wave.value("spawn",0);
+            }
+            restored.enemySlotHolds_.push_back(std::move(hold));
+        }
+        restoredAnimation = true;
+    } catch (const std::exception&) {
+        // Optional visual corruption must not turn a valid version-one match into a failed load.
+    }
+    if (!restoredAnimation) {
+        restored.enemySlots_.fill(false); restored.enemySlotHolds_.clear(); restored.nextEnemySlot_ = 0;
+        // Entity order is the best available fallback; historical slots and frozen times are unknown.
+        const auto rebuildAnimation = [&](Enemy& enemy) {
+            enemy.nativeSlot = restored.allocateEnemySlot();
+            enemy.visualHeadingDegrees = enemy.heading * LegacyDegreesPerRadian;
+            enemy.stunFrameTimeMs = restored.timeMs; enemy.deathFrameTimeMs = restored.timeMs;
+        };
+        for (auto& enemy : restored.enemies) rebuildAnimation(enemy);
+        for (auto& enemy : restored.pendingChildren_) rebuildAnimation(enemy);
+    }
     std::istringstream engine(state.at("rng").get<std::string>()); engine >> restored.randomEngine_;
     if (!engine || restored.grid_.size() != static_cast<std::size_t>(restored.width * restored.height)
         || !restored.waves.is_array() || restored.wavesSent < 0 || restored.wavesSent > static_cast<int>(restored.waves.size())
@@ -55,7 +149,8 @@ void Game::restoreState(const nlohmann::json& state) {
     for (const auto& tower : restored.towers)
         if (!restored.technology.at("towers").contains(tower.type) || tower.x < 0 || tower.y < 0
             || tower.x + 1 >= restored.width || tower.y + 1 >= restored.height) throw std::runtime_error("Invalid saved tower.");
-    restored.updateDistances(); restored.message = "Saved game restored.";
+    restored.updateDistances();
+    restored.message = restoredAnimation ? "Saved game restored." : "Saved game restored; animation history reconstructed.";
     *this = std::move(restored);
 }
 } // namespace tmreborn

@@ -25,6 +25,7 @@ $run.ExitCode
 | flak / flame / lightning | 空中目标伤害及同爆炸地面排除；护甲先截断再乘heat、火焰免疫；即时链击、衰减和跳数 |
 | mine / slow / boost / bait | 原触发延迟、消耗拆除和地块恢复；弱slow不覆盖强效果、相等效果重置时间；加法boost及严格边界；bait改道和原状态爆炸 |
 | 普通tick | stun/slow跨零最后一tick仍生效、严格大于1秒regen及slow缩放、原分裂boss的两子体/金币/状态继承 |
+| 动画状态 | 原时间帧/slot持续时间、眩晕冻结、generation-one帧选择、平滑朝向、分裂slot顺序及尸体冻结/释放；没有原作动态对照 |
 | Profile / session | 仅输出目录保存profile、最佳成绩、损坏文件备份及默认可用；自然局与活动导弹的逐字段保存/恢复/继续一致，非法版本不破坏当前局 |
 
 ## 数值夹具的边界
@@ -35,6 +36,6 @@ $run.ExitCode
 
 地图路径检查针对`pad+(2,2)`实际释放点。UFO的pad是锚点，固定路径地图可能把锚点放在阻挡草地上，例如AshMountain；因此不能把锚点本身必须能走作为原游戏规则。固定路径、大小地图均包含于116逐项记录。
 
-保存恢复检查比较完整`saveState()` JSON，包括随机引擎、UFO、敌人、塔和投射物；自然局恢复后推进40tick，导弹夹具推进20tick。渲染effect不属于原session合同。测试使用指定输出目录的`coverage-profile`，不会触及真实LocalAppData。
+保存恢复检查比较完整`saveState()` JSON，包括随机引擎、UFO、敌人、塔、投射物及可选animation扩展；自然局恢复后推进40tick，导弹夹具推进20tick，冻结尸体继续计时一致。旧纯占位扩展不凭空生成尸体，坏视觉扩展降级而保留有效核心。短暂渲染effect不属于原session合同。测试使用指定输出目录的`coverage-profile`，不会触及真实LocalAppData。
 
 此验证证明已覆盖的本机实现规则可运行，不证明所有116关都能自然获胜，也不构成Android真机动态等价验证。资源存在与原解锁状态的区别见[MODES.md](MODES.md)。

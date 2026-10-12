@@ -13,8 +13,18 @@ constexpr float TurnFactor = 12.5f, FireTolerance = 0.08726646f, FullTurn = 6.28
 constexpr float LineRangeFactor = 1.5f;
 // Desktop effect lifetime affects rendering only, never hit timing.
 constexpr int EffectLifetimeMs = 250, BeamLifetimeMs = 125;
+// Desktop death and split cues approximate the original particle presentation only.
+constexpr int DeathVisualMs = 600;
+// Cue radii are visual world units, independent of the enemy hit rules.
+constexpr float DeathVisualRadius = 0.6f, SplitVisualRadius = 0.8f;
 // Beam and flame increment target heat by this amount, capped at two.
 constexpr float HeatPerHit = 0.05f, MaximumHeat = 2.0f;
+// ENEMIES_alloc starts the last-generation corpse countdown at three seconds.
+constexpr float CorpseSlotSeconds = 3.0f;
+// Visual hashing approximates the original combat-random death direction without consuming RNG.
+constexpr std::uint32_t DeathAngleHashMultiplier = 0x9e3779b9u;
+// The original integer death angle ranges from -45 through 44 degrees.
+constexpr int DeathAngleSpanDegrees = 90, DeathAngleOffsetDegrees = 45;
 
 // Measure planar distance in the original single-precision world coordinates.
 float planar(float x, float y, float tx, float ty) { return std::hypot(tx - x,ty - y); }
@@ -47,15 +57,31 @@ void Game::damage(Enemy& enemy, const Tower& tower, int raw) {
     enemy.health = std::max(std::int64_t{0},enemy.health - dealt);
     if (enemy.health > 0) return;
     enemy.alive = false; ++killed;
+    enemy.deathFrameTimeMs = enemy.stunMs > 0 ? enemy.stunFrameTimeMs : timeMs;
+    EnemyCorpse corpse;
+    corpse.slot = enemy.nativeSlot; corpse.enemy = enemy; corpse.frame = walkFrame(enemy);
+    corpse.drawable = enemy.generation >= wave.value("spawn",0);
+    corpse.remainingSeconds = corpse.drawable ? CorpseSlotSeconds : 0.0f;
+    // Slot fallback still renders a corpse and derives its approximate direction from the ID.
+    const std::uint32_t visualKey = static_cast<std::uint32_t>(enemy.nativeSlot >= 0 ? enemy.nativeSlot : enemy.id);
+    const std::uint32_t visualSample = (visualKey + 1u) * DeathAngleHashMultiplier;
+    corpse.deathAngleDegrees = static_cast<float>(static_cast<int>(visualSample % DeathAngleSpanDegrees) - DeathAngleOffsetDegrees);
+    enemySlotHolds_.push_back(std::move(corpse));
+    // Retain the kill point after the dead enemy is removed from the active deque.
+    const Vec3 deathPoint = hitPoint(enemy,wave);
+    effects.push_back({deathPoint,DeathVisualRadius,timeMs + DeathVisualMs,"death",timeMs});
     completeWaveEnemy(enemy.wave,true);
     if (wave.contains("deathsounds") && !wave.at("deathsounds").empty()) soundEvents.push_back(wave.at("deathsounds")[0].get<std::string>());
     if (enemy.generation == 0) { const int reward = wave.at("gold").get<int>(); money += reward; score += reward; }
     if (enemy.generation >= wave.value("spawn",0)) return;
+    effects.push_back({deathPoint,SplitVisualRadius,timeMs + DeathVisualMs,"split",timeMs});
     // Queue children separately so a splash/line traversal never invalidates enemy references.
     for (int index = 0; index < 2; ++index) {
         Enemy child = makeEnemy(enemy.wave,enemy.x,enemy.y);
         child.generation = enemy.generation + 1;
         child.slowMs = enemy.slowMs; child.slowFactor = enemy.slowFactor; child.stunMs = enemy.stunMs;
+        // Original split yaw consumes RNG; keep zero until that full sequence is recovered.
+        child.visualHeadingDegrees = 0; child.stunFrameTimeMs = 0;
         child.health = child.maxHealth = wave.at("health").get<std::int64_t>() >> enemy.generation;
         child.model = wave.at("submodel").get<std::string>();
         for (int attempt = 0; attempt < 10; ++attempt) {
@@ -109,9 +135,9 @@ void Game::fire(Tower& tower, Enemy* target) {
         if (kind == "mine") radiusDamage(x,y,radius,static_cast<int>(baseDamage),tower);
         else for (auto& enemy : enemies) if (planar(x,y,enemy.x,enemy.y) < radius) {
             slow(enemy,weapon.at("factor").get<float>(),weapon.at("slowduration").get<int>());
-            enemy.stunMs = std::max(enemy.stunMs,weapon.at("stunduration").get<int>());
+            stun(enemy,weapon.at("stunduration").get<int>());
         }
-        effects.push_back({{x,y,0.15f},radius,timeMs + EffectLifetimeMs,kind}); tower.consumed = true; return;
+        effects.push_back({{x,y,0.15f},radius,timeMs + EffectLifetimeMs,kind,timeMs}); tower.consumed = true; return;
     }
     if (!target) return;
     if (weapon.contains("firesounds") && !weapon.at("firesounds").empty()) soundEvents.push_back(weapon.at("firesounds")[0].get<std::string>());
@@ -120,21 +146,23 @@ void Game::fire(Tower& tower, Enemy* target) {
     if (kind == "beam") {
         damage(*target,tower,static_cast<int>(baseDamage * tower.damageBoost * target->heat));
         if (wave.value("armor",0) != 4) target->heat = std::min(MaximumHeat,target->heat + HeatPerHit);
-        beams.push_back({origin.x,origin.y,endpoint.x,endpoint.y,endpoint.z,timeMs + BeamLifetimeMs});
+        beams.push_back({origin.x,origin.y,endpoint.x,endpoint.y,endpoint.z,timeMs + BeamLifetimeMs,origin.z,kind});
     } else if (kind == "railgun" || kind == "flamethrower") {
         lineDamage(x,y,target->x,target->y,definition.at("range").get<float>() * LineRangeFactor,weapon.at("radius").get<float>(),boosted,tower);
         if (kind == "flamethrower" && wave.value("armor",0) != 4) target->heat = std::min(MaximumHeat,target->heat + HeatPerHit);
         const float angle = std::atan2(target->y - y,target->x - x),length = definition.at("range").get<float>() * LineRangeFactor;
-        beams.push_back({x,y,x + std::cos(angle) * length,y + std::sin(angle) * length,endpoint.z,timeMs + BeamLifetimeMs});
+        // Render from the recovered muzzle; line damage retains the original tower-center rule.
+        beams.push_back({origin.x,origin.y,x + std::cos(angle) * length,y + std::sin(angle) * length,
+            endpoint.z,timeMs + BeamLifetimeMs,origin.z,kind});
     } else if (kind == "flak") {
         const float tx = target->x + randomFloat() - 0.5f,ty = target->y + randomFloat() - 0.5f;
         randomFloat(); // The original consumes a third combat RNG sample for explosion height.
         radiusDamage(tx,ty,weapon.at("splash").get<float>(),static_cast<int>(baseDamage),tower);
-        effects.push_back({{tx,ty,endpoint.z},weapon.at("splash").get<float>(),timeMs + EffectLifetimeMs,kind});
+        effects.push_back({{tx,ty,endpoint.z},weapon.at("splash").get<float>(),timeMs + EffectLifetimeMs,kind,timeMs});
     } else if (kind == "slow") {
         for (auto& enemy : enemies) if (planar(target->x,target->y,enemy.x,enemy.y) < weapon.at("splash").get<float>())
             slow(enemy,weapon.at("factor").get<float>(),weapon.at("duration").get<int>());
-        beams.push_back({origin.x,origin.y,endpoint.x,endpoint.y,endpoint.z,timeMs + BeamLifetimeMs});
+        beams.push_back({origin.x,origin.y,endpoint.x,endpoint.y,endpoint.z,timeMs + BeamLifetimeMs,origin.z,kind});
     } else if (kind == "lightning") {
         // Original chain height samples span 0.5..1; Tesla pull decays by powers of 2.5.
         constexpr float ChainHeightMinimum = 0.5f, ChainHeightSpan = 0.5f, PullDecayBase = 2.5f;
@@ -150,7 +178,7 @@ void Game::fire(Tower& tower, Enemy* target) {
         hit.insert(current->id);
         damage(*current,tower,static_cast<int>(baseDamage));
         const Vec3 firstPoint{current->x,current->y,wave.value("height",0.0f) + wave.value("offset",0.0f) + ChainHeightSpan * randomFloat()};
-        beams.push_back({origin.x,origin.y,firstPoint.x,firstPoint.y,firstPoint.z,timeMs + BeamLifetimeMs});
+        beams.push_back({origin.x,origin.y,firstPoint.x,firstPoint.y,firstPoint.z,timeMs + BeamLifetimeMs,origin.z,kind});
         if (attracts > 0) pull(*current,attracts);
         // Retain float damage between jumps; only each delivered hit is truncated to integer HP.
         float remainingDamage = baseDamage;
@@ -176,7 +204,7 @@ void Game::fire(Tower& tower, Enemy* target) {
             const float attenuation = std::max(0.0f,1 - std::sqrt(dot(difference,difference)) / range);
             hit.insert(next->id);
             damage(*next,tower,static_cast<int>(remainingDamage * attenuation));
-            beams.push_back({previous.x,previous.y,point.x,point.y,point.z,timeMs + BeamLifetimeMs});
+            beams.push_back({previous.x,previous.y,point.x,point.y,point.z,timeMs + BeamLifetimeMs,previous.z,kind});
             if (attracts > 0) pull(*next,static_cast<float>(2 * static_cast<double>(attracts) / std::pow(static_cast<double>(PullDecayBase),jump)));
             remainingDamage *= attenuation;
             current = next;

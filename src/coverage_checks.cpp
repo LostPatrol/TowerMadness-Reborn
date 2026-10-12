@@ -174,6 +174,32 @@ int runCoverageChecks(const std::filesystem::path& assets, const std::filesystem
     std::filesystem::create_directories(output);
     runCase(report,"all116NaturalOpenings",[&] { checkModes(assets,report); });
     runCase(report,"fourTechnologyPalettes",[&] { checkTechnologies(assets,report); });
+    runCase(report,"terminalCommandsPreserveDefense",[&] {
+        for (const auto outcome : {Outcome::Won,Outcome::Lost}) {
+            Game game(assets);
+            const auto opening = game.saveState();
+            const std::string openingMessage = game.message;
+            require(game.buildBlockReason(FixtureTower.x,FixtureTower.y,"Kilowatt Laser").empty(),"Opening build query refused a legal tower.");
+            require(game.saveState() == opening && game.message == openingMessage,"Legal build preview changed occupancy, RNG, funds or the status message.");
+            require(game.build(FixtureTower.x,FixtureTower.y),"Terminal command fixture construction failed.");
+            advance(game,21);
+            const int id = game.towers.front().id;
+            require(game.upgradeBlockReason(id).empty() && game.sellBlockReason(id).empty(),"Ready affordable tower commands were incorrectly blocked.");
+            game.outcome = outcome;
+            const auto before = game.saveState();
+            require(!game.buildBlockReason(13,10,"Kilowatt Laser").empty() &&
+                    !game.upgradeBlockReason(id).empty() && !game.sellBlockReason(id).empty(),"Terminal legality queries allowed a tower command.");
+            require(game.saveState() == before,"Read-only terminal legality queries changed the session.");
+            require(!game.build(13,10) && !game.upgrade(id) && !game.sell(id) && !game.sendWave(),"Won/lost match accepted a gameplay command.");
+            require(game.saveState() == before,"Rejected terminal command changed funds, score, tower timers or occupancy.");
+            game.restart();
+            require(game.build(FixtureTower.x,FixtureTower.y),"Restart did not restore build eligibility.");
+            advance(game,21);
+            require(game.upgrade(game.towers.front().id),"Restart did not restore upgrade eligibility.");
+            advance(game,21);
+            require(game.sell(game.towers.front().id),"Restart did not restore sale eligibility.");
+        }
+    });
     runCase(report,"fixedPathBuildSellPreservesRoute",[&] {
         Game game(assets,"AshMountain");
         require(game.map.value("fixedpath",0) == 1,"Fixed-path fixture map changed.");
@@ -255,6 +281,7 @@ int runCoverageChecks(const std::filesystem::path& assets, const std::filesystem
         const int expectedDamage = static_cast<int>(beforeArmor * game.technology.at("towers").at("Kilowatt Laser").at("lightdamage").get<float>());
         require(game.enemies.front().health == FixtureHealth - expectedDamage,"Beam damage did not truncate heat before original armor.");
         require(!game.beams.empty() && near(game.enemies.front().heat,2),"Beam visual or heat cap absent.");
+        require(game.beams.front().kind == "beam" && game.beams.front().fromZ > 0,"Beam lost its muzzle height or weapon family.");
     });
     runCase(report,"plasmaMovingDelayAndStun",[&] {
         auto game = fixture(assets,"Plasmatron I"); target(game);
@@ -274,12 +301,17 @@ int runCoverageChecks(const std::filesystem::path& assets, const std::filesystem
             observed = stun.enemies.front().stunMs > 0;
         }
         require(observed,"Original Fusion Cannon stun chance never produced a stun in deterministic fixture.");
+        const auto& frozen = stun.enemies.front();
+        require(frozen.stunFrameTimeMs > 0 && frozen.stunFrameTimeMs <= stun.timeMs,
+            "Applied plasma stun did not capture its animation sample time.");
     });
     runCase(report,"railPenetration",[&] {
         auto game = fixture(assets,"Railgun I"); target(game,10,11); target(game,12,11); target(game,12,12);
         singleShot(game);
         require(game.enemies[0].health == FixtureHealth - 90 && game.enemies[1].health == FixtureHealth - 90,"Railgun failed to penetrate aligned targets.");
         require(game.enemies[2].health == FixtureHealth && game.projectiles.empty(),"Railgun hit an off-line target or created a tracker.");
+        require(game.beams.size() == 1 && game.beams.front().kind == "railgun" && game.beams.front().fromZ > 0,
+            "Railgun lost its muzzle height or weapon family.");
     });
     runCase(report,"homingMultimuzzleDelayedSplash",[&] {
         auto game = fixture(assets,"Guided Missile IV"); target(game,10,11); target(game,10.3f,11);
@@ -312,6 +344,8 @@ int runCoverageChecks(const std::filesystem::path& assets, const std::filesystem
         singleShot(game);
         require(game.enemies[0].health < FixtureHealth && game.enemies[1].health == FixtureHealth,"Air-only flak eligibility failed in a shared explosion.");
         require(game.projectiles.empty() && !game.effects.empty(),"Flak did not use its immediate randomized explosion.");
+        require(game.effects.back().kind == "flak" && game.effects.back().bornAt == game.timeMs
+            && game.effects.back().expiresAt > game.effects.back().bornAt,"Flak effect lost its visual lifecycle.");
     });
     runCase(report,"flamePostArmorHeatAndImmunity",[&] {
         auto game = fixture(assets,"Flamethrower I");
@@ -333,6 +367,9 @@ int runCoverageChecks(const std::filesystem::path& assets, const std::filesystem
         const auto secondary = FixtureHealth - game.enemies[1].health;
         require(secondary > 0 && secondary < 75 && game.enemies[2].health == FixtureHealth,"Lightning chain attenuation or jump limit failed.");
         require(game.beams.size() == 2 && game.projectiles.empty(),"Lightning did not render distinct immediate chain segments.");
+        require(game.beams.front().kind == "lightning" && game.beams.back().kind == "lightning"
+            && game.beams.front().fromZ > 0 && game.beams.back().fromZ >= game.waves.at(0).value("height",0.0f) + 0.5f,
+            "Lightning lost its original muzzle or sampled chain start height.");
     });
     runCase(report,"mineTimerRemoval",[&] {
         auto game = fixture(assets,"Proximity Mine I"); target(game);
@@ -372,13 +409,31 @@ int runCoverageChecks(const std::filesystem::path& assets, const std::filesystem
         game.enemies.front().stunMs = 0; game.tick();
         require(game.towers.empty() && game.canBuild(FixtureTower.x,FixtureTower.y) && game.distanceAt(8,27) == 0,"Bait removal did not restore the sheep gate route.");
         require(near(game.enemies.front().slowFactor,0.25f) && game.enemies.front().slowMs == 3000 && game.enemies.front().stunMs == 1000,"Bait detonation status fields differ from original configuration.");
+        require(game.enemies.front().stunFrameTimeMs == game.timeMs,"Bait stun did not refresh the frozen animation time.");
     });
     runCase(report,"regularTickStatusesRegenSplitBoss",[&] {
         Game movement(assets); movement.outcome = Outcome::Running;
         auto& stopped = target(movement,10,11,0,false); stopped.stunMs = SimulationStepMs;
         movement.tick();
         require(movement.enemies.front().x == 10 && movement.enemies.front().y == 11 && movement.enemies.front().stunMs == 0,"Final stun tick did not remain stationary.");
+        require(movement.enemies.front().visualHeadingDegrees == 0,"Final stunned tick changed visual heading.");
         movement.tick(); require(movement.enemies.front().traveled > 0,"Expired stun continued to prevent movement.");
+        require(movement.enemies.front().visualHeadingDegrees != 0,"Expired stun did not resume visual turning.");
+        // Fractional periods distinguish both truncations and slot-as-duration from phase offsets.
+        movement.waves.at(0)["speed"] = 1.3f; movement.waves.at(0)["walkanimfactor"] = 1.5f;
+        movement.waves.at(0)["walk"] = {"a","b","c","d"};
+        movement.waves.at(0)["subwalk"] = {"a","b","c"};
+        auto& animated = movement.enemies.front(); animated.nativeSlot = 17;
+        movement.timeMs = 189; animated.stunMs = 0;
+        require(movement.walkFrame(animated) == 1,"Animation duration lost reciprocal, staged truncation, or slot addition.");
+        animated.stunMs = 1000; animated.stunFrameTimeMs = 188;
+        require(movement.walkFrame(animated) == 0,"Stunned walk frame did not use its captured sample time.");
+        movement.timeMs = 900;
+        require(movement.walkFrame(animated) == 0,"Stunned walk frame advanced with game time.");
+        animated.stunMs = 0; animated.generation = 1;
+        require(movement.walkFrame(animated) == 1,"Generation-one walk did not use its own subwalk count.");
+        animated.generation = 2;
+        require(movement.walkFrame(animated) == 0,"Later generation incorrectly selected subwalk.");
         Game slowdown(assets); slowdown.outcome = Outcome::Running;
         auto& slowed = target(slowdown,10,11,0,false); slowed.slowMs = SimulationStepMs; slowed.slowFactor = 0.5f;
         slowdown.tick(); require(near(slowdown.enemies.front().traveled,0.0125f) && slowdown.enemies.front().slowMs == 0,"Final slow tick did not retain its speed reduction.");
@@ -399,12 +454,28 @@ int runCoverageChecks(const std::filesystem::path& assets, const std::filesystem
         auto split = fixture(assets,"Railgun VI");
         auto& parent = target(split,10,11,23); parent.health = parent.maxHealth = split.waves.at(23).at("health").get<std::int64_t>();
         require(split.waves.at(23).value("boss",false) && split.waves.at(23).value("spawn",0) == 1,"Split-boss fixture lost its original properties.");
-        parent.stunMs = 1000; const int originalMoney = split.money;
+        parent.stunMs = 1000; parent.stunFrameTimeMs = split.timeMs; const int originalMoney = split.money;
+        // Public fixture targets bypass spawning; restore marks their test slot as occupied.
+        parent.nativeSlot = 0;
+        auto splitState = split.saveState(); splitState["animation"]["nextSlot"] = 1;
+        split.restoreState(splitState);
         singleShot(split);
         require(split.killed == 1 && split.spawned == 2 && split.enemies.size() == 2,"Boss death did not enqueue exactly two children.");
+        require(std::any_of(split.effects.begin(),split.effects.end(),[&](const Effect& effect) {
+            return effect.kind == "death" && effect.bornAt == split.timeMs;
+        }) && std::any_of(split.effects.begin(),split.effects.end(),[&](const Effect& effect) {
+            return effect.kind == "split" && effect.bornAt == split.timeMs;
+        }),"Boss death lost its independent death or split presentation event.");
         require(split.money == originalMoney + split.waves.at(23).at("gold").get<int>(),"Boss parent reward was not paid exactly once.");
         for (const auto& child : split.enemies)
-            require(child.generation == 1 && child.health == split.waves.at(23).at("health").get<std::int64_t>() && child.stunMs == 975 && child.slowFactor == 1,"Split child health/status inheritance changed.");
+            require(child.generation == 1 && child.health == split.waves.at(23).at("health").get<std::int64_t>() && child.stunMs == 975 && child.slowFactor == 1
+                && child.stunFrameTimeMs == 0 && child.visualHeadingDegrees == 0,"Split child health/status or animation initialization changed.");
+        require(split.enemies[0].nativeSlot == 1 && split.enemies[1].nativeSlot == 2
+            && split.saveState().at("animation").at("slotHolds").size() == 1,
+            "Split children did not allocate in order while their parent still occupied slot zero.");
+        require(!split.corpses().front().drawable,"Splitting parent incorrectly retained drawable corpse geometry.");
+        split.tick();
+        require(split.saveState().at("animation").at("slotHolds").empty(),"Split parent slot survived its next enemy update.");
     });
     runCase(report,"profileReadSaveAndDamage",[&] {
         const auto directory = output / "coverage-profile";
@@ -420,11 +491,19 @@ int runCoverageChecks(const std::filesystem::path& assets, const std::filesystem
     runCase(report,"sessionExactContinuation",[&] {
         // A natural match includes live UFO release and a normally purchased laser.
         Game natural(assets); require(natural.build(7,10) && natural.sendWave(),"Natural continuation setup failed.");
-        advance(natural,OpeningSmokeTicks);
+        while (natural.spawned == 0 && natural.timeMs < OpeningSmokeTicks * SimulationStepMs) natural.tick();
+        require(natural.spawned == 1 && !natural.enemies.empty() && natural.enemies.front().nativeSlot == 0,
+            "First natural enemy did not allocate native animation slot zero.");
+        advance(natural,OpeningSmokeTicks - natural.timeMs / SimulationStepMs);
         Game restored(assets); restored.restoreState(natural.saveState());
         require(natural.saveState() == restored.saveState(),"Natural session did not roundtrip exactly.");
         advance(natural,40); advance(restored,40);
         require(natural.saveState() == restored.saveState(),"Natural resumed state diverged after one second.");
+        auto legacy = natural.saveState(); legacy.erase("animation");
+        for (auto& enemy : legacy["enemies"]) enemy.erase("animation");
+        for (auto& enemy : legacy["pendingChildren"]) enemy.erase("animation");
+        Game oldSave(assets); oldSave.restoreState(legacy);
+        require(oldSave.snapshot() == natural.snapshot(),"Optional animation fields broke legacy core save compatibility.");
         // A separate live missile fixture verifies projectile geometry and RNG state.
         auto missiles = fixture(assets,"Guided Missile IV"); target(missiles); singleShot(missiles);
         Game resumed(assets);
@@ -432,6 +511,40 @@ int runCoverageChecks(const std::filesystem::path& assets, const std::filesystem
         require(missiles.saveState() == resumed.saveState(),"Live projectile state did not roundtrip exactly.");
         advance(missiles,20); advance(resumed,20);
         require(missiles.saveState() == resumed.saveState(),"Live projectile resumed state diverged after half a second.");
+        // A real projectile kill retains a last-generation corpse's visual slot across saves.
+        auto corpseState = missiles.saveState();
+        require(!corpseState.at("enemies").empty(),"Projectile continuation fixture lost its durable target.");
+        corpseState["enemies"][0]["health"] = 1;
+        corpseState["enemies"][0]["animation"]["slot"] = 0;
+        corpseState["animation"]["nextSlot"] = 1;
+        Game corpse(assets); corpse.restoreState(corpseState);
+        corpse.towers.front().nextShotAt = 0; singleShot(corpse);
+        for (int tick = 0; tick < 200 && corpse.killed == 0; ++tick) corpse.tick();
+        require(corpse.killed == 1 && corpse.saveState().at("animation").at("slotHolds").size() == 1,
+            "Projectile death released its visual slot immediately.");
+        const auto& visualCorpse = corpse.corpses().front();
+        require(visualCorpse.drawable && !visualCorpse.enemy.alive && visualCorpse.slot == visualCorpse.enemy.nativeSlot
+            && visualCorpse.frame == corpse.walkFrame(visualCorpse.enemy)
+            && visualCorpse.deathAngleDegrees >= -45 && visualCorpse.deathAngleDegrees <= 44,
+            "Death did not capture the frozen corpse frame, pose, or approximate direction.");
+        Game corpseRestored(assets); corpseRestored.restoreState(corpse.saveState());
+        require(corpse.saveState() == corpseRestored.saveState(),"Corpse countdown did not roundtrip exactly.");
+        require(corpseRestored.corpses().front().drawable,"Saved drawable corpse became an occupancy-only record.");
+        auto occupancyState = corpse.saveState();
+        for (auto& hold : occupancyState["animation"]["slotHolds"]) hold.erase("corpse");
+        Game occupancyOnly(assets); occupancyOnly.restoreState(occupancyState);
+        require(occupancyOnly.saveState() == occupancyState && !occupancyOnly.corpses().front().drawable,
+            "Older occupancy-only animation extension invented drawable corpse geometry.");
+        auto invalidVisual = corpse.saveState();
+        invalidVisual["animation"]["slotHolds"][0]["corpse"]["enemy"]["wave"] = -1;
+        Game visualFallback(assets); visualFallback.restoreState(invalidVisual);
+        require(visualFallback.snapshot() == corpse.snapshot() && visualFallback.corpses().empty()
+            && visualFallback.saveState().at("rng") == corpse.saveState().at("rng"),
+            "Damaged optional corpse data corrupted the core match or combat RNG.");
+        advance(corpse,40); advance(corpseRestored,40);
+        require(corpse.saveState() == corpseRestored.saveState(),"Resumed corpse countdown diverged.");
+        advance(corpse,100);
+        require(corpse.saveState().at("animation").at("slotHolds").empty(),"Expired corpse did not release its visual slot.");
         auto broken = natural.saveState(); broken["version"] = -1;
         const auto intact = restored.saveState(); bool refused = false;
         try { restored.restoreState(broken); } catch (const std::exception&) { refused = true; }

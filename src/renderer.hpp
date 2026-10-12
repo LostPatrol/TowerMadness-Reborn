@@ -23,6 +23,10 @@ struct Renderable {
     float scale = 1;
     Color tint{};
     float animationTime = 0;
+    float pitch = 0;
+    Vec3 pitchPivot{};
+    Mat4 animationTransform = Mat4::identity();
+    bool overrideMaterialColor = false, unlit = false;
 };
 
 struct RenderLine {
@@ -30,10 +34,28 @@ struct RenderLine {
     Color color{};
 };
 
+struct RenderSprite {
+    std::string texture;
+    Vec3 position{};
+    float width = 1, height = 1;
+    Color color{};
+    bool ground = false, additive = false;
+};
+
+struct RenderRibbon {
+    std::string texture;
+    Vec3 from{}, to{};
+    float width = 0.1f;
+    Color color{};
+    int frame = 0, frames = 1;
+    bool additive = true;
+};
+
 struct HudText {
     std::string text;
     float x = 0, y = 0;
     Color color{};
+    int fontSize = 18;
 };
 
 struct HudButton {
@@ -42,6 +64,12 @@ struct HudButton {
     bool selected = false;
     bool enabled = true;
     int action = -1;
+    std::string icon{};
+};
+
+struct HudPanel {
+    float x = 0, y = 0, width = 0, height = 0;
+    Color color{};
 };
 
 struct SceneView {
@@ -50,6 +78,10 @@ struct SceneView {
     std::vector<HudText> texts;
     std::vector<HudButton> buttons;
     std::optional<Vec2> selectedCell;
+    std::vector<HudPanel> panels;
+    Color cellColor{0.2f,0.65f,1,1};
+    std::vector<RenderSprite> sprites;
+    std::vector<RenderRibbon> ribbons;
 };
 
 class Renderer {
@@ -68,6 +100,8 @@ public:
     bool changeMap(const std::filesystem::path& mapFile);
     // Refresh logical and drawable sizes from SDL after resize or DPI changes.
     void resize();
+    // Reserve a logical-pixel battlefield so projection and picking avoid the HUD.
+    void setBoardViewport(float x, float y, float width, float height);
     // Render map, simulation models, world lines, and desktop HUD, then present.
     void draw(const SceneView& scene);
     // Intersect a logical-pixel mouse position with the world ground plane.

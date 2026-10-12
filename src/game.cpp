@@ -24,6 +24,12 @@ constexpr float HeatDecayPerSecond = 0.05f;
 constexpr int WaveIntervalMs = 20000;
 // The original scoreboard awards forty points for every surviving sheep.
 constexpr int SheepScore = 40;
+// Desktop leak cue lifetime is a visual approximation, independent of sheep loss.
+constexpr int SheepLeakVisualMs = 750;
+// Desktop leak cue size is expressed in world units and never changes gate detection.
+constexpr float SheepLeakVisualRadius = 0.9f;
+// Enemy hit-point presentation shares the original quarter-unit ground offset.
+constexpr float EnemyVisualGroundOffset = 0.25f;
 // Original UFO approach divides the square root of its remaining distance by 400.
 constexpr float UfoApproachDivisor = 400.0f;
 // The original approach keeps this minimum movement per millisecond.
@@ -34,6 +40,10 @@ constexpr float UfoDepartureHeight = 50.0f;
 constexpr float UfoDepartureFactor = 1.4f;
 // Original departure finishes below this remaining-height threshold.
 constexpr float UfoDepartureTolerance = 0.01f;
+// ENEMIES_draw uses reciprocal wave speed times this duration before truncation.
+constexpr float WalkFrameBaseMs = 150.0f;
+// Recovered float32 angle conversion, turn coefficient, and dead zone.
+constexpr float EnemyDegreesPerRadian = 57.295784f, EnemyTurnPerMs = 0.005f, EnemyTurnDeadZone = 2.0f;
 
 // Read one normalized configuration with a useful filename on parse failures.
 nlohmann::json readJson(const std::filesystem::path& path) {
@@ -97,6 +107,7 @@ void Game::restart() {
     if (endless) waves = nlohmann::json::array();
     money = mode.at("money").get<int>(); lives = mode.at("lifes").get<int>();
     enemies.clear(); towers.clear(); beams.clear(); projectiles.clear(); effects.clear(); pendingChildren_.clear();
+    enemySlots_.fill(false); enemySlotHolds_.clear(); nextEnemySlot_ = 0;
     timeMs = wavesSent = killed = leaked = spawned = 0;
     // ENEMIES_alloc starts lastPadIndex at zero and searches from the next pad.
     nextId_ = 1; lastWaveAt_ = 0; nextPad_ = 1 % static_cast<int>(pads_.size());
@@ -123,42 +134,45 @@ bool Game::traversable(int x, int y, int nextX, int nextY) const {
 
 // Compute both tower-aware ground and tower-independent flying distance fields.
 void Game::updateDistances() {
+    distances_ = calculateDistances(false,grid_);
+    flyingDistances_ = calculateDistances(true,grid_);
+}
+
+// Keep trial and live navigation identical, including completed bait targets.
+std::vector<float> Game::calculateDistances(bool flying, const std::vector<int>& grid) const {
     // A completed bait replaces the sheep gate with its four passable target cells.
     std::vector<Cell> targets = goals_;
     if (!map.value("fixedpath",0)) for (const auto& tower : towers)
         if (!tower.selling && !tower.consumed && timeMs > tower.readyAt && technology.at("towers").at(tower.type).value("isbait",0))
             targets = {{tower.x,tower.y},{tower.x + 1,tower.y},{tower.x,tower.y + 1},{tower.x + 1,tower.y + 1}};
-    const auto calculate = [this,&targets](bool flying) {
-        std::vector<float> values(width * height,Unreachable);
-        using Entry = std::pair<float,int>;
-        std::priority_queue<Entry,std::vector<Entry>,std::greater<Entry>> queue;
-        const auto allowed = [this,flying](int x,int y,int nx,int ny) {
-            const auto blocked = [this,flying](int cx,int cy) {
-                if (cx < 0 || cy < 0 || cx >= width || cy >= height) return true;
-                const int terrain = map.at("terrain")[cx / 2 + (cy / 2) * (width / 2)].get<int>();
-                return flying ? terrain != 0 && terrain != 1 : (grid_[cx + cy * width] & 9) == 1;
-            };
-            return !blocked(nx,ny) && (x == nx || y == ny || (!blocked(x,ny) && !blocked(nx,y)));
+    std::vector<float> values(width * height,Unreachable);
+    using Entry = std::pair<float,int>;
+    std::priority_queue<Entry,std::vector<Entry>,std::greater<Entry>> queue;
+    const auto allowed = [this,flying,&grid](int x,int y,int nx,int ny) {
+        const auto blocked = [this,flying,&grid](int cx,int cy) {
+            if (cx < 0 || cy < 0 || cx >= width || cy >= height) return true;
+            const int terrain = map.at("terrain")[cx / 2 + (cy / 2) * (width / 2)].get<int>();
+            return flying ? terrain != 0 && terrain != 1 : (grid[cx + cy * width] & 9) == 1;
         };
-        for (const Cell goal : targets) {
-            values[goal.x + goal.y * width] = 0;
-            queue.push({0.0f,goal.x + goal.y * width});
-        }
-        while (!queue.empty()) {
-            const auto [distance,index] = queue.top(); queue.pop();
-            if (distance != values[index]) continue;
-            const int x = index % width,y = index / width;
-            for (const Cell delta : Neighbors) {
-                const int nx = x + delta.x,ny = y + delta.y;
-                if (!allowed(x,y,nx,ny)) continue;
-                const int next = nx + ny * width;
-                const float candidate = distance + (delta.x && delta.y ? DiagonalCost : 1.0f);
-                if (candidate < values[next]) { values[next] = candidate; queue.push({candidate,next}); }
-            }
-        }
-        return values;
+        return !blocked(nx,ny) && (x == nx || y == ny || (!blocked(x,ny) && !blocked(nx,y)));
     };
-    distances_ = calculate(false); flyingDistances_ = calculate(true);
+    for (const Cell goal : targets) {
+        values[goal.x + goal.y * width] = 0;
+        queue.push({0.0f,goal.x + goal.y * width});
+    }
+    while (!queue.empty()) {
+        const auto [distance,index] = queue.top(); queue.pop();
+        if (distance != values[index]) continue;
+        const int x = index % width,y = index / width;
+        for (const Cell delta : Neighbors) {
+            const int nx = x + delta.x,ny = y + delta.y;
+            if (!allowed(x,y,nx,ny)) continue;
+            const int next = nx + ny * width;
+            const float candidate = distance + (delta.x && delta.y ? DiagonalCost : 1.0f);
+            if (candidate < values[next]) { values[next] = candidate; queue.push({candidate,next}); }
+        }
+    }
+    return values;
 }
 
 // Return infinity for invalid cells instead of wrapping indices across rows.
@@ -175,30 +189,48 @@ bool Game::canBuild(int x, int y) const {
 }
 
 // Keep every landing pad and live ground enemy connected to the sheep gate.
-bool Game::routesRemain() const {
-    for (const Cell pad : pads_) if (!std::isfinite(distanceAt(pad.x + 2,pad.y + 2))) return false;
+bool Game::routesRemain(const std::vector<float>& distances) const {
+    // Invalid enemy coordinates remain unreachable, as with distanceAt.
+    const auto reachable = [this,&distances](int x, int y) {
+        return x >= 0 && y >= 0 && x < width && y < height && std::isfinite(distances[x + y * width]);
+    };
+    for (const Cell pad : pads_) if (!reachable(pad.x + 2,pad.y + 2)) return false;
     for (const auto& enemy : enemies)
-        if (enemy.alive && !waveFor(enemy).value("flying",false) && !std::isfinite(distanceAt(static_cast<int>(enemy.x),static_cast<int>(enemy.y)))) return false;
+        if (enemy.alive && !waveFor(enemy).value("flying",false) && !reachable(static_cast<int>(enemy.x),static_cast<int>(enemy.y))) return false;
     return true;
 }
 
-// Trial the actual footprint and revert it before charging an illegal placement.
-bool Game::build(int x, int y, const std::string& type) {
-    if (outcome == Outcome::Won || outcome == Outcome::Lost) { message = "Restart to build a new defense."; return false; }
-    if (!technology.at("towers").contains(type)) { message = "Unknown tower."; return false; }
+// Inspect original construction rules without touching the live grid or message.
+std::string Game::buildBlockReason(int x, int y, const std::string& type) const {
+    if (outcome == Outcome::Won || outcome == Outcome::Lost) return "Restart to build a new defense.";
+    if (!technology.at("towers").contains(type)) return "Unknown tower.";
     const auto& definition = technology.at("towers").at(type);
-    if (definition.value("disabled",false)) { message = "This tower is disabled in the selected technology."; return false; }
+    if (definition.value("disabled",false)) return "This tower is disabled in the selected technology.";
+    if (money < definition.at("cost").get<int>()) return "Not enough gold.";
+    if (x < 0 || y < 0 || x + 1 >= width || y + 1 >= height) return "The tower footprint is outside the map.";
+    for (int dy = 0; dy < 2; ++dy) for (int dx = 0; dx < 2; ++dx) {
+        if ((grid_[x + dx + (y + dy) * width] & 2) != 0) return "A tower needs four buildable grass cells (2 x 2).";
+        if (towerAt(x + dx,y + dy)) return "The tower footprint is already occupied.";
+    }
+    if (!map.value("fixedpath",0)) {
+        auto trialGrid = grid_;
+        // Original build checks the blocking footprint before granting bait passability.
+        for (int dy = 0; dy < 2; ++dy) for (int dx = 0; dx < 2; ++dx) trialGrid[x + dx + (y + dy) * width] |= 1;
+        if (!routesRemain(calculateDistances(false,trialGrid))) return "Build refused: this would block the route to the sheep.";
+    }
+    return {};
+}
+
+// Apply only a legal placement after its read-only original-rule query succeeds.
+bool Game::build(int x, int y, const std::string& type) {
+    const std::string reason = buildBlockReason(x,y,type);
+    if (!reason.empty()) { message = reason; return false; }
+    const auto& definition = technology.at("towers").at(type);
     const int cost = definition.at("cost").get<int>();
-    if (money < cost) { message = "Not enough gold."; return false; }
-    if (!canBuild(x,y)) { message = "A tower needs four free buildable cells (2 x 2)."; return false; }
     // Fixed-path grass already blocks navigation; original towers do not alter that grid.
     const bool fixedPath = map.value("fixedpath",0) != 0;
     if (!fixedPath) for (int dy = 0; dy < 2; ++dy) for (int dx = 0; dx < 2; ++dx) grid_[x + dx + (y + dy) * width] |= 1;
     updateDistances();
-    if (!fixedPath && !routesRemain()) {
-        for (int dy = 0; dy < 2; ++dy) for (int dx = 0; dx < 2; ++dx) grid_[x + dx + (y + dy) * width] &= ~1;
-        updateDistances(); message = "Build refused: this would block the route to the sheep."; return false;
-    }
     Tower tower; tower.id = nextId_++; tower.x = x; tower.y = y; tower.type = type; tower.refund = cost;
     tower.readyAt = timeMs + (wavesSent == 0 ? 500 : definition.value("buildtime",0));
     tower.nextShotAt = tower.readyAt;
@@ -216,36 +248,131 @@ const Tower* Game::towerAt(int x, int y) const {
     return nullptr;
 }
 
+// Share terminal, readiness, technology, branch and affordability rules with the UI.
+std::string Game::upgradeBlockReason(int id, const std::string& nextType) const {
+    if (outcome == Outcome::Won || outcome == Outcome::Lost) return "Restart to change the defense.";
+    const auto tower = std::find_if(towers.begin(),towers.end(),[id](const Tower& value) { return value.id == id; });
+    if (tower == towers.end()) return "Tower no longer exists.";
+    if (tower->selling) return "Tower is being dismantled.";
+    if (timeMs <= tower->readyAt) return "Wait for construction to finish.";
+    const auto& upgrades = technology.at("towers").at(tower->type).at("upgrades");
+    if (upgrades.empty()) return "This tower is fully upgraded.";
+    const std::string next = nextType.empty() ? upgrades[0].get<std::string>() : nextType;
+    if (std::find(upgrades.begin(),upgrades.end(),next) == upgrades.end()) return "Invalid upgrade branch.";
+    const auto& definition = technology.at("towers").at(next);
+    if (definition.value("disabled",false)) return "This upgrade is disabled in the selected technology.";
+    if (money < definition.at("cost").get<int>()) return "Not enough gold for " + next + ".";
+    return {};
+}
+
 // Use original upgrade costs and keep accumulated investment for later sales.
 bool Game::upgrade(int id, const std::string& nextType) {
+    const std::string reason = upgradeBlockReason(id,nextType);
+    if (!reason.empty()) { message = reason; return false; }
     auto tower = std::find_if(towers.begin(),towers.end(),[id](const Tower& value) { return value.id == id; });
-    if (tower == towers.end() || tower->selling || timeMs <= tower->readyAt) { message = "Wait for construction to finish."; return false; }
     const auto& upgrades = technology.at("towers").at(tower->type).at("upgrades");
-    if (upgrades.empty()) { message = "This tower is fully upgraded."; return false; }
     const std::string next = nextType.empty() ? upgrades[0].get<std::string>() : nextType;
-    if (std::find(upgrades.begin(),upgrades.end(),next) == upgrades.end()) { message = "Invalid upgrade branch."; return false; }
     const auto& definition = technology.at("towers").at(next);
-    if (definition.value("disabled",false)) { message = "This upgrade is disabled in the selected technology."; return false; }
     const int cost = definition.at("cost").get<int>();
-    if (money < cost) { message = "Not enough gold for " + next + "."; return false; }
     money -= cost; tower->refund += cost; tower->type = next; tower->target = -1;
     tower->readyAt = timeMs + (wavesSent == 0 ? 500 : definition.value("buildtime",0));
     tower->nextShotAt = tower->readyAt; message = "Upgrading to " + next + ".";
     return true;
 }
 
+// Share terminal and construction-state sale rules with the selected-tower controls.
+std::string Game::sellBlockReason(int id) const {
+    if (outcome == Outcome::Won || outcome == Outcome::Lost) return "Restart to change the defense.";
+    const auto tower = std::find_if(towers.begin(),towers.end(),[id](const Tower& value) { return value.id == id; });
+    if (tower == towers.end()) return "Tower no longer exists.";
+    if (tower->selling) return "Tower is being dismantled.";
+    if (timeMs <= tower->readyAt) return "Wait for construction to finish.";
+    return {};
+}
+
+// Preserve original float truncation and avoid discounting a pending refund twice.
+int Game::sellRefund(int id) const {
+    const auto tower = std::find_if(towers.begin(),towers.end(),[id](const Tower& value) { return value.id == id; });
+    if (tower == towers.end()) return 0;
+    return tower->selling || wavesSent == 0 ? tower->refund : static_cast<int>(tower->refund * 0.75f);
+}
+
 // Keep the footprint blocked until the original sale timer has completed.
 bool Game::sell(int id) {
+    const std::string reason = sellBlockReason(id);
+    if (!reason.empty()) { message = reason; return false; }
     auto tower = std::find_if(towers.begin(),towers.end(),[id](const Tower& value) { return value.id == id; });
-    if (tower == towers.end() || tower->selling || timeMs <= tower->readyAt) { message = "Wait for construction to finish."; return false; }
+    tower->refund = sellRefund(id);
     tower->selling = true; tower->target = -1; tower->readyAt = timeMs + (wavesSent == 0 ? 500 : 3000);
-    tower->refund = wavesSent == 0 ? tower->refund : static_cast<int>(tower->refund * 0.75f);
     score -= std::min(score,10);
     message = "Selling tower; refund when dismantling finishes."; return true;
 }
 
+// Automatic dispatch occurs on the first fixed step strictly beyond twenty seconds.
+int Game::nextWaveDelayMs() const {
+    return std::max(0,WaveIntervalMs + SimulationStepMs - (timeMs - lastWaveAt_));
+}
+
+// Reserve the original whole-second early bonus; the opening wave has no bonus.
+int Game::earlyWaveBonus() const {
+    return wavesSent == 0 ? 0 : std::max(0,WaveIntervalMs / 1000 - (timeMs - lastWaveAt_) / 1000);
+}
+
 // Resolve the unchanged original wave parameters for a live or split enemy.
 const nlohmann::json& Game::waveFor(const Enemy& enemy) const { return waves.at(enemy.wave); }
+
+// Preserve float32 duration arithmetic and the original generation-one frame list.
+int Game::walkFrame(const Enemy& enemy) const {
+    const auto& wave = waveFor(enemy);
+    const auto& frames = enemy.generation == 1 && wave.contains("subwalk") && !wave.at("subwalk").empty()
+        ? wave.at("subwalk") : wave.at("walk");
+    if (frames.empty()) return 0;
+    const float speed = wave.at("speed").get<float>();
+    if (speed <= 0) return 0;
+    const int baseMs = static_cast<int>((1.0f / speed) * WalkFrameBaseMs);
+    const int periodMs = static_cast<int>(wave.value("walkanimfactor",1.0f) * static_cast<float>(baseMs));
+    // Slot exhaustion affects only animation variation, never combat availability.
+    const int frameMs = std::max(1,std::max(0,enemy.nativeSlot) + periodMs);
+    const int sampleMs = !enemy.alive ? enemy.deathFrameTimeMs : enemy.stunMs > 0 ? enemy.stunFrameTimeMs : timeMs;
+    return std::max(0,sampleMs / frameMs) % static_cast<int>(frames.size());
+}
+
+// Keep corpse presentation read-only and outside all active-enemy iteration.
+const std::vector<EnemyCorpse>& Game::corpses() const { return enemySlotHolds_; }
+
+// Search the original cyclic allocator while keeping visual capacity non-blocking.
+int Game::allocateEnemySlot() {
+    for (int attempt = 0; attempt < NativeEnemySlotCount; ++attempt) {
+        const int slot = (nextEnemySlot_ + attempt) % NativeEnemySlotCount;
+        if (enemySlots_[slot]) continue;
+        enemySlots_[slot] = true; nextEnemySlot_ = slot + 1;
+        return slot;
+    }
+    return -1;
+}
+
+// Ignore the visual fallback slot used when all native slots are occupied.
+void Game::releaseEnemySlot(int slot) {
+    if (slot >= 0 && slot < NativeEnemySlotCount) enemySlots_[slot] = false;
+}
+
+// Check before subtraction so the last positive corpse tick remains occupied.
+void Game::updateEnemySlotHolds() {
+    std::erase_if(enemySlotHolds_,[this](EnemyCorpse& hold) {
+        if (hold.remainingSeconds > 0) {
+            hold.remainingSeconds -= static_cast<float>(SimulationStepMs) / 1000.0f;
+            return false;
+        }
+        releaseEnemySlot(hold.slot);
+        return true;
+    });
+}
+
+// Repeat and weaker stuns still resample the original frozen animation time.
+void Game::stun(Enemy& enemy, int duration) {
+    enemy.stunMs = std::max(enemy.stunMs,duration);
+    enemy.stunFrameTimeMs = timeMs;
+}
 
 // Record actual live state without adjusting results to satisfy a test expectation.
 nlohmann::json Game::snapshot() const {
@@ -274,7 +401,7 @@ bool Game::sendWave() {
         auto& ufo = ufos[index];
         if (ufo.state != Ufo::State::Idle) continue;
         if (endless && wavesSent >= static_cast<int>(waves.size())) waves.push_back(generateEndlessWave(endlessSource_,wavesSent,endlessSeedOffset_));
-        const int earlyBonus = wavesSent == 0 ? 0 : std::max(0,WaveIntervalMs / 1000 - (timeMs - lastWaveAt_) / 1000);
+        const int earlyBonus = earlyWaveBonus();
         ufo.wave = wavesSent++; ufo.remaining = waves.at(ufo.wave).at("count").get<int>();
         waveCounters_[ufo.wave] = {ufo.remaining * (waves.at(ufo.wave).value("spawn",0) ? 3 : 1),earlyBonus};
         ufo.x = width * 0.5f; ufo.y = height + 20.0f; ufo.z = 10;
@@ -289,6 +416,7 @@ bool Game::sendWave() {
 // Allocate an original integer-health enemy without changing its configured speed.
 Enemy Game::makeEnemy(int wave, float x, float y) {
     Enemy enemy; enemy.id = nextId_++; enemy.wave = wave; enemy.x = x; enemy.y = y;
+    enemy.nativeSlot = allocateEnemySlot();
     enemy.previous = {x,y}; enemy.lastRegenAt = timeMs;
     enemy.health = enemy.maxHealth = waves.at(wave).at("health").get<std::int64_t>();
     enemy.model = waves.at(wave).at("model").get<std::string>();
@@ -341,6 +469,7 @@ void Game::updateUfos() {
 // Follow the original center-to-center movement and cap each tick at its target.
 void Game::moveEnemies() {
     const float seconds = SimulationStepMs / 1000.0f;
+    updateEnemySlotHolds();
     for (auto& enemy : enemies) {
         if (!enemy.alive) continue;
         const auto& wave = waveFor(enemy);
@@ -366,6 +495,9 @@ void Game::moveEnemies() {
         if (sheepGate) {
             completeWaveEnemy(enemy.wave,false);
             enemy.alive = false; ++leaked; --lives;
+            releaseEnemySlot(enemy.nativeSlot);
+            effects.push_back({{enemy.x,enemy.y,wave.value("height",0.0f) + wave.value("offset",0.0f) + EnemyVisualGroundOffset},
+                SheepLeakVisualRadius,timeMs + SheepLeakVisualMs,"sheepLeak",timeMs});
             if (lives <= 0) { lives = 0; outcome = Outcome::Lost; message = "The sheep are gone. Restart to try a new defense."; }
             continue;
         }
@@ -395,6 +527,14 @@ void Game::moveEnemies() {
             enemy.previous = {enemy.x,enemy.y};
             enemy.x += dx / length * step; enemy.y += dy / length * step; enemy.traveled += step;
             enemy.heading = std::atan2(dy,dx);
+            if (!stunned) {
+                const float target = std::atan2(dy / length,dx / length) * EnemyDegreesPerRadian;
+                float difference = target - enemy.visualHeadingDegrees;
+                if (difference > 180.0f) difference -= 360.0f;
+                else if (difference < -180.0f) difference += 360.0f;
+                if (std::abs(difference) > EnemyTurnDeadZone)
+                    enemy.visualHeadingDegrees += (static_cast<float>(SimulationStepMs) * EnemyTurnPerMs) * difference;
+            }
         }
     }
 }

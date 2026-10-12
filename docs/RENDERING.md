@@ -14,6 +14,10 @@
 
 Native `PGL_init` creates the built-in `default` material with `checkerboard` texture and UV scale 8 before packaged materials load. The renderer follows that order. Materials without a `tex` field use white texture samples multiplied by their original RGBA tint, matching the native untextured material path.
 
+`PGL_loadTexture` at Ghidra 0028b3c8 defaults to NEAREST min/mag and REPEAT S/T, then applies descriptor min/mag/wraps/wrapt. The renderer retains the descriptor reference as its cache key, resolves its file alias, and applies these settings. Desktop PNG controls/text retain their own linear/clamped sampler. This distinction matters for the skybox's out-of-range UVs and moon texture scale 20. Focused pseudocode/assembly is in agent/codex/p8-render-evidence.
+
+The packaged skybox mesh is drawn around the camera before terrain without depth writes, matching the camera translation observed in `GAME_drawSkybox` at 0029e51c. Maps can choose skybox_moon. Original camera pose and background appearance still require dynamic comparison.
+
 Terrain has no standalone packaged VBO. The renderer builds two-unit quads from the original terrain array and the map's `basetileAtlas` (default `basetiles`), using the native `MAP_alloc` mapping `0=mud`, `1=grass`, `2=forest`. Within each atlas region, world Y=0 uses `(atlasHeight-positionY-sizeY)/atlasHeight`; world Y=2 uses `(atlasHeight-positionY)/atlasHeight`, as recovered from `MAP_prepareRendering`.
 
 `transitionAtlas` defaults to `transitions`. Higher terrain adds the original left/lefttop/lefttopright/surround regions onto lower terrain, with native UV rotations and separate opposing-edge quads. Diagonal corner regions are omitted when either adjoining edge covers them. The native renderer disables depth testing for these ground overlays; the desktop renderer lifts them by 0.002 units per terrain layer to keep depth testing for scene geometry.
@@ -28,10 +32,16 @@ World X/Y is the navigation grid; Z points upward. PlainPlane is 22×32 world un
 
 SDL mouse and HUD coordinates use logical window pixels. The GL viewport and screenshot use `SDL_GetWindowSizeInPixels`. Both `pick` and `project` use the same camera and logical aspect ratio, so resizing or DPI scaling does not introduce a second coordinate conversion. `pan`, `zoom`, and `resetCamera` are exposed for application input.
 
+Production desktop play reserves a board viewport between the HUD, palette and tower details. Camera fitting tests the map corners and a treetop margin against the real perspective. Developer scenes can retain the full-window default. Projection and picking must use the same reserved rectangle.
+
 HUD labels are UTF-8 strings rasterized with Windows GDI into alpha textures at the current pixel density. This is a desktop control surface; the original mobile menu layout has not been reconstructed.
 
 ## Fidelity limits
 
-The current shader adds simple ambient/directional lighting. It does not reconstruct the original shadow renderer, skybox, or particle lifecycle. Geoset local transforms are retained, but runtime articulated hierarchy has not been recovered. Original geometry animation frames can be rendered by supplying the chosen frame model name; frame selection and timing belong to the simulation/application. Transparent sorting is per instance rather than per triangle, so intersecting translucent geometry can still differ. Transition shape selection and tree placement have static native evidence; no Android device comparison has yet verified their appearance.
+The current shader adds simple ambient/directional lighting. Tower contact uses shadowblob with approximate size and opacity; non-flying enemies use the recovered directionalshadow model transform and material. Enemy armor auras, original status tint and frozen death geometry are supplied by main.cpp; animation formulas and limits are in ANIMATION.md. Renderable.animationTransform composes after instance yaw/scale and before packaged geoset transforms; overrideMaterialColor matches native color replacement for enemy bodies. Unlit world sprites/ribbons reuse beam, lightning, fireball, plasma, smoke and shockwave bitmaps; widths, fades and particle placement remain desktop approximations. Beam endpoints retain recovered XYZ muzzle/chain coordinates. Projectile pitch follows its complete velocity. Wounded health bars and status rings are desktop readability aids.
+
+Ordinary tower meshes face local negative Y: yaw is desktop heading+90 degrees, pitch is negative recovered elevation, and body height is 0.25 above the separate ground base. Articulated turrets pitch around rotationoffset. Game::towerElevation is shared with muzzle geometry; production input replay verifies the original laser mesh tip against the actual shot origin. Enemy bodies use original smoothed yaw directly without this tower offset.
+
+Exact skybox camera pose, tower shadow/aim smoothing, particle lifecycle and special tower animation are not yet fully reconstructed. Original geometry animation frames are chosen by Game::walkFrame and frozen corpse records. Transparent sorting is per instance rather than per triangle, and world sprites do not provide a full particle depth sort. The recovered static transforms still require successful gameplay comparison on Android.
 
 Face culling is disabled until native winding and material-cull behavior have been visually verified. No original model is replaced by a cube or other placeholder. Missing model/material/PNG errors are logged and exposed through `Renderer::error`; remaining scene objects continue rendering.

@@ -157,8 +157,12 @@ struct Renderer::Impl {
     SDL_GLContext context = nullptr;
     std::filesystem::path root;
     std::string error, info;
+    // The original maps select their background mesh, with the ordinary sky as default.
+    std::string skybox = "skybox";
     bool ownsCom = false;
     int width = 1, height = 1, pixelWidth = 1, pixelHeight = 1;
+    // Logical board bounds exclude desktop controls while leaving HUD at full size.
+    float viewportX = 0, viewportY = 0, viewportWidth = 0, viewportHeight = 0;
     float mapWidth = 22, mapHeight = 32;
     Vec3 target{11, 16, 0};
     float distance = 48;
@@ -220,9 +224,13 @@ struct Renderer::Impl {
     Vec3 eye() const { return target + Vec3{0, -0.62f * distance, 0.785f * distance}; }
     // Match rendering and picking to the same perspective camera.
     Mat4 viewProjection() const {
-        return perspective(kCameraFov, static_cast<float>(width) / height, 0.1f, 250.0f) *
+        return perspective(kCameraFov, boardWidth() / boardHeight(), 0.1f, 250.0f) *
                lookAt(eye(), target, {0, 0, 1});
     }
+    // A zero-sized viewport preserves the existing full-window developer scenes.
+    float boardWidth() const { return viewportWidth > 0 ? viewportWidth : static_cast<float>(width); }
+    // Keep the same full-window default for vertical projection.
+    float boardHeight() const { return viewportHeight > 0 ? viewportHeight : static_cast<float>(height); }
     // Add actionable warnings without obscuring a previous asset failure.
     void warning(const std::string& message) {
         if (!resourceWarnings.insert(message).second) return;
@@ -315,20 +323,42 @@ void main() {
         if (mipmaps) GenerateMipmap(GL_TEXTURE_2D);
         return texture;
     }
-    // Cache decoded PNG files by their original resource reference.
+    // Cache original descriptor references separately so aliases retain their samplers.
     Texture& texture(const std::string& name) {
         // PGL_setMaterial disables texturing for a material without a tex property.
         if (name.empty()) return whiteImage;
         auto found = textures.find(name);
         if (found != textures.end()) return found->second;
-        return textures.emplace(name,uploadTexture(decodePng(root/name),true)).first->second;
+        Json descriptor = Json::object();
+        std::string file = name;
+        if (name.ends_with(".texture.json")) {
+            descriptor = readJson(root / name);
+            file = "textures/" + descriptor.at("file").get<std::string>() + ".pvr.png";
+        } else if (name.starts_with("textures/") && name.ends_with(".pvr.png")) {
+            const std::string stem = name.substr(9,name.size() - 9 - std::string(".pvr.png").size());
+            const auto path = root / "data" / (stem + ".texture.json");
+            if (std::filesystem::exists(path)) descriptor = readJson(path);
+        }
+        const std::string min = descriptor.value("min",std::string("nearest"));
+        Texture image = uploadTexture(decodePng(root / file),!descriptor.empty() && min.find("mipmap") != std::string::npos);
+        if (!descriptor.empty()) {
+            // PGL_loadTexture defaults to NEAREST and REPEAT, then applies these fields.
+            GLint filter = GL_NEAREST;
+            if (min == "linear") filter = GL_LINEAR;
+            else if (min == "linear_mipmap_nearest") filter = GL_LINEAR_MIPMAP_NEAREST;
+            else if (min == "linear_mipmap_linear") filter = GL_LINEAR_MIPMAP_LINEAR;
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,filter);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,descriptor.value("mag",std::string("nearest")) == "linear" ? GL_LINEAR : GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,descriptor.value("wraps",std::string("repeat")) == "clamp" ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+            glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,descriptor.value("wrapt",std::string("repeat")) == "clamp" ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+        }
+        return textures.emplace(name,std::move(image)).first->second;
     }
-    // Texture descriptors may alias another image; material names are not filenames.
+    // Preserve the descriptor name; its file alias and sampler are resolved together.
     std::string textureFile(const Json& material) {
         if (!material.contains("tex")) return "";
         const std::string name = material.at("tex").get<std::string>();
-        const Json descriptor = readJson(root / "data" / (name + ".texture.json"));
-        return "textures/" + descriptor.at("file").get<std::string>() + ".pvr.png";
+        return "data/" + name + ".texture.json";
     }
     // Upload immutable triangle vertices while retaining source material names.
     Mesh uploadMesh(const std::vector<Vertex>& vertices, std::string textureName) {
@@ -355,16 +385,29 @@ void main() {
         glDrawArrays(mode, 0, static_cast<GLsizei>(vertices.size()));
     }
     // Draw a textured HUD rectangle in logical desktop coordinates.
-    void quad(float x, float y, float w, float h, Color color, GLuint image = 0) {
-        primitive({{x,y,0,0,0,1,0,0}, {x+w,y,0,0,0,1,1,0}, {x+w,y+h,0,0,0,1,1,1},
-                   {x,y,0,0,0,1,0,0}, {x+w,y+h,0,0,0,1,1,1}, {x,y+h,0,0,0,1,0,1}},
+    void quad(float x, float y, float w, float h, Color color, GLuint image = 0,
+              float u1 = 1, float v1 = 1) {
+        primitive({{x,y,0,0,0,1,0,0}, {x+w,y,0,0,0,1,u1,0}, {x+w,y+h,0,0,0,1,u1,v1},
+                   {x,y,0,0,0,1,0,0}, {x+w,y+h,0,0,0,1,u1,v1}, {x,y+h,0,0,0,1,0,v1}},
                   GL_TRIANGLES, hudMatrix(static_cast<float>(width), static_cast<float>(height)), color, image);
     }
-    // Cache font pixels at the current DPI and present labels at logical size.
-    void text(const HudText& label, float maximumWidth = 0) {
+    // Draw an unlit world quad using original bitmap alpha and an optional atlas row.
+    void worldQuad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, const std::string& image, Color tint,
+                   bool additive, int frame = 0, int frames = 1) {
+        const float v0 = static_cast<float>(frame % std::max(1,frames)) / std::max(1,frames);
+        const float v1 = v0 + 1.0f / std::max(1,frames);
+        glBlendFunc(GL_SRC_ALPHA,additive ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
+        try {
+            primitive({{a.x,a.y,a.z,0,0,1,0,v0},{b.x,b.y,b.z,0,0,1,1,v0},{c.x,c.y,c.z,0,0,1,1,v1},
+                       {a.x,a.y,a.z,0,0,1,0,v0},{c.x,c.y,c.z,0,0,1,1,v1},{d.x,d.y,d.z,0,0,1,0,v1}},
+                      GL_TRIANGLES,viewProjection(),tint,texture("textures/" + image).id);
+        } catch (const std::exception& error) { warning(error.what()); }
+    }
+    // Cache DPI-aware labels and crop overflow without reducing readable font size.
+    void text(const HudText& label, float maximumWidth = 0, float maximumHeight = 0) {
         if (label.text.empty()) return;
         const float dpi = static_cast<float>(pixelHeight) / height;
-        const int fontHeight = std::max(12, static_cast<int>(18 * dpi));
+        const int fontHeight = std::max(1, static_cast<int>(std::max(12,label.fontSize) * dpi));
         const std::string key = std::to_string(fontHeight) + ':' + label.text;
         auto found = labels.find(key);
         if (found == labels.end()) {
@@ -375,9 +418,11 @@ void main() {
             found = labels.emplace(key, uploadTexture(rasterText(label.text, fontHeight), false)).first;
         }
         const Texture& image = found->second;
-        // Preserve complete tower names without drawing across neighboring buttons.
-        const float scale = maximumWidth > 0 ? std::min(1.0f,maximumWidth / (image.width / dpi)) : 1.0f;
-        quad(label.x, label.y, image.width / dpi * scale, image.height / dpi * scale, label.color, image.id);
+        const float imageWidth = image.width / dpi, imageHeight = image.height / dpi;
+        const float drawWidth = maximumWidth > 0 ? std::min(imageWidth,maximumWidth) : imageWidth;
+        const float drawHeight = maximumHeight > 0 ? std::min(imageHeight,maximumHeight) : imageHeight;
+        quad(label.x,label.y,drawWidth,drawHeight,label.color,image.id,
+             drawWidth/imageWidth,drawHeight/imageHeight);
     }
     // Load converted original map and mesh data; defined alongside export schema.
     void loadMap(const std::filesystem::path& mapFile);
@@ -470,6 +515,7 @@ void Renderer::Impl::loadMap(const std::filesystem::path& mapFile) {
         for (const auto& [name, material] : materialFile.items()) materials[name] = material;
     }
     const Json map = readJson(mapFile);
+    skybox = map.value("skybox",std::string("skybox"));
     const int columns = map.at("width").get<int>(), rows = map.at("height").get<int>();
     mapWidth = static_cast<float>(columns*2); mapHeight = static_cast<float>(rows*2);
     const Json atlas = readJson(root/"data"/(map.value("basetileAtlas",std::string("basetiles")) + ".atlas.json"));
@@ -672,6 +718,15 @@ void Renderer::resize() {
     r.pixelWidth = std::max(1, r.pixelWidth); r.pixelHeight = std::max(1, r.pixelHeight);
 }
 
+// Set one shared logical rectangle for camera rendering and mouse coordinates.
+void Renderer::setBoardViewport(float x, float y, float width, float height) {
+    auto& r = *impl_;
+    r.viewportX = std::clamp(x,0.0f,static_cast<float>(r.width - 1));
+    r.viewportY = std::clamp(y,0.0f,static_cast<float>(r.height - 1));
+    r.viewportWidth = std::clamp(width,1.0f,r.width - r.viewportX);
+    r.viewportHeight = std::clamp(height,1.0f,r.height - r.viewportY);
+}
+
 // Render opaque meshes first and sorted translucent parts without depth writes.
 void Renderer::draw(const SceneView& scene) {
     auto& r = *impl_;
@@ -679,8 +734,11 @@ void Renderer::draw(const SceneView& scene) {
     resize();
     glViewport(0, 0, r.pixelWidth, r.pixelHeight);
     glClearColor(0.14f, 0.23f, 0.3f, 1); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    const float dpiX = static_cast<float>(r.pixelWidth) / r.width,dpiY = static_cast<float>(r.pixelHeight) / r.height;
+    glViewport(static_cast<int>(std::lround(r.viewportX * dpiX)),static_cast<int>(std::lround((r.height - r.viewportY - r.boardHeight()) * dpiY)),
+               static_cast<int>(std::lround(r.boardWidth() * dpiX)),static_cast<int>(std::lround(r.boardHeight() * dpiY)));
     r.UseProgram(r.program); glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);
-    struct DrawPart { Impl::Mesh* mesh; Impl::Texture* texture; Mat4 transform; Color tint; float distance; };
+    struct DrawPart { Impl::Mesh* mesh; Impl::Texture* texture; Mat4 transform; Color tint; float distance; bool unlit; };
     std::vector<DrawPart> opaque, transparent;
     // Keep individual broken resources visible as diagnostics while rendering the rest.
     const auto append = [&](const Renderable& object) {
@@ -689,10 +747,10 @@ void Renderer::draw(const SceneView& scene) {
             for (const auto& part : model.parts) {
                 auto& mesh = r.meshes.at(part.mesh);
                 auto& texture = r.texture(mesh.texture);
-                const Color tint{part.tint.r*object.tint.r, part.tint.g*object.tint.g,
+                const Color tint = object.overrideMaterialColor ? object.tint : Color{part.tint.r*object.tint.r, part.tint.g*object.tint.g,
                                  part.tint.b*object.tint.b, part.tint.a*object.tint.a};
-                const Mat4 transform = modelMatrix(object.position, object.rotation, object.scale) * part.transform;
-                DrawPart draw{&mesh, &texture, transform, tint, dot(object.position-r.eye(),object.position-r.eye())};
+                const Mat4 transform = modelMatrix(object.position, object.rotation, object.scale, object.pitch, object.pitchPivot) * object.animationTransform * part.transform;
+                DrawPart draw{&mesh, &texture, transform, tint, dot(object.position-r.eye(),object.position-r.eye()),object.unlit};
                 (!mesh.blend.empty() || !mesh.depthWrite || texture.translucent || tint.a < 1 ? transparent : opaque).push_back(draw);
             }
         } catch (const std::exception& e) { r.warning(e.what()); }
@@ -700,12 +758,24 @@ void Renderer::draw(const SceneView& scene) {
     for (const auto& object : r.terrain) append(object);
     for (const auto& object : scene.models) append(object);
     const Mat4 camera = r.viewProjection();
+    // Render the packaged background around the eye before terrain without depth writes.
+    glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
+    try {
+        for (const auto& part : r.model(r.skybox).parts) {
+            const auto& mesh = r.meshes.at(part.mesh);
+            const auto& texture = r.texture(mesh.texture);
+            r.uniforms(camera,modelMatrix(r.eye(),0,1) * part.transform,part.tint,true);
+            glBindTexture(GL_TEXTURE_2D,texture.id); r.BindVertexArray(mesh.vao);
+            glDrawArrays(GL_TRIANGLES,0,mesh.count);
+        }
+    } catch (const std::exception& error) { r.warning(error.what()); }
+    glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);
     const auto render = [&](const DrawPart& part) {
         // Original effect materials distinguish additive and alpha-weighted additive light.
         const GLenum sourceBlend = part.mesh->blend == "additive" ? GL_ONE : GL_SRC_ALPHA;
         const GLenum destinationBlend = part.mesh->blend.starts_with("additive") ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA;
         glBlendFunc(sourceBlend,destinationBlend);
-        r.uniforms(camera, part.transform, part.tint, false);
+        r.uniforms(camera, part.transform, part.tint, part.unlit);
         glBindTexture(GL_TEXTURE_2D, part.texture->id); r.BindVertexArray(part.mesh->vao);
         glDrawArrays(GL_TRIANGLES, 0, part.mesh->count);
     };
@@ -714,7 +784,26 @@ void Renderer::draw(const SceneView& scene) {
         return a.distance > b.distance;
     });
     glDepthMask(GL_FALSE);
+    // Ground shadows and shockwaves keep depth testing but do not occlude units.
+    for (const auto& sprite : scene.sprites) if (sprite.ground) {
+        const Vec3 horizontal{sprite.width / 2,0,0},vertical{0,sprite.height / 2,0};
+        r.worldQuad(sprite.position - horizontal - vertical,sprite.position + horizontal - vertical,
+                    sprite.position + horizontal + vertical,sprite.position - horizontal + vertical,
+                    sprite.texture,sprite.color,sprite.additive);
+    }
     for (const auto& part : transparent) render(part);
+    const Vec3 forward = normalized(r.target - r.eye()),horizontal = normalized(cross(forward,{0,0,1})),vertical = cross(horizontal,forward);
+    for (const auto& sprite : scene.sprites) if (!sprite.ground) {
+        const Vec3 across = horizontal * (sprite.width / 2),up = vertical * (sprite.height / 2);
+        r.worldQuad(sprite.position - across + up,sprite.position + across + up,
+                    sprite.position + across - up,sprite.position - across - up,
+                    sprite.texture,sprite.color,sprite.additive);
+    }
+    for (const auto& ribbon : scene.ribbons) {
+        const Vec3 side = normalized(cross(ribbon.to - ribbon.from,r.eye() - ribbon.from)) * (ribbon.width / 2);
+        r.worldQuad(ribbon.from + side,ribbon.to + side,ribbon.to - side,ribbon.from - side,
+                    ribbon.texture,ribbon.color,ribbon.additive,ribbon.frame,ribbon.frames);
+    }
     glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
     for (const auto& line : scene.lines)
         r.primitive({{line.from.x,line.from.y,line.from.z,0,0,1,0,0},
@@ -724,15 +813,51 @@ void Renderer::draw(const SceneView& scene) {
         // Original towers occupy a two-by-two navigation-cell footprint.
         r.primitive({{x,y,kOverlayHeight,0,0,1,0,0}, {x+2,y,kOverlayHeight,0,0,1,0,0},
                      {x+2,y+2,kOverlayHeight,0,0,1,0,0}, {x,y+2,kOverlayHeight,0,0,1,0,0}},
-                    GL_LINE_LOOP, camera, {1,0.85f,0.15f,1});
+                    GL_LINE_LOOP, camera, scene.cellColor);
     }
     glDisable(GL_DEPTH_TEST);
+    glViewport(0,0,r.pixelWidth,r.pixelHeight);
+    for (const auto& panel : scene.panels)
+        r.quad(panel.x,panel.y,panel.width,panel.height,panel.color);
+    float mouseX = 0, mouseY = 0;
+    const SDL_MouseButtonFlags mouseButtons = SDL_GetMouseState(&mouseX,&mouseY);
+    // Preserve an inset for icons and readable labels within each button.
+    constexpr float buttonPadding = 7, iconGap = 6;
+    // Match the default HUD type size rather than shrinking long button labels.
+    constexpr int buttonFontSize = 18;
     for (const auto& button : scene.buttons) {
-        const Color fill = !button.enabled ? Color{0.16f,0.17f,0.19f,0.95f} :
-                           button.selected ? Color{0.24f,0.49f,0.24f,0.96f} : Color{0.09f,0.13f,0.18f,0.96f};
+        const bool hovered = button.enabled && SDL_GetMouseFocus() == r.window &&
+                             mouseX >= button.x && mouseX < button.x+button.width &&
+                             mouseY >= button.y && mouseY < button.y+button.height;
+        const bool pressed = hovered && (mouseButtons & SDL_BUTTON_LMASK) != 0;
+        Color fill = !button.enabled ? Color{0.16f,0.17f,0.19f,0.95f} :
+                     button.selected ? Color{0.24f,0.49f,0.24f,0.96f} : Color{0.09f,0.13f,0.18f,0.96f};
+        if (hovered) {
+            // A held click darkens the same control that brightens on hover.
+            const float highlight = pressed ? 0.75f : 1.35f;
+            fill.r *= highlight; fill.g *= highlight; fill.b *= highlight;
+        }
         r.quad(button.x, button.y, button.width, button.height, fill);
-        r.text({button.text,button.x+7,button.y+(button.height-22)/2,
-                button.enabled ? Color{} : Color{0.5f,0.5f,0.5f,1}},button.width - 14);
+        float textX = button.x+buttonPadding;
+        const float contentHeight = button.height-2*buttonPadding;
+        if (!button.icon.empty() && contentHeight > 0 && button.width > 2*buttonPadding) {
+            try {
+                const auto& icon = r.texture("textures/"+button.icon);
+                // Limit icon width so every ordinary button retains label space.
+                const float iconSpace = std::min(contentHeight,(button.width-2*buttonPadding)*0.28f);
+                const float scale = iconSpace/std::max(icon.width,icon.height);
+                const float iconWidth = icon.width*scale, iconHeight = icon.height*scale;
+                r.quad(textX,button.y+(button.height-iconHeight)/2,iconWidth,iconHeight,
+                       button.enabled ? Color{} : Color{0.7f,0.7f,0.7f,1},icon.id);
+                textX += iconWidth+iconGap;
+            } catch (const std::exception& error) { r.warning(error.what()); }
+        }
+        const float textWidth = button.x+button.width-buttonPadding-textX;
+        const float textY = button.y+std::max(0.0f,(button.height-buttonFontSize-4)/2);
+        if (textWidth > 0 && button.height > 0)
+            r.text({button.text,textX,textY,
+                    button.enabled ? Color{} : Color{0.72f,0.74f,0.77f,1},buttonFontSize},
+                   textWidth,button.y+button.height-textY);
     }
     for (const auto& label : scene.texts) r.text(label);
     glDepthMask(GL_TRUE); SDL_GL_SwapWindow(r.window);
@@ -741,12 +866,14 @@ void Renderer::draw(const SceneView& scene) {
 // Intersect a camera ray with Z=0 using the same basis as lookAt.
 std::optional<Vec2> Renderer::pick(float x, float y) const {
     const auto& r = *impl_;
+    x -= r.viewportX; y -= r.viewportY;
+    if (x < 0 || y < 0 || x >= r.boardWidth() || y >= r.boardHeight()) return std::nullopt;
     const Vec3 eye = r.eye(), forward = normalized(r.target-eye);
     const Vec3 right = normalized(cross(forward,{0,0,1}));
     const Vec3 vertical = cross(right,forward);
     const float tangent = std::tan(kCameraFov/2);
-    const Vec3 ray = forward + right*((2*x/r.width-1)*tangent*r.width/r.height) +
-                     vertical*((1-2*y/r.height)*tangent);
+    const Vec3 ray = forward + right*((2*x/r.boardWidth()-1)*tangent*r.boardWidth()/r.boardHeight()) +
+                     vertical*((1-2*y/r.boardHeight())*tangent);
     if (std::abs(ray.z) < 0.0001f) return std::nullopt;
     const float t = -eye.z/ray.z;
     if (t < 0) return std::nullopt;
@@ -760,7 +887,7 @@ std::optional<Vec2> Renderer::project(Vec3 world) const {
     const auto& r = *impl_;
     const auto clip = transform(r.viewProjection(),{world.x,world.y,world.z,1});
     if (clip[3] <= 0) return std::nullopt;
-    return Vec2{(clip[0]/clip[3]+1)*0.5f*r.width,(1-clip[1]/clip[3])*0.5f*r.height};
+    return Vec2{r.viewportX + (clip[0]/clip[3]+1)*0.5f*r.boardWidth(),r.viewportY + (1-clip[1]/clip[3])*0.5f*r.boardHeight()};
 }
 
 // Pan within a generous map margin without restricting ordinary exploration.
@@ -804,12 +931,25 @@ void Renderer::pan(float x, float y) {
 void Renderer::zoom(float steps) {
     impl_->distance = std::clamp(impl_->distance*std::exp(-steps*0.12f),kMinimumDistance,kMaximumDistance);
 }
-// Frame the whole map with a small margin for the desktop HUD.
+// Fit the map and treetops inside the actual board rectangle with a small margin.
 void Renderer::resetCamera() {
     auto& r = *impl_;
     r.target = {r.mapWidth/2,r.mapHeight/2,0};
-    r.distance = std::clamp(std::max(r.mapHeight*1.5f,r.mapWidth*1.5f*r.height/r.width),
-                            kMinimumDistance,kMaximumDistance);
+    // Test the real perspective rather than assuming a portrait or landscape aspect.
+    constexpr float FrameLimit = 0.92f, TreeHeight = 3.0f;
+    constexpr int FitIterations = 18;
+    float low = kMinimumDistance,high = kMaximumDistance;
+    for (int step = 0; step < FitIterations; ++step) {
+        r.distance = (low + high) * 0.5f;
+        const Mat4 camera = r.viewProjection();
+        bool fits = true;
+        for (const float x : {0.0f,r.mapWidth}) for (const float y : {0.0f,r.mapHeight}) for (const float z : {0.0f,TreeHeight}) {
+            const auto clip = transform(camera,{x,y,z,1});
+            if (clip[3] <= 0 || std::abs(clip[0]/clip[3]) > FrameLimit || std::abs(clip[1]/clip[3]) > FrameLimit) fits = false;
+        }
+        if (fits) high = r.distance; else low = r.distance;
+    }
+    r.distance = high;
 }
 // Expose asset or initialization diagnostics to the desktop caller.
 const std::string& Renderer::error() const { return impl_->error; }

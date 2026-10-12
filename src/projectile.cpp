@@ -48,15 +48,9 @@ Vec3 trackingDirection(Vec3 previous, Vec3 desired, float traveled) {
 }
 } // namespace
 
-/** Transform the original muzzle with inverse yaw/pitch and rotation offset. */
-Vec3 Game::muzzle(const Tower& tower, int index) const {
+/** Resolve the original fixed or target-dependent tower elevation in radians. */
+float Game::towerElevation(const Tower& tower) const {
     const auto& type = technology.at("towers").at(tower.type);
-    Vec3 local{};
-    if (type.contains("muzzleoffset") && !type.at("muzzleoffset").empty()) {
-        const auto& muzzles = type.at("muzzleoffset");
-        local = offsetVector(muzzles.at(std::min(index, static_cast<int>(muzzles.size()) - 1)));
-    }
-    const Vec3 rotation = type.contains("rotationoffset") ? offsetVector(type.at("rotationoffset")) : Vec3{};
     float elevation = type.value("elevation", 0.0f) * DegreesToRadians;
     if (!type.contains("elevation")) {
         const auto enemy = std::find_if(enemies.begin(), enemies.end(), [&](const Enemy& value) {
@@ -69,6 +63,19 @@ Vec3 Game::muzzle(const Tower& tower, int index) const {
                 : std::atan2(wave.value("height", 0.0f) + wave.value("offset", 0.0f) - GroundOffset, distance);
         }
     }
+    return elevation;
+}
+
+/** Transform the original muzzle with inverse yaw/pitch and rotation offset. */
+Vec3 Game::muzzle(const Tower& tower, int index) const {
+    const auto& type = technology.at("towers").at(tower.type);
+    Vec3 local{};
+    if (type.contains("muzzleoffset") && !type.at("muzzleoffset").empty()) {
+        const auto& muzzles = type.at("muzzleoffset");
+        local = offsetVector(muzzles.at(std::min(index, static_cast<int>(muzzles.size()) - 1)));
+    }
+    const Vec3 rotation = type.contains("rotationoffset") ? offsetVector(type.at("rotationoffset")) : Vec3{};
+    const float elevation = towerElevation(tower);
     // Muzzle helpers use negative degree conversion, unlike ballistic physics.
     const float yaw = HalfPi - tower.heading, pitch = -elevation;
     const float cy = std::cos(yaw), sy = std::sin(yaw), cp = std::cos(pitch), sp = std::sin(pitch);
@@ -162,7 +169,7 @@ void Game::updateProjectiles() {
             if (enemy != enemies.end()) damage(*enemy, projectile.source, projectile.damage);
             const float chance = weapon.value("stun", 0.0f);
             if (chance > 0 && randomFloat() < chance && enemy != enemies.end() && enemy->alive)
-                enemy->stunMs = std::max(enemy->stunMs, weapon.value("duration", 0));
+                stun(*enemy, weapon.value("duration", 0));
         } else {
             if (projectile.source.type == "H Bomb") {
                 for (auto& victim : enemies) {
@@ -173,7 +180,7 @@ void Game::updateProjectiles() {
             radiusDamage(projectile.position.x, projectile.position.y, projectile.splash, projectile.damage, projectile.source);
         }
         effects.push_back({projectile.position, projectile.splash, timeMs + ExplosionVisualMs,
-            projectile.kind == "plasma" ? "plasma" : nuclear ? "nuke" : projectile.kind});
+            projectile.kind == "plasma" ? "plasma" : nuclear ? "nuke" : projectile.kind, timeMs});
         releaseChildren();
     }
     projectiles.erase(std::remove_if(projectiles.begin(), projectiles.end(), [](const Projectile& value) {
