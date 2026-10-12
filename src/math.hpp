@@ -1,14 +1,30 @@
-// Small column-major vector and matrix operations for scene projection.
+// Small scene math operations and deterministic visual samples independent of combat.
 #pragma once
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
+#include <cstdint>
 
 namespace tmreborn {
 
 struct Vec2 { float x = 0, y = 0; };
 struct Vec3 { float x = 0, y = 0, z = 0; };
+
+// Use a separate avalanche hash without consuming the battle random engine.
+inline float visualRandom(std::uint32_t seed) {
+    seed ^= seed >> 16; seed *= 0x7feb352du;
+    seed ^= seed >> 15; seed *= 0x846ca68bu;
+    seed ^= seed >> 16;
+    return static_cast<float>(seed) * 0x1p-32f;
+}
+
+// Keep an event's visual choices stable throughout its lifetime.
+inline std::uint32_t visualSeed(int bornAt, Vec3 origin) {
+    return static_cast<std::uint32_t>(bornAt) ^ std::bit_cast<std::uint32_t>(origin.x)
+        ^ (std::bit_cast<std::uint32_t>(origin.y) * 31u) ^ std::bit_cast<std::uint32_t>(origin.z);
+}
 
 // Add two world-space vectors.
 inline Vec3 operator+(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }

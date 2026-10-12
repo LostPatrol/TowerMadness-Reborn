@@ -37,6 +37,8 @@ nlohmann::json Game::saveState() const {
         state["enemies"][index]["animation"] = enemyAnimation(enemies[index]);
     for (std::size_t index = 0; index < pendingChildren_.size(); ++index)
         state["pendingChildren"][index]["animation"] = enemyAnimation(pendingChildren_[index]);
+    for (std::size_t index = 0; index < projectiles.size(); ++index)
+        state["projectiles"][index]["trail"] = {{"position",projectiles[index].trailSample},{"threshold",projectiles[index].trailThreshold}};
     auto holds = nlohmann::json::array();
     for (const auto& hold : enemySlotHolds_) {
         nlohmann::json raw{{"slot",hold.slot},{"remainingSeconds",hold.remainingSeconds}};
@@ -67,6 +69,20 @@ void Game::restoreState(const nlohmann::json& state) {
     restored.towers = state.at("towers").get<std::vector<Tower>>();
     restored.ufos = state.at("ufos").get<std::vector<Ufo>>();
     restored.projectiles = state.at("projectiles").get<std::vector<Projectile>>();
+    for (std::size_t index = 0; index < restored.projectiles.size(); ++index) {
+        auto& projectile = restored.projectiles[index];
+        projectile.trailSample = projectile.position;
+        projectile.trailThreshold = 0;
+        // Old or malformed cosmetic fields must not prevent continuation of the core match.
+        try {
+            const auto& trail = state.at("projectiles").at(index).at("trail");
+            const Vec3 sample = trail.at("position").get<Vec3>();
+            const float threshold = trail.at("threshold").get<float>();
+            if (std::isfinite(sample.x) && std::isfinite(sample.y) && std::isfinite(sample.z) && std::isfinite(threshold) && threshold >= 0) {
+                projectile.trailSample = sample; projectile.trailThreshold = threshold;
+            }
+        } catch (const nlohmann::json::exception&) {}
+    }
     restored.pendingChildren_ = state.at("pendingChildren").get<std::vector<Enemy>>();
     restored.waves = state.at("waves"); restored.grid_ = state.at("grid").get<std::vector<int>>();
     restored.nextId_ = state.at("nextId").get<int>(); restored.lastWaveAt_ = state.at("lastWaveAt").get<int>();

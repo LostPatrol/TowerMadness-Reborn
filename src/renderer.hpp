@@ -45,8 +45,12 @@ struct RenderSprite {
     float width = 1, height = 1;
     Color color{};
     bool ground = false, additive = false;
-    // Native point sprites scale this parameter by viewport width and camera distance.
+    // Native point sprites divide this size parameter by their camera distance.
     float pointSizeParameter = 0;
+    // Flak and missile flashes use fixed native pixels rather than the screen-width multiplier.
+    bool screenRelative = true;
+    // Early flak flash shares the primary burst's distance despite its raised position.
+    std::optional<Vec3> pointDistanceOrigin;
 };
 
 struct RenderRibbon {
@@ -56,6 +60,13 @@ struct RenderRibbon {
     Color color{};
     int frame = 0, frames = 1;
     bool additive = true;
+};
+
+struct RenderQuad {
+    // Preserve native untextured geometry instead of deriving a camera-facing ribbon.
+    std::array<Vec3,4> vertices;
+    Color color{};
+    bool additive = false;
 };
 
 struct HudText {
@@ -96,6 +107,7 @@ struct SceneView {
     std::vector<RenderSprite> sprites;
     std::vector<RenderRibbon> ribbons;
     std::vector<HudImage> images;
+    std::vector<RenderQuad> quads;
 };
 
 class Renderer {

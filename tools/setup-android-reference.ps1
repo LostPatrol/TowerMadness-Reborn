@@ -9,12 +9,14 @@ param(
     [ValidateSet('arm', 'x86')]
     [string]$Architecture = 'arm',
     [switch]$PlayStore,
+    [switch]$DevelopmentImage,
     [switch]$LegacyAdb,
     [switch]$LaunchOriginal
 )
 
 $ErrorActionPreference = 'Stop'
 if ($ImageTag -eq 'google_apis_playstore') { $PlayStore = $true }
+if ($DevelopmentImage -and $PlayStore) { throw 'Select either DevelopmentImage or PlayStore.' }
 
 # Resolve paths relative to this project, never the caller's working directory.
 $projectDirectory = Split-Path -Parent $PSScriptRoot
@@ -40,11 +42,18 @@ if ($PlayStore) {
     $avdName = 'TM_Original_API24_Play_x86'
     $serial = 'emulator-5584'
 }
+if ($DevelopmentImage) {
+    $Architecture = 'x86'
+    $ImageTag = 'google_apis'
+    $apiLevel = 24
+    $avdName = 'TM_Original_API24_Google_x86_legacy'
+    $serial = 'emulator-5588'
+}
 $avdDirectory = Join-Path $avdRoot "$avdName.avd"
 $logsDirectory = Join-Path (Join-Path $RuntimeDirectory 'logs') $avdName
 # Google Play background services need more RAM than the legacy bare image.
 $memoryMegabytes = 512
-if ($PlayStore) { $memoryMegabytes = 1536 }
+if ($PlayStore -or $DevelopmentImage) { $memoryMegabytes = 1536 }
 # Each original APK variant must use the matching native ABI.
 $imageAbi = 'armeabi-v7a'
 $cpuModel = 'cortex-a8'
@@ -111,6 +120,13 @@ if ($PlayStore) {
     $packages[1].Size = 812724041L
     $packages[1].Sha1 = 'b52e9593ffdde65c1a0970256a32e8967c89cc22'
 }
+if ($DevelopmentImage) {
+    # Google's untouched userdebug image exposes the normal development adb transport.
+    $packages[1].Name = 'google-apis-x86-24_r27.zip'
+    $packages[1].Url = 'https://dl.google.com/android/repository/sys-img/google_apis/x86-24_r27.zip'
+    $packages[1].Size = 889204295L
+    $packages[1].Sha1 = '74505c33546fb9f6722fb7aa8fc1472777b924ff'
+}
 if ($LegacyAdb) {
     # Keep the older client separate; it uses the existing host keypair without changing it.
     $packages[2].Name = 'platform-tools_r29.0.6-windows.zip'
@@ -158,7 +174,8 @@ function Invoke-ReferenceAdb {
 }
 
 Write-Host "Reference runtime: $RuntimeDirectory"
-$downloadBytes = ($packages | Measure-Object -Property Size -Sum).Sum
+# Windows PowerShell 5 does not expose hashtable entries to Measure-Object -Property.
+$downloadBytes = ($packages | ForEach-Object { $_.Size } | Measure-Object -Sum).Sum
 Write-Host "Pinned downloads: $downloadBytes bytes, plus extraction and AVD storage."
 Write-Host 'No Windows feature, system PATH, or original APK will be changed.'
 foreach ($directory in @($downloadsDirectory, $sdkDirectory, $avdRoot, $avdDirectory, $logsDirectory)) {
@@ -244,7 +261,7 @@ if (-not $LaunchOriginal) {
     Write-Host 'Setup complete. Use -LaunchOriginal to boot and capture the original game.'
     return
 }
-if (-not $PlayStore) {
+if (-not $PlayStore -and -not $DevelopmentImage) {
     Write-Warning 'The tested API17 images lack the startup service needed by this unchanged game; menu entry remains unverified.'
 }
 if ((Get-FileHash -LiteralPath $apkPath -Algorithm SHA256).Hash -ne $apkSha256) {
@@ -256,23 +273,29 @@ $previousSdkRoot = $env:ANDROID_SDK_ROOT
 $previousAndroidHome = $env:ANDROID_HOME
 $previousAvdHome = $env:ANDROID_AVD_HOME
 $previousAdbMaxPort = $env:ADB_LOCAL_TRANSPORT_MAX_PORT
+$previousAudioDriver = $env:QEMU_AUDIO_DRV
 try {
     $env:ANDROID_SDK_ROOT = $sdkDirectory
     $env:ANDROID_HOME = $sdkDirectory
     $env:ANDROID_AVD_HOME = $avdRoot
     # Legacy adb otherwise scans only through 5585, below the retained reference AVD's port.
     $env:ADB_LOCAL_TRANSPORT_MAX_PORT = '5589'
+    if ($DevelopmentImage) { $env:QEMU_AUDIO_DRV = 'none' }
     # An offline serial is still a booting AVD; launching it again would hit its device-data lock.
     $existingDevice = @(& $adbExecutable devices) | Where-Object { $_ -match "^$serial\s" }
     $emulatorProcess = $null
     if (-not $existingDevice) {
         $launchArguments = @(
             '-avd', $avdName, '-port', ($serial -replace 'emulator-', ''),
-            '-accel', 'off', '-no-audio', '-no-snapshot'
+            '-accel', 'off', '-no-snapshot'
         )
+        # Old QEMU2 rejects the wrapper's -audio option; use its process-local audio driver.
+        if (-not $DevelopmentImage) { $launchArguments += '-no-audio' }
         if ($PlayStore) {
             # Headless software GLES avoids the observed current Qt/host-renderer startup exit.
             $launchArguments += @('-no-window', '-no-metrics', '-gpu', 'software', '-feature', '-Vulkan')
+        } elseif ($DevelopmentImage) {
+            $launchArguments += @('-engine', 'qemu2', '-gpu', 'host')
         } else {
             # Explicit classic selection avoids this SDK launcher's incompatible ARM QEMU2 fallback.
             $launchArguments += @('-engine', 'classic', '-gpu', 'host')
@@ -309,4 +332,5 @@ try {
     $env:ANDROID_HOME = $previousAndroidHome
     $env:ANDROID_AVD_HOME = $previousAvdHome
     $env:ADB_LOCAL_TRANSPORT_MAX_PORT = $previousAdbMaxPort
+    $env:QEMU_AUDIO_DRV = $previousAudioDriver
 }

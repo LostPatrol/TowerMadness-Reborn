@@ -36,6 +36,6 @@ $run.ExitCode
 
 地图路径检查针对`pad+(2,2)`实际释放点。UFO的pad是锚点，固定路径地图可能把锚点放在阻挡草地上，例如AshMountain；因此不能把锚点本身必须能走作为原游戏规则。固定路径、大小地图均包含于116逐项记录。
 
-保存恢复检查比较完整`saveState()` JSON，包括随机引擎、UFO、敌人、塔、投射物及可选animation扩展；自然局恢复后推进40tick，导弹夹具推进20tick，冻结尸体继续计时一致。旧纯占位扩展不凭空生成尸体，坏视觉扩展降级而保留有效核心。短暂渲染effect不属于原session合同。测试使用指定输出目录的`coverage-profile`，不会触及真实LocalAppData。
+保存恢复检查比较完整`saveState()` JSON，包括随机引擎、UFO、敌人、塔、投射物及可选animation/trail扩展；自然局恢复后推进40tick，导弹夹具先实际移动/采样再保存，并推进20tick验证继续一致。缺少或损坏trail字段保留核心状态及战斗RNG；旧纯占位扩展不凭空生成尸体，坏视觉扩展降级而保留有效核心。短暂渲染effect不属于原session合同。测试使用指定输出目录的`coverage-profile`，不会触及真实LocalAppData。
 
 此验证证明已覆盖的本机实现规则可运行，不证明所有116关都能自然获胜，也不构成Android真机动态等价验证。资源存在与原解锁状态的区别见[MODES.md](MODES.md)。

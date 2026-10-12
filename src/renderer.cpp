@@ -835,12 +835,13 @@ void Renderer::drawScene(const SceneView& scene, bool present) {
     for (const auto& sprite : scene.sprites) if (!sprite.ground) {
         float width = sprite.width, height = sprite.height;
         if (sprite.pointSizeParameter > 0) {
-            const float cameraDistance = std::sqrt(dot(sprite.position - r.eye(),sprite.position - r.eye()));
+            const Vec3 distanceOrigin = sprite.pointDistanceOrigin.value_or(sprite.position);
+            const float cameraDistance = std::sqrt(dot(distanceOrigin - r.eye(),distanceOrigin - r.eye()));
             const auto clip = transform(camera,{sprite.position.x,sprite.position.y,sprite.position.z,1});
             if (clip[3] <= 0 || cameraDistance <= 0) continue;
             // Convert native pixel size to a billboard at this exact projected depth.
             constexpr float NativeScreenWidth = 320;
-            const float pixels = sprite.pointSizeParameter / cameraDistance * r.boardWidth() / NativeScreenWidth;
+            const float pixels = sprite.pointSizeParameter / cameraDistance * (sprite.screenRelative ? r.boardWidth() / NativeScreenWidth : 1);
             width = height = pixels * clip[3] * (2 * std::tan(kCameraFov / 2)) / r.boardHeight();
         }
         const Vec3 across = horizontal * (width / 2),up = vertical * (height / 2);
@@ -852,6 +853,16 @@ void Renderer::drawScene(const SceneView& scene, bool present) {
         const Vec3 side = normalized(cross(ribbon.to - ribbon.from,r.eye() - ribbon.from)) * (ribbon.width / 2);
         r.worldQuad(ribbon.from + side,ribbon.to + side,ribbon.to - side,ribbon.from - side,
                     ribbon.texture,ribbon.color,ribbon.additive,ribbon.frame,ribbon.frames);
+    }
+    for (const auto& quad : scene.quads) {
+        glBlendFunc(GL_SRC_ALPHA,quad.additive ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
+        std::vector<Vertex> vertices;
+        // Native EffectTrail explicitly uses these two triangles without a texture.
+        for (const int index : {0,1,2,0,2,3}) {
+            const Vec3 point = quad.vertices[index];
+            vertices.push_back({point.x,point.y,point.z,0,0,1,0,0});
+        }
+        r.primitive(vertices,GL_TRIANGLES,camera,quad.color);
     }
     glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
     for (const auto& line : scene.lines)

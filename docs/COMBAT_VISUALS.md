@@ -113,9 +113,9 @@ blast/crater实际用rect VBO、dustcone用cone、flash/debris用3plane；不能
 
 地雷所有等级在塔中心 `(tower.x+1,tower.y+1)` 无条件创建弹坑，参数都是 **`.75*splash,5s`**；包括末级核爆地雷，不能套用mortar核弹的`.5*splash,10s`。`mineFireFunc 002d73e4` 先在 `002d7558–002d7580` 创建该GroundDamage，再检查tower type字段+0x64（upgrades数量，通用parser `002dd4fc`）：为零时选NukeExplosion，否则普通Explosion。因此原配置的末级Proximity Mine III使用核爆表现，前两级使用普通爆炸。
 
-## 已导出但尚未完全闭合
+## 补充投射物规格
 
-`EffectMissileExplosion 002c921c/002c93ec` 初始化白/蓝flash三选一、smokepuff、blast、debris、rangecircle，大小输入乘3、随机scale=.75+.5*randExt、随机yaw和随机材料；到期是 `1.5+3*randExt` 秒，但draw归一化固定除1.5。已保留完整指令；其多层缩放及余下透明度未写成实现规格，不应用统一火球宣称复现。init最后flag非零选blueflash/2/3，否则flash/2/3。
+`EffectMissileExplosion 002c921c/002c93ec` 初始化白/蓝flash三选一、smokepuff、blast、debris、rangecircle，大小输入乘3、随机scale=.75+.5*randExt、随机yaw和随机材料；到期是 `1.5+3*randExt` 秒，但draw归一化固定除1.5。多层缩放、透明度及固定像素闪光已闭合并接入Windows，详见[PROJECTILE_VISUALS](PROJECTILE_VISUALS.md)。init最后flag非零选blueflash/2/3，否则flash/2/3。
 
 `homingProjectileHit 002d3c24` 只创建MissileExplosion，不调用普通地面Explosion或GroundDamage。视觉origin=`projectile.xyz+.25*(Rx-.5,Ry-.5,Rz-.5)`，三个R按X/Y/Z顺序取 **GAME_randFloatExt**，各轴偏移[-.125,.125)。传入radius=`projectile.splash(+0xa0)`，最后的白/蓝选择flag=`projectile[+0x60]`（既有pulse标志）。原XYZ被保留，包括空中高度；伤害先在未抖动的projectile原XY发生。指令 `002d3c70–002d3d58`。
 
@@ -123,7 +123,7 @@ blast/crater实际用rect VBO、dustcone用cone、flash/debris用3plane；不能
 
 `flakFireFunc 002d1ac0` 调用参数为 `EffectFlakExplosion_init(effect,game,enemy.x+R1-.5,enemy.y+R2-.5,enemy.z+R3-.25,weapon.splash)`。R1/R2/R3是开头连续三次**战斗**GAME_randFloat；第三个虽不影响伤害，却必须复用已消费样本，不能多抽。没有WAVES_getOffset或Z钳制。该效果XYZ在伤害后重新读取原enemy记录，然后加保留的偏移；伤害XY是在伤害前读取。输入半径取weapon+0x40，与ENEMIES_damageEnemiesInRadius的splash相同，未乘boost；原内部视觉scale随机仍用外部RNG。关键指令 `002d1bac–002d1bb8` 和 `002d214c–002d21a8`。
 
-`EffectTrail 002c9e70/002c9ed4` 是.25秒的白色无纹理四边形，非smoke贴图；alpha乘game[+0xa68]，端点/宽度来自调用者，完整投射物采样频率尚未复核。首次复现不要将任意烟点排列标作原版拖尾。
+`EffectTrail 002c9e70/002c9ed4` 是.25秒的白色无纹理四边形，非smoke贴图；端点/宽度及距离/时间采样已复核，按正XYZ对角偏移及additive接入。alpha乘game[+0xa68]，已证明为播放速度倒数；非零图形模式禁止尾迹，缺省正常模式为0。具体矩阵、命中跳过采样、核弹转换保留阈值与前缀例外见PROJECTILE_VISUALS。
 
 仍需动态验收：原设备横竖屏point-size标定、暂停/倍速的realtime结果、模型透明排序、颜色/光照状态、外部随机初始状态及完整消费序列、同帧删除和高帧率闪电闪烁。本文记录静态证据，不能以规格闭合代替原作运行对照。
 
@@ -133,6 +133,8 @@ blast/crater实际用rect VBO、dustcone用cone、flash/debris用3plane；不能
 
 `Renderable`提供非均匀缩放和UV动画；`$effect:material`直接组合原2plane网格与原材质。Renderer把point-size参数按实际相机距离与桌面战场宽度换算为billboard，火焰沿用additive。闪电图集每次实际呈现换帧，视觉hash独立于战斗RNG。
 
-明确适配差异：寿命沿用仿真毫秒，尚未切换原realtime；视觉hash不是lrand48/drand48原序列；point-size屏幕字段尚未完成平台标定。导弹多层命中/原四边形尾迹、flak早期blast、条件式核爆2D闪光及增幅/诱饵特殊动作未全部恢复。状态环和诱饵/分裂反馈属于桌面可读性辅助。
+导弹现在按固定1.5秒绘制进度组装五层原模型/点精灵，保留真实impactXYZ及独立视觉抖动；白/蓝闪光使用对应三张原材质。Flak早期blast使用真正点精灵并与主burst共用到原点的相机距离。两类点大小没有plasma/flame的screen-width/320倍率。原trail在非命中移动更新按距离/弹道时间留下无纹理四边形，不再使用烟点近似；Energy Pulse等原武器名前缀禁用trail，保存可选采样点/阈值。
 
-`--visual-test`已在本机原沙盒真实战斗覆盖12基础类别及5高级形态，并捕获生产GL画面。它不改资金、HP或战斗RNG，高级塔直接由Game API建造；不证明手机动态等价或UI升级操作完成。
+明确适配差异：寿命沿用仿真毫秒，尚未切换原realtime；视觉hash不是lrand48/drand48原序列；plasma/flame屏幕字段尚未标定；point RGBA使用float而非原byte量化，透明排序及trail继承的深度写入状态待动态对照。条件式核爆2D闪光及增幅/诱饵特殊动作未全部恢复。状态环和诱饵/分裂反馈属于桌面可读性辅助。
+
+`--visual-test`已在本机原沙盒真实战斗覆盖12基础类别及6高级形态，包含Energy Pulse Missile，共18种；导弹/炮弹等待真正命中并检查trail存在或原前缀禁用，再捕获生产GL画面。它不改资金、HP或战斗RNG，高级塔直接由Game API建造；不证明手机动态等价或UI升级操作完成。

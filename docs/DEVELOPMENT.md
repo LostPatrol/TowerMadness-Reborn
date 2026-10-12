@@ -44,7 +44,7 @@ $run.ExitCode
 | `--smoke-test` | 本机真实 GL、窗口缩放及坐标往返、场景截图 |
 | `--input-test` | 将 self-test 合法操作经 SDL 鼠标／键盘及生产输入处理重放，完成胜利、重开、失败 |
 | `--desktop-test` | 生产菜单选择、保存／继续、116地图实际绘制；只使用输出目录的测试 profile |
-| `--visual-test` | 12类基础武器及Nuke、H Bomb、Mine III、Tesla、Rail VI的17个原沙盒真实事件和GL截图 |
+| `--visual-test` | 12类基础武器及Nuke、H Bomb、Mine III、Tesla、Rail VI、Energy Pulse的18个原沙盒真实事件和GL截图；炮弹/导弹等待真实命中 |
 | `--resource-test` | 420 PNG 和321模型及其材质／实际纹理文件加载 |
 | `--audio-test` | 36 Ogg 离线解码，绝不初始化声音设备 |
 | `--benchmark-test` | 依赖 self-test 操作记录；完整自然局及最繁忙场景的12000帧绘制、内存样本 |
@@ -54,6 +54,8 @@ $run.ExitCode
 `visual-test`通过公开Game API在原10000金币沙盒合法建塔、发波，等待实际发射/命中；不改资金、HP、波参数或战斗RNG。高级塔直接由API建造，不能将结果描述为UI升级路径验收。截图使用生产desktopScene和Renderer，逐类JSON明确记录时刻与范围。
 
 保存格式带版本，临时文件关闭后用 Windows 替换现有 profile。局内记录实体、活动波计数、UFO、投射物、状态、时钟及 MT19937；视觉 effect 重新进入后可省略。坏的局内保存由候选 Game 校验，失败不会覆盖当前局。
+
+投射物视觉规格见PROJECTILE_VISUALS.md。Projectile的trailSample/trailThreshold由真实移动更新推进；Effect保存A/B，SceneView.quads只绘制原世界几何，不能用相机朝向重新生成trail。可选session.projectiles[].trail保存采样点/阈值；旧或损坏视觉字段从当前位置重新开始，不拒绝有效核心局。影像随机来自math.hpp的独立hash，绝不能消费战斗MT。
 
 开发期原作对照见[Android环境](ANDROID_REFERENCE.md)与[双APK基线](APK_BASELINES.md)。模拟器和下载包只放在agent/codex，发布EXE不依赖它们。
 

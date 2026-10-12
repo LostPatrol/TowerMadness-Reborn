@@ -83,6 +83,9 @@ struct Projectile {
     float speed = 0, splash = 0, traveled = 0;
     float elapsed = 0, elevation = 0, speedMultiplier = 1;
     bool waypointReached = true, active = true;
+    // Native trail sampling is independent of the last simulation position.
+    Vec3 trailSample{};
+    float trailThreshold = 0;
 };
 struct Effect {
     Vec3 position{};
@@ -93,6 +96,8 @@ struct Effect {
     int bornAt = 0;
     std::string sourceType;
     float heading = 0, elevation = 0;
+    // Trail events preserve both original world-space endpoints.
+    Vec3 end{};
 };
 struct WaveCounter { int remaining = 0, bonus = 0; };
 enum class Outcome { Preparing, Running, Won, Lost };

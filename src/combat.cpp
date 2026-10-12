@@ -273,6 +273,7 @@ void Game::fire(Tower& tower, Enemy* target) {
                 }
             }
             projectile.previous = projectile.origin = projectile.position;
+            projectile.trailSample = projectile.position;
             projectiles.push_back(projectile);
         }
     }

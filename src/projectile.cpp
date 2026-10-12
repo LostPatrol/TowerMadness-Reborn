@@ -26,6 +26,8 @@ constexpr float MaximumHeat = 2.0f;
 constexpr int ExplosionVisualMs = 1000, NukeVisualMs = 4000;
 // Original mortar impact ground damage outlives its explosion.
 constexpr int CraterVisualMs = 5000, NukeCraterVisualMs = 10000;
+// Original trail records expire independently of their parent projectile.
+constexpr int TrailVisualMs = 250;
 // A half turn maps desktop direction radians to the original tower yaw frame.
 constexpr float HalfPi = 1.57079633f;
 
@@ -123,7 +125,8 @@ void Game::updateProjectiles() {
                 wave.value("height", 0.0f) + wave.value("offset", 0.0f) + GroundOffset};
         }
         bool hit = false;
-        if (projectile.kind == "mortar" && (!nuclear || !projectile.waypointReached)) {
+        const bool ballistic = projectile.kind == "mortar" && (!nuclear || !projectile.waypointReached);
+        if (ballistic) {
             projectile.previous = projectile.position;
             const float scaledStep = dt * projectile.speedMultiplier;
             projectile.elapsed += scaledStep;
@@ -162,7 +165,22 @@ void Game::updateProjectiles() {
                 projectile.position = projectile.position + direction * step;
             }
         }
-        if (!hit) continue;
+        if (!hit) {
+            const std::string weaponName = technology.at("towers").at(projectile.source.type).at("weapon").get<std::string>();
+            const bool suppressed = !ballistic && (weaponName.starts_with("Plasmatron") || weaponName.starts_with("Gauss")
+                || weaponName.starts_with("Fusion") || weaponName.starts_with("Flame") || weaponName.starts_with("Energy"));
+            // Nuclear descent retains the ascent's last sample and threshold unchanged.
+            const float progress = ballistic ? projectile.elapsed : projectile.traveled;
+            if (!suppressed && progress > projectile.trailThreshold) {
+                const float trailWidth = nuclear ? 5 : ballistic ? 2.5f : 3;
+                Effect trail{projectile.position,trailWidth,timeMs + TrailVisualMs,"trail",timeMs,projectile.source.type};
+                trail.end = projectile.trailSample;
+                effects.push_back(std::move(trail));
+                projectile.trailSample = projectile.position;
+                projectile.trailThreshold = progress + (ballistic && !nuclear ? 0.1f : 0.2f);
+            }
+            continue;
+        }
         projectile.active = false;
         const auto& type = technology.at("towers").at(projectile.source.type);
         const auto& weapon = technology.at("weapons").at(type.at("weapon").get<std::string>());
@@ -183,7 +201,16 @@ void Game::updateProjectiles() {
         }
         // Original plasma hits apply damage/status without a generic impact explosion.
         if (projectile.kind != "plasma") {
-            effects.push_back({projectile.position,projectile.splash,timeMs + (nuclear ? NukeVisualMs : ExplosionVisualMs),
+            Vec3 visualPosition = projectile.position;
+            int lifetime = nuclear ? NukeVisualMs : ExplosionVisualMs;
+            if (projectile.kind == "homing") {
+                // Original impact jitter uses only the separate visual random stream.
+                const std::uint32_t seed = visualSeed(timeMs,visualPosition);
+                visualPosition = visualPosition + Vec3{0.25f * (visualRandom(seed + 1) - 0.5f),
+                    0.25f * (visualRandom(seed + 2) - 0.5f),0.25f * (visualRandom(seed + 3) - 0.5f)};
+                lifetime = static_cast<int>(1500 + 3000 * visualRandom(visualSeed(timeMs,visualPosition)));
+            }
+            effects.push_back({visualPosition,projectile.splash,timeMs + lifetime,
                 nuclear ? "nuke" : projectile.kind,timeMs,projectile.source.type});
             if (projectile.kind == "mortar") effects.push_back({projectile.position,projectile.splash * (nuclear ? 0.5f : 0.75f),
                 timeMs + (nuclear ? NukeCraterVisualMs : CraterVisualMs),"groundDamage",timeMs,projectile.source.type});

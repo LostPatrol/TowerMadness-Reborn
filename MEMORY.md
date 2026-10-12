@@ -41,7 +41,9 @@ Enemy::visualHeadingDegrees直接绘制，不另加90°；行走帧为timeMs/(na
 
 Renderer新增非均匀scale、UVscale/offset及point-size billboard换算；视觉hash与战斗RNG分离，闪电每实际呈现一帧换两个不同atlas行。mapPreview使用同一场景路径离屏512×288，恢复活跃地图/相机/GL状态，最多缓存16张。火焰fireball采用additive，状态环用线而不把环VBO纹理直接当quad。
 
-所有表现仍用仿真时钟而非原realtime；视觉hash不等于lrand48/drand48，point-size以桌面战场宽度换算、原屏幕字段未标定。导弹多层命中/原trail、flak早期blast、条件式核爆2D闪光、特殊塔动画、塔接地shadowblob及血条/状态辅助仍未完成或近似。短暂effect不保存，冻结尸体及动画状态保存。
+导弹五层命中按固定1.5s绘制分母接入，随机expiry1.5..4.5s不拉长动画；保留impactXYZ并使用独立视觉抖动，白/蓝flash三材料。Flak早期blast为真正点精灵，与主burst共用到原origin的相机距离。Flak/导弹固定像素大小没有plasma/flame的屏幕倍率。原trail为无纹理additive四边形，按原距离/弹道秒阈值在非命中更新采样；Energy等武器前缀禁用。播放速度倒数仅影响trail alpha，正常图形模式0启用trail。可选projectile.trail存采样点/阈值，旧/坏视觉字段保留有效核心继续。规格/证据/入口见docs/PROJECTILE_VISUALS.md。
+
+所有表现仍用仿真时钟而非原realtime；视觉hash不等于lrand48/drand48，plasma/flame point-size以桌面战场宽度换算、原屏幕字段未标定。Point RGBA未恢复原byte量化，trail继承深度状态/透明排序、条件式核爆2D闪光、特殊塔动画、塔接地shadowblob及血条/状态辅助仍未完成或近似。短暂effect不保存，冻结尸体及动画状态保存。
 
 ## 工具与验证条件
 
@@ -57,8 +59,10 @@ GUI验收注意：Profile::userDirectory使用SHGetKnownFolderPath，覆盖LOCAL
 
 本机RX9070XT已通过22项规则/保存检查、116模式原资金自然开局、116地图实际GL绘制、420PNG/321模型完整加载、36Ogg离线解码。PlainPlane普通50金币操作自然26波保住10羊，鼠标键盘重放胜利/重开/自然失败，15/144FPS调度一致。1280×900和1000×700拾取通过。发布ZIP解压到中文含空格目录、从C:/Windows/Temp及仅Windows PATH启动，菜单和保存继续通过。仍只测试一台Windows，非真正干净OS。
 
-P8首轮原资金50金币、生产SDL输入重放自然26波保住10羊（523200ms、235击杀、最终1422分）及自然失败成立；23项规则/保存检查、三窗口布局和116地图绘制通过。生产菜单/预览不弃局或改相机、胜利解锁/下一战役/重复胜利及真实保存失败保留当前局通过。--visual-test在原10000金币沙盒合法API建塔/发波覆盖12基础类别及5高级形态的17个真实事件和GL截图，不改资金/HP/波/RNG；高级塔直建不等于UI升级路径。测试和截图只证明本机当前实现，不构成原作等价或人类可用性最终验收。
+P8首轮原资金50金币、生产SDL输入重放自然26波保住10羊（523200ms、235击杀、最终1422分）及自然失败成立；23项规则/保存检查、三窗口布局和116地图绘制通过。生产菜单/预览不弃局或改相机、胜利解锁/下一战役/重复胜利及真实保存失败保留当前局通过。--visual-test在原10000金币沙盒合法API建塔/发波覆盖12基础类别及6高级形态的18个真实事件和GL截图，导弹/炮弹等待真正命中并检查trail存在/禁用，不改资金/HP/波/RNG；高级塔直建不等于UI升级路径。测试和截图只证明本机当前实现，不构成原作等价或人类可用性最终验收。
 
-没有真机；项目内Android对照环境与版本路线见docs/ANDROID_REFERENCE.md。旧QEMU2+API24 Play x86已进入Android主屏，但adb仍未认证，尚未安装该设备的x86原游戏；用户已手动允许调试，不能凭此描述transport或游戏成功。没有启用WHPX、改Windows系统功能或重启Windows。行走/死亡/敌人投影有静态实现，动态保真未验；精确炮塔平滑、天空镜头/粒子、羊被抓完整收尾和原手机UI未恢复。桌面持续2/4倍速不同于原临时2倍20秒。完整活动链/多诱饵堵路及同刻排序仍有差异。116关并未全部自然通关；长时高压无限局、跨机器、高DPI跨显示器和实际声音播放未验。购买验证与广告仍排除。
+没有真机；项目内Android对照环境与版本路线见docs/ANDROID_REFERENCE.md。旧QEMU2+API24 Play x86仍未认证；新增未经修改的官方API24 Google APIs x86开发镜像正常adb29=device，已实际安装并启动原x86 APK，但libcxx.so/系统linker的unwind链SIGSEGV，尚无原菜单或PlainPlane动态证据。没有启用WHPX、改Windows系统功能或重启Windows。行走/死亡/敌人投影有静态实现，动态保真未验；精确炮塔平滑、天空镜头/粒子、羊被抓完整收尾和原手机UI未恢复。原GAME_togglePlaySpeed已证实具有1/2/4倍速，普通UI入口尚未追踪，不能再一概称桌面持续倍速与原作不同；对手临时2倍20秒是另一机制。完整活动链/多诱饵堵路及同刻排序仍有差异。116关并未全部自然通关；长时高压无限局、跨机器、高DPI跨显示器和实际声音播放未验。购买验证与广告仍排除。
 
 性能检查为完整自然局及其轻负载峰值场景的12000帧、关闭VSync且glFinish同步；不能据此保证所有大地图/多小时局的60FPS。无限已发波历史仍保留在状态数组，超长局内存覆盖不足。旧Android存档兼容、联网/排行/多人不在本次交付范围。
+
+原作下一条可继续的对照路线为默认API17 ARM设备5580：已正常启动、原ARM游戏已安装，没有vending stub。官方Play镜像提取Phonesky是没有classes.dex的预优化系统组件，不能普通安装；不能再次只凭minSdk判断它可用。需要合法取得原Google签名、含完整dex的兼容分发APK并验证JAR签名/摘要，然后正常安装启动依赖。既有分发源受403/429/TLS失败，尚未取得完整包；不拼接ODEX、不改签名、不注入安全密钥或模拟服务响应。设备进程须重新核验，不能以历史PID作为存活证据。

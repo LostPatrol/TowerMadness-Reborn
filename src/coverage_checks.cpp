@@ -506,6 +506,17 @@ int runCoverageChecks(const std::filesystem::path& assets, const std::filesystem
         require(oldSave.snapshot() == natural.snapshot(),"Optional animation fields broke legacy core save compatibility.");
         // A separate live missile fixture verifies projectile geometry and RNG state.
         auto missiles = fixture(assets,"Guided Missile IV"); target(missiles); singleShot(missiles);
+        advance(missiles,2);
+        require(!missiles.projectiles.empty() && missiles.projectiles.front().trailThreshold > 0,
+            "A moving missile did not preserve its native trail sampling threshold.");
+        auto legacyProjectiles = missiles.saveState();
+        for (auto& projectile : legacyProjectiles["projectiles"]) projectile.erase("trail");
+        Game legacyMissiles(assets); legacyMissiles.restoreState(legacyProjectiles);
+        require(legacyMissiles.snapshot() == missiles.snapshot() && legacyMissiles.saveState().at("rng") == missiles.saveState().at("rng"),
+            "Missing optional trail fields changed core state or combat RNG.");
+        auto malformedTrail = missiles.saveState(); malformedTrail["projectiles"][0]["trail"] = "invalid";
+        Game trailFallback(assets); trailFallback.restoreState(malformedTrail);
+        require(trailFallback.snapshot() == missiles.snapshot(),"Damaged cosmetic trail fields rejected a usable session.");
         Game resumed(assets);
         resumed.restoreState(missiles.saveState());
         require(missiles.saveState() == resumed.saveState(),"Live projectile state did not roundtrip exactly.");

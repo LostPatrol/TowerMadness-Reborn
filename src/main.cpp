@@ -223,20 +223,6 @@ void enemyShadow(SceneView& scene, const Enemy& enemy, const nlohmann::json& wav
     scene.models.back().unlit = true;
 }
 
-// Use a separate deterministic visual sample without consuming battle RNG.
-float visualRandom(std::uint32_t seed) {
-    seed ^= seed >> 16; seed *= 0x7feb352du;
-    seed ^= seed >> 15; seed *= 0x846ca68bu;
-    seed ^= seed >> 16;
-    return static_cast<float>(seed) * 0x1p-32f;
-}
-
-// Keep one effect's random width and direction stable throughout its lifetime.
-std::uint32_t visualSeed(int bornAt, Vec3 origin) {
-    return static_cast<std::uint32_t>(bornAt) ^ std::bit_cast<std::uint32_t>(origin.x)
-        ^ (std::bit_cast<std::uint32_t>(origin.y) * 31u) ^ std::bit_cast<std::uint32_t>(origin.z);
-}
-
 // Match recovered laser and rail tier colors rather than reusing one red ribbon.
 Color beamColor(const Beam& beam) {
     const auto& type = beam.sourceType;
@@ -391,12 +377,17 @@ SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover,
             scene.sprites.push_back({frame == 0 ? "plasmaball.pvr.png" : "plasmaball" + std::to_string(frame + 1) + ".pvr.png",projectile.position,1,1,{},false,false,
                 projectile.damage < 450 ? 164 + 0.2f * projectile.damage : 254});
         }
-        else scene.sprites.push_back({"smokepuff.pvr.png",projectile.previous,0.32f,0.32f,{0.85f,0.85f,0.85f,0.45f}});
     }
     for (const auto& effect : game.effects) if (!ended(game)) {
         const float age = std::clamp(static_cast<float>(game.timeMs - effect.bornAt) / std::max(1,effect.expiresAt - effect.bornAt),0.0f,1.0f);
         const float radius = effect.radius > 0 ? effect.radius : 0.4f,diameter = radius * (0.5f + age * 1.5f);
-        if (effect.kind == "death") scene.sprites.push_back({"smokepuff.pvr.png",effect.position + Vec3{0,0,age * 0.7f},diameter,diameter,{0.65f,0.7f,0.6f,1 - age}});
+        if (effect.kind == "trail") {
+            const float alpha = 1 - (game.timeMs - effect.bornAt) / 250.0f;
+            const float width = std::min(effect.radius * alpha * 0.02f,0.2f);
+            const Vec3 offset{width,width,width};
+            scene.quads.push_back({{effect.position,effect.end,effect.end + offset,effect.position + offset},{1,1,1,alpha / speed},true});
+        }
+        else if (effect.kind == "death") scene.sprites.push_back({"smokepuff.pvr.png",effect.position + Vec3{0,0,age * 0.7f},diameter,diameter,{0.65f,0.7f,0.6f,1 - age}});
         else if (effect.kind == "sheepLeak") scene.sprites.push_back({"life.pvr.png",effect.position + Vec3{0,0,age * 1.5f},1,1,{1,0.2f,0.2f,1 - age}});
         else if (effect.kind == "plasmaFlash" || effect.kind == "mortarFlash") {
             auto& object = effectModel(scene,"$effect:muzzlefx",effect.position,{0.5f * age,0.5f * age,age},{1,1,1,1 - age * age * age},effect.heading,EffectHalfPi - effect.elevation);
@@ -407,7 +398,32 @@ SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover,
             const std::uint32_t seed = visualSeed(effect.bornAt,effect.position);
             const float scale = (0.5f + visualRandom(seed)) * radius;
             scene.sprites.push_back({visualRandom(seed + 1) < 0.5f ? "flakburst1.pvr.png" : "flakburst2.pvr.png",effect.position,1,1,{1,1,1,1 - age * age * age},false,false,
-                (age < 0.1f ? 2560 * age : 256 + 128 * age) * scale});
+                (age < 0.1f ? 2560 * age : 256 + 128 * age) * scale,false});
+            if (age < 0.1f) {
+                scene.sprites.push_back({"blast.pvr.png",effect.position + Vec3{0,0,0.05f},1,1,{1,1,1,1 - age * age * age},false,false,2560 * age * scale,false});
+                scene.sprites.back().pointDistanceOrigin = effect.position;
+            }
+        } else if (effect.kind == "homing") {
+            // Native expiry is random, but all draw branches use a fixed 1.5-second divisor.
+            const float u = (game.timeMs - effect.bornAt) / 1500.0f;
+            const std::uint32_t seed = visualSeed(effect.bornAt,effect.position);
+            const float size = 3 * radius, jitter = 0.75f + 0.5f * visualRandom(seed + 1);
+            const float yaw = visualRandom(seed + 2) * 2 * EffectPi;
+            const float scale = ((u + 0.6000000238418579f) * 0.6000000238418579f + 0.4000000059604645f) * size * 0.30000001192092896f;
+            if (u <= 0.4f) {
+                effectModel(scene,"blast",effect.position,{2 * scale,2 * scale,2 * scale},{1,1,1,0.5f - 1.25f * u},yaw);
+                const bool pulse = game.technology.at("towers").at(effect.sourceType).value("ispulsemissile",0) != 0;
+                const int variant = std::min(2,static_cast<int>(visualRandom(seed + 3) * 3));
+                const std::string texture = std::string(pulse ? "blueflash" : "flash") + (variant == 0 ? "" : std::to_string(variant + 1)) + ".pvr.png";
+                scene.sprites.push_back({texture,effect.position,1,1,{1,1,1,1 - 2.5f * u},false,false,200 * (0.5f + 9 * u * size),false});
+            }
+            if (u < 0.5f) {
+                const Color color{1,1,1,1 - 2 * u};
+                effectModel(scene,"smokepuff",effect.position,{scale,scale,scale},color,yaw);
+                effectModel(scene,"debris",effect.position,{scale,scale,scale},color,yaw);
+                const float ring = 0.75f * jitter * ((1 - u) * (0.3f * size) + u * size);
+                effectModel(scene,"rangecircle",effect.position,{ring,ring,1},color);
+            }
         } else if (effect.kind == "nuke") {
             const float yaw = visualRandom(visualSeed(effect.bornAt,effect.position)) * 2 * EffectPi;
             const bool hydrogen = effect.sourceType == "H Bomb";
@@ -553,7 +569,7 @@ SceneView desktopScene(Renderer& renderer, const Game& game, Desktop& desktop, c
     const float right = width - DetailsWidth, bottom = paletteTop(game,width,height);
     renderer.setBoardViewport(0,108,width - DetailsWidth - 12,bottom - 116);
     if (desktop.menu) {
-        scene.models.clear(); scene.lines.clear(); scene.sprites.clear(); scene.ribbons.clear(); scene.selectedCell.reset();
+        scene.models.clear(); scene.lines.clear(); scene.sprites.clear(); scene.ribbons.clear(); scene.quads.clear(); scene.selectedCell.reset();
         scene.panels.push_back({12,12,width - 24.0f,height - 24.0f,PanelColor});
         scene.texts.push_back({"TOWERMADNESS",32,26,AccentColor,34});
         scene.texts.push_back({"保卫羊群",34,70,{},22});
@@ -1287,7 +1303,7 @@ int benchmarkVerification(Renderer& renderer, SDL_Window* window, Game& game,
 int combatVisualVerification(Renderer& renderer, const std::filesystem::path& assets, const std::filesystem::path& output) {
     Game catalog(assets,"Sandbox:Endless_Hard:PlainPlane");
     auto types = catalog.baseTowers();
-    types.insert(types.end(),{"Nuke","H Bomb","Proximity Mine III","Tesla Coil","Railgun VI"});
+    types.insert(types.end(),{"Nuke","H Bomb","Proximity Mine III","Tesla Coil","Railgun VI","Energy Pulse Missile"});
     Profile profile(output / "visual-profile");
     nlohmann::json report{{"passed",true},{"scope","Isolated original sandbox runs with programmatic legal construction and dispatch. No funds, HP, wave parameters or combat RNG are altered. Advanced types are direct API construction, not UI upgrade walkthroughs. Screenshots verify Windows rendering, not Android equivalence or natural campaign wins."},{"cases",nlohmann::json::array()}};
     for (const auto& type : types) {
@@ -1298,30 +1314,38 @@ int combatVisualVerification(Renderer& renderer, const std::filesystem::path& as
             const auto& definition = game.technology.at("towers").at(type);
             const std::string kind = game.technology.at("weapons").at(definition.at("weapon").get<std::string>()).at("type").get<std::string>();
             result["kind"] = kind;
-            if (!game.build(7,10,type)) throw std::runtime_error(game.message);
+            if (!game.build(7,kind == "homing" ? 18 : 10,type)) throw std::runtime_error(game.message);
             const int selected = game.towers.front().id;
             // Ordinary upper-field lasers keep the real infinite stream alive for air/support cases.
-            for (const Cell cell : {Cell{7,22},Cell{11,18},Cell{7,16}})
+            const std::array<Cell,3> support = kind == "homing" ? std::array<Cell,3>{Cell{7,22},Cell{11,22},Cell{15,22}}
+                : std::array<Cell,3>{Cell{7,22},Cell{11,18},Cell{7,16}};
+            for (const Cell cell : support)
                 if (!game.build(cell.x,cell.y,"Terawatt Laser")) throw std::runtime_error(game.message);
             if (kind == "boost" && !game.build(9,10,"Kilowatt Laser")) throw std::runtime_error(game.message);
             for (int tick = 0; tick < 21; ++tick) game.tick();
             if (!game.sendWave()) throw std::runtime_error(game.message);
             bool observed = false;
+            bool observedTrail = false;
             // A bounded real wave run may fail honestly if its required effect never appears.
             constexpr int MaximumVisualRunMs = 240000;
             while (game.timeMs < MaximumVisualRunMs && !ended(game)) {
                 game.tick();
+                observedTrail = observedTrail || std::any_of(game.effects.begin(),game.effects.end(),[&](const Effect& effect) { return effect.sourceType == type && effect.kind == "trail"; });
                 observed = std::any_of(game.beams.begin(),game.beams.end(),[&](const Beam& beam) { return beam.sourceType == type; })
                     || std::any_of(game.projectiles.begin(),game.projectiles.end(),[&](const Projectile& projectile) { return projectile.source.id == selected; })
                     || std::any_of(game.effects.begin(),game.effects.end(),[&](const Effect& effect) { return effect.sourceType == type; });
                 if (type == "Nuke" || type == "H Bomb" || type == "Proximity Mine III")
                     observed = std::any_of(game.effects.begin(),game.effects.end(),[&](const Effect& effect) { return effect.sourceType == type && effect.kind == "nuke"; });
+                else if (kind == "homing" || kind == "mortar")
+                    observed = std::any_of(game.effects.begin(),game.effects.end(),[&](const Effect& effect) { return effect.sourceType == type && effect.kind == kind; });
                 if (kind == "boost") observed = std::any_of(game.towers.begin(),game.towers.end(),[](const Tower& tower) { return tower.damageBoost > 1; });
                 if (observed) break;
             }
             if (!observed) throw std::runtime_error("No actual attack/support event before the natural run ended.");
+            if ((kind == "homing" || kind == "mortar") && (observedTrail == (type == "Energy Pulse Missile")))
+                throw std::runtime_error("Projectile trail presence disagrees with its original weapon-name suppression.");
             const int sampleDelay = type == "Nuke" || type == "H Bomb" || type == "Proximity Mine III" ? 1000
-                : kind == "railgun" ? 250 : kind == "flamethrower" ? 400 : kind == "mortar" || kind == "homing" || kind == "plasma" ? 125 : 50;
+                : kind == "railgun" ? 250 : kind == "flamethrower" ? 400 : kind == "homing" ? 100 : kind == "plasma" ? 125 : 50;
             for (int elapsed = 0; elapsed < sampleDelay && !ended(game); elapsed += SimulationStepMs) game.tick();
             if (!renderer.changeMap(assets / "data/PlainPlane.map.json")) throw std::runtime_error(renderer.error());
             renderer.setBoardViewport(0,108,990,paletteTop(game,1280,900) - 116); renderer.resetCamera(); renderer.zoom(2);
@@ -1330,7 +1354,8 @@ int combatVisualVerification(Renderer& renderer, const std::filesystem::path& as
             std::string filename = type;
             std::replace(filename.begin(),filename.end(),' ','-'); filename += ".png";
             if (!renderer.capture(output / filename) || !renderer.error().empty()) throw std::runtime_error(renderer.error());
-            result.update({{"passed",true},{"snapshot",game.snapshot()},{"modelCount",scene.models.size()},{"spriteCount",scene.sprites.size()},{"screenshot",filename}});
+            result.update({{"passed",true},{"snapshot",game.snapshot()},{"modelCount",scene.models.size()},{"spriteCount",scene.sprites.size()},
+                {"trailObserved",observedTrail},{"quadCount",scene.quads.size()},{"screenshot",filename}});
         } catch (const std::exception& error) { result["failure"] = error.what(); report["passed"] = false; }
         report["cases"].push_back(result);
     }
