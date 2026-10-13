@@ -13,7 +13,7 @@ constexpr float TurnFactor = 12.5f, FireTolerance = 0.08726646f, FullTurn = 6.28
 constexpr float LineRangeFactor = 1.5f;
 // Desktop effect lifetime affects rendering only, never hit timing.
 constexpr int EffectLifetimeMs = 1000, BeamLifetimeMs = 100;
-// Recovered effect lifetimes, adapted to the existing simulation clock.
+// Original effect lifetimes; runtime stamps them on the separate realtime clock.
 constexpr int LightningLifetimeMs = 200, RailLifetimeMs = 2000, FlameLifetimeMs = 500, MuzzleFlashLifetimeMs = 130;
 // Native ground damage remains after the ordinary or nuclear explosion.
 constexpr int CraterLifetimeMs = 5000, NukeLifetimeMs = 4000, FlakLifetimeMs = 2000;
@@ -73,12 +73,12 @@ void Game::damage(Enemy& enemy, const Tower& tower, int raw) {
     enemySlotHolds_.push_back(std::move(corpse));
     // Retain the kill point after the dead enemy is removed from the active deque.
     const Vec3 deathPoint = hitPoint(enemy,wave);
-    effects.push_back({deathPoint,DeathVisualRadius,timeMs + DeathVisualMs,"death",timeMs});
+    addEffect({deathPoint,DeathVisualRadius,timeMs + DeathVisualMs,"death",timeMs});
     completeWaveEnemy(enemy.wave,true);
     if (wave.contains("deathsounds") && !wave.at("deathsounds").empty()) soundEvents.push_back(wave.at("deathsounds")[0].get<std::string>());
     if (enemy.generation == 0) { const int reward = wave.at("gold").get<int>(); money += reward; score += reward; }
     if (enemy.generation >= wave.value("spawn",0)) return;
-    effects.push_back({deathPoint,SplitVisualRadius,timeMs + DeathVisualMs,"split",timeMs});
+    addEffect({deathPoint,SplitVisualRadius,timeMs + DeathVisualMs,"split",timeMs});
     // Queue children separately so a splash/line traversal never invalidates enemy references.
     for (int index = 0; index < 2; ++index) {
         Enemy child = makeEnemy(enemy.wave,enemy.x,enemy.y);
@@ -142,8 +142,8 @@ void Game::fire(Tower& tower, Enemy* target) {
             stun(enemy,weapon.at("stunduration").get<int>());
         }
         const bool nuclear = kind == "mine" && definition.at("upgrades").empty();
-        effects.push_back({{x,y,0},radius,timeMs + (nuclear ? NukeLifetimeMs : EffectLifetimeMs),nuclear ? "nuke" : kind,timeMs,tower.type});
-        if (kind == "mine") effects.push_back({{x,y,0},radius * 0.75f,timeMs + CraterLifetimeMs,"groundDamage",timeMs,tower.type});
+        addEffect({{x,y,0},radius,timeMs + (nuclear ? NukeLifetimeMs : EffectLifetimeMs),nuclear ? "nuke" : kind,timeMs,tower.type});
+        if (kind == "mine") addEffect({{x,y,0},radius * 0.75f,timeMs + CraterLifetimeMs,"groundDamage",timeMs,tower.type});
         tower.consumed = true; return;
     }
     if (!target) return;
@@ -164,7 +164,7 @@ void Game::fire(Tower& tower, Enemy* target) {
             // The original chain computes elevation against its full 3D length.
             beam.elevation = std::atan2(delta.z,beam.length);
         }
-        beams.push_back(std::move(beam));
+        addBeam(std::move(beam));
     };
     if (kind == "beam") {
         damage(*target,tower,static_cast<int>(baseDamage * tower.damageBoost * target->heat));
@@ -181,7 +181,7 @@ void Game::fire(Tower& tower, Enemy* target) {
         const float tx = target->x + randomFloat() - 0.5f,ty = target->y + randomFloat() - 0.5f;
         const float heightSample = randomFloat();
         radiusDamage(tx,ty,weapon.at("splash").get<float>(),static_cast<int>(baseDamage),tower);
-        effects.push_back({{tx,ty,wave.value("height",0.0f) + heightSample - 0.25f},weapon.at("splash").get<float>(),timeMs + FlakLifetimeMs,kind,timeMs,tower.type});
+        addEffect({{tx,ty,wave.value("height",0.0f) + heightSample - 0.25f},weapon.at("splash").get<float>(),timeMs + FlakLifetimeMs,kind,timeMs,tower.type});
     } else if (kind == "slow") {
         for (auto& enemy : enemies) if (planar(target->x,target->y,enemy.x,enemy.y) < weapon.at("splash").get<float>())
             slow(enemy,weapon.at("factor").get<float>(),weapon.at("duration").get<int>());
@@ -241,7 +241,7 @@ void Game::fire(Tower& tower, Enemy* target) {
             if (kind == "plasma" || kind == "mortar") {
                 Effect flash{projectile.position,0,timeMs + MuzzleFlashLifetimeMs,kind == "plasma" ? "plasmaFlash" : "mortarFlash",timeMs,tower.type};
                 flash.heading = tower.heading + FullTurn / 4; flash.elevation = elevation;
-                effects.push_back(std::move(flash));
+                addEffect(std::move(flash));
             }
             projectile.damage = static_cast<int>(baseDamage * tower.damageBoost / (muzzles * volley));
             projectile.speed = weapon.value("speed",1.0f); projectile.splash = weapon.value("splash",0.0f);

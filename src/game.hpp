@@ -55,6 +55,13 @@ struct Tower {
     int triggeredAt = -1;
     float damageBoost = 1;
     bool consumed = false;
+    // Original construction/sale animation uses game time and remembers the upgrade's old body.
+    int appearanceStartedAt = -1;
+    std::string previousType;
+};
+struct EffectTiming {
+    // Real seconds are cosmetic; legacy game milliseconds remain gameplay metadata.
+    double bornSeconds = -1, expiresSeconds = -1;
 };
 struct Beam {
     float fromX = 0, fromY = 0, toX = 0, toY = 0, toZ = 0;
@@ -66,6 +73,7 @@ struct Beam {
     std::string sourceType;
     int bornAt = 0;
     float heading = 0, elevation = 0, length = 0, radius = 0;
+    EffectTiming timing;
 };
 struct Ufo {
     // States follow landing, releasing, departure, and idle lifecycle phases.
@@ -92,12 +100,13 @@ struct Effect {
     float radius = 0;
     int expiresAt = 0;
     std::string kind;
-    // Visual age uses simulation time without changing damage or random state.
+    // Keep simulation birth metadata for visual hashing and existing save-independent events.
     int bornAt = 0;
     std::string sourceType;
     float heading = 0, elevation = 0;
     // Trail events preserve both original world-space endpoints.
     Vec3 end{};
+    EffectTiming timing;
 };
 struct WaveCounter { int remaining = 0, bonus = 0; };
 enum class Outcome { Preparing, Running, Won, Lost };
@@ -114,6 +123,10 @@ public:
     void restart();
     // Advance one original 25 ms tick unless paused or the match has ended.
     void tick();
+    // Advance cosmetic realtime independently of paused or accelerated game ticks.
+    void advanceEffects(double realtimeSeconds);
+    // Offline verification uses deterministic game seconds until a realtime clock is supplied.
+    double effectClockSeconds() const;
     // Dispatch the next complete original wave through an idle UFO.
     bool sendWave();
     // Occupy a 2x2 footprint only if all spawn points and live enemies keep a route.
@@ -175,6 +188,11 @@ public:
     std::string message;
 
 private:
+    // Stamp original lifetimes without consuming gameplay random state.
+    void addEffect(Effect effect);
+    void addBeam(Beam beam);
+    // Remove only expired cosmetic events; gameplay and saved RNG are untouched.
+    void pruneEffects();
     // Recompute the original eight-neighbor distance field towards the sheep gate.
     void updateDistances();
     // Calculate an unchanged route field against a live or trial occupancy grid.
@@ -240,6 +258,8 @@ private:
     std::filesystem::path assets_;
     std::vector<Enemy> pendingChildren_;
     int lastBoostAt_ = 0;
+    // Negative means deterministic offline verification rather than a supplied wall clock.
+    double effectClock_ = -1;
     nlohmann::json endlessSource_;
     std::uint32_t endlessSeedOffset_ = 0;
     std::map<int,WaveCounter> waveCounters_;

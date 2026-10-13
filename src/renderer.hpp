@@ -27,7 +27,8 @@ struct Renderable {
     float pitch = 0;
     Vec3 pitchPivot{};
     Mat4 animationTransform = Mat4::identity();
-    bool overrideMaterialColor = false, unlit = false;
+    // Original PGL uses texture times RGBA with fixed-function lighting disabled.
+    bool overrideMaterialColor = false, unlit = true;
     Vec2 textureScale{1,1}, textureOffset{};
     // Lightning chooses two distinct atlas strips on each presented frame.
     int atlasFrames = 0, atlasLayer = 0;
@@ -103,7 +104,8 @@ struct SceneView {
     std::vector<HudButton> buttons;
     std::optional<Vec2> selectedCell;
     std::vector<HudPanel> panels;
-    Color cellColor{0.2f,0.65f,1,1};
+    // Native existing-tower selection color, separate from the tower's material.
+    Color cellColor{195.0f / 255,217.0f / 255,1,1};
     std::vector<RenderSprite> sprites;
     std::vector<RenderRibbon> ribbons;
     std::vector<HudImage> images;
@@ -136,12 +138,12 @@ public:
     std::optional<Vec2> pick(float screenX, float screenY) const;
     // Project a world point to logical pixels for diagnostics and UI anchoring.
     std::optional<Vec2> project(Vec3 world) const;
-    // Move the camera target in world ground coordinates.
+    // Move the camera target along the displayed horizontal and vertical ground axes.
     void pan(float worldX, float worldY);
     // Change camera distance exponentially using mouse-wheel steps.
     void zoom(float wheelSteps);
-    // Restore the map-centered camera with a view covering the whole board.
-    void resetCamera();
+    // Restore the original centered camera, optionally fitting the reserved desktop board.
+    void resetCamera(bool fit = true);
     // Save the presented framebuffer as PNG without changing scene rendering.
     bool capture(const std::filesystem::path& path);
     // Load every prepared texture and model, retaining per-resource failures in a report.

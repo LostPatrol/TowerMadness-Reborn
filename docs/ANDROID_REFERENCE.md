@@ -1,7 +1,11 @@
 <!-- Original-game reference tooling, artifact identities, and verified runtime limits. -->
 # Android 原作对照环境
 
-当前结论：已安装隔离 SDK 和官方镜像，未修改任何原游戏 APK，尚未进入原作菜单或 PlainPlane。原 ARM 包曾加载原生库并显示 Loading 封面。官方 API24 Google APIs x86 r27 开发镜像配旧 QEMU2，正常 adb29 transport 为 device，已实际安装并启动原 x86 APK；它在原 libcxx.so/系统 linker 的 unwind 调用链发生 SIGSEGV，未进入菜单。API24 Play 镜像的旧设备仍 unauthorized。没有启用 WHPX、安装虚拟化驱动或重启 Windows。
+旧PlainPlane建造/选中及首波图片中的10金币绿色军用炮塔曾被误标为Laser；普通UI复核与原价格链确认该分支为Mortar。旧图片的升级25、未保存的短暂白线均不能用作Laser证据。原Laser10→20与Mortar10→25价格保持不变，依据见[UPGRADE_PRICE.md](UPGRADE_PRICE.md)；原菜单/地图/环境可运行结论不受塔种误标影响。
+
+后续明确选择能量家族Laser的普通UI验证已取得建造/选中/升级图片：40→30→10，分别扣10/20，该局已有另一座Mortar。独立Mortar局为50→40→15。身份、完整连续操作及文件误名边界见[ORIGINAL_TOWER_IDENTITY.md](ORIGINAL_TOWER_IDENTITY.md)，不把混合塔局冒称Laser独占开局。
+
+当前结论：默认API17 ARM官方镜像＋SDK25.2.5 classic＋原Google签名完整Phonesky4.3.11已实际运行未经修改的原ARM游戏，进入原作菜单、PlainPlane、建10金币迫击炮、选中范围与首波战斗。所有依赖均普通安装，未修改APK、签名、服务响应或镜像。官方API24 Google APIs x86仍因原libcxx.so/系统linker unwind链SIGSEGV未进入菜单；API24 Play旧设备仍unauthorized。没有启用WHPX、安装虚拟化驱动或重启Windows。
 
 ## 目标与原作候选
 
@@ -46,7 +50,8 @@ $env:QEMU_AUDIO_DRV = 'none'
 
 | 对照环境 | 实际结果 |
 | --- | --- |
-| API17 default/Google APIs ARM＋25.2.5 classic | Android4.2.2可启动，ABI=armeabi-v7a/armeabi；主 APK 安装及原生库加载成功，Google 版显示原 Loading；进入菜单前因缺少启动服务而空 Intent 崩溃 |
+| API17 default ARM＋25.2.5 classic＋完整原签名Phonesky4.3.11 | 新隔离AVD5592正常安装依赖与ARM游戏，原作菜单、PlainPlane、10金币迫击炮建造/选中/首波战斗与Menu返回Resume已实际观察；旧5580有vending残留目录引发UID_CHANGED，不改其数据 |
+| API17 Google APIs ARM＋25.2.5 classic | Android4.2.2可启动，主APK原生库加载并显示Loading；旧尝试因缺少启动服务而空Intent崩溃，未在此镜像重复完整依赖安装 |
 | API17 Google APIs x86＋25.2.5 classic，无加速 | 系统的 system_server 在包证书扫描反复 SIGSEGV；未运行新 x86 游戏 |
 | API24 Google Play x86＋37.2.12，无加速 | guestCPU android32、1536MB；host GLES 初始化到 RX9070XT Translator，软件模式为 SwiftShader；后续一直 offline，未形成有效 guest 启动证据；已停止 |
 | API24 Google Play x86＋25.2.5 QEMU2，无加速 | 实际 Android 主屏可见；用户手动允许调试后，adb37/官方 adb29 及一次正常设备重启仍 unauthorized；2026-10-13 06:26 的 get-state 与 install-r 均失败，未安装或运行 x86 游戏 |
@@ -59,9 +64,19 @@ API17 Google APIs 自带 com.android.vending1.8，只提供许可服务，不能
 
 API24 Google APIs 同样内置 `/system/app/LicenseChecker`、com.android.vending1.8。对它普通安装该原签名 Phonesky 明确返回 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`，没有替换 stub 或修改证书。API24 x86 原生崩溃证据在 runtime/logs/TM_Original_API24_Google_x86_legacy/original-start-crash.txt，设备已正常停止。
 
-默认 API17 ARM 没有 vending stub，原 ARM 游戏已安装、adb=device、boot_completed=1。普通安装同一官方镜像提取的 Phonesky6.7.15 返回 `INSTALL_FAILED_DEXOPT`：包内没有 `classes.dex`，是预优化系统组件，不能把它当作完整可普通安装的分发 APK。证据 runtime/logs/TM_Original_API17_ARM/phonesky-install-logcat.txt 中 `DexOptZ: zip archive ... does not include classes.dex`；剩余存储充足。没有拼接 ODEX、重新签名或修改镜像。需要另外取得 Google 原签名、完整含 dex 的兼容 APK，并验证签名和全部 JAR 摘要后再普通安装，才能继续该原生加载已知可用路线。未进入菜单的指标保持未完成。
+旧默认API17 ARM普通安装官方镜像提取的Phonesky6.7.15返回 `INSTALL_FAILED_DEXOPT`：包内没有 `classes.dex`，是预优化系统组件。证据runtime/logs/TM_Original_API17_ARM/phonesky-install-logcat.txt；剩余存储充足。没有拼接ODEX、重新签名或修改镜像。此提取组件不再作为可安装候选；下述完整签名分发包已解决新隔离设备的启动依赖。
 
 ## 下载身份与官方依据
+
+完整兼容依赖已从 [历史 GApps 分发仓库](https://github.com/DrMacinyasha/proprietary_vendor_google/blob/gh-pages/gapps-jb-20130812-signed.zip)取得，未将整个 GApps ZIP 安装或刷入设备。100751136 字节 ZIP 的 SHA256 为 `480a1bab87c05b1f7ef6a3643d93b83d2c3f42dbd48604834e99c741ee2550e7`；只读提取 `system/app/Phonesky.apk`，6038575 字节，SHA256 `04897ec9492ab119c137b18a021ec931f547c91faeb1d73d4a36b78592e2f03a`。该包为 Play Store4.3.11、minSdk8/target14，含4217764字节 `classes.dex` 和正常 `InAppBillingService.BIND` 声明。REA静态证据为 `ev_77f0fa3f3ff0fe3a9fbd913cad8d804769580dc1a596b67f8b82031be3031c2d`。
+
+项目局部 Java JarFile 验证实际读完1089项非META-INF有效负载，全部JAR签名/摘要通过，每项Google证书SHA1均为 `38918a453d07199354f8b19af05ec6562ced5788`；未仅依赖分发站的签名声明。Java验证进程单独允许历史SHA1签名，不改变全局JDK配置、APK或网络TLS校验。验证器与原始候选位于runtime/downloads，结果位于runtime/logs/TM_Original_API17_ARM/phonesky-4.3.11-signature-verification.txt。
+
+既有5580普通安装此完整包返回 `INSTALL_FAILED_UID_CHANGED`。包管理器无已安装vending，但 `/data/data/com.android.vending` 残留u0_a48目录；未删除该目录或改UID。使用同一官方镜像创建新隔离 `TM_Original_API17_ARM_clean:5592`，两包普通安装均Success，原菜单及PlainPlane已取得。旧5580正常emu kill停止且数据保留，旧Play5586仍保留。
+
+复现已配置的新设备：设置进程局部 `ANDROID_SDK_ROOT=runtime/sdk`、`ANDROID_AVD_HOME=runtime/avd`，以 `runtime/sdk/tools/emulator.exe -avd TM_Original_API17_ARM_clean -engine classic -port 5592 -accel off -no-audio -no-snapshot -gpu host` 启动。用adb29显式 `-s emulator-5592`，待boot_completed=1后普通安装上述Phonesky和原ARM APK，再 `shell am start -n com.limbicsoftware.towermadnesszero/com.apportable.activity.VerdeActivity`。此AVD配置在runtime内；setup脚本的默认5580仍是旧设备。
+
+实际PNG证据在runtime/logs/TM_Original_API17_ARM_clean：menu.png、plainplane-select.png、plainplane-initial.png、plainplane-build-choice.png、plainplane-selected-range.png、paused-menu.png及first-wave-frames/24张原帧。原UI显示V1.21，APKmanifest为1.22且摘要不变；按各自来源记录。普通UI50金币→建10金币迫击炮后40金币；选中显示退款10/升级25及范围。首波敌人/HP/塔转向、死亡爆炸、分数和金币变化已捕获；一次顶右箭头点击观察到白→绿，但未测定速度倍率。单塔局采样到第4波时羊降至0，没有胜利验收。此环境已可作为动态对照，尚未完成全表现/全玩法等价验证。
 
 | 固定包 | 官方 SHA1 |
 | --- | --- |
@@ -83,4 +98,4 @@ API24 Google APIs 同样内置 `/system/app/LicenseChecker`、com.android.vendin
 
 当前 Emulator 不直接支持 classic ARM32；旧镜像的存在不代表新版能启动它。[官方启动器源码](https://android.googlesource.com/platform/external/qemu/+/emu-master-dev/android/emulator/main-emulator.cpp) 官方 Windows 推荐 WHPX，要求 Windows10 1803+、BIOS VT-x/EPT，并可能需要启用功能后重启；本轮没有执行。软件旧 QEMU2 已进入认证阶段，因此不能据此断言必须开启 WHPX。[官方加速说明](https://developer.android.com/studio/run/emulator-acceleration)
 
-旧 Play 设备 TM_Original_API24_Play_x86_legacy:5586 与 adb29 保留；后续须按名称重新核验进程，不能将历史 PID 当作存活证明。host 原有 RSA keypair 未替换，未写 guest keys 或改安全设置；认证失败原因仍未确认。旧认证证据为 runtime/logs/x86-api24-final-attempt-20261013-062654.log。新开发镜像已经实际推进到原 x86 应用崩溃，仍须继续验证原菜单、PlainPlane、建造、塔详情和战斗，当前这些画面均未取得。
+旧Play设备TM_Original_API24_Play_x86_legacy:5586与adb29保留，后续须按名称重新核验进程。host原RSA keypair未替换，未写guest keys或改安全设置；旧认证原因仍未确认。x86开发镜像原生崩溃尚未解决，当前可用动态对照来自ARM5592；不要混淆两包/两环境的运行证据。

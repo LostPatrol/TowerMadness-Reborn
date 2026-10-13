@@ -29,19 +29,24 @@ namespace {
 using Json = nlohmann::json;
 using Microsoft::WRL::ComPtr;
 
-// The first implementation uses a fixed tilted camera and original Z-up models.
+// Original gameplay uses a 45-degree vertical FOV at camera height fifty.
 constexpr float kCameraFov = 0.785398163f;
-// Keep the ground ray stable over the full map and useful desktop zoom range.
-constexpr float kMinimumDistance = 12.0f;
-constexpr float kMaximumDistance = 100.0f;
-// A small offset prevents diagnostic lines from fighting the terrain depth.
-constexpr float kOverlayHeight = 0.06f;
+// Native eye keeps a fixed five-unit Y offset; its minimum zoom height is .8.
+constexpr float kCameraGroundOffset = 5, kNativeCameraHeight = 50, kMinimumDistance = 0.8f;
+// Desktop fitting extends the original maximum height for large boards and landscape viewports.
+constexpr float kMaximumDistance = 160.0f;
 // Menu thumbnails use a fixed resolution independent of window density.
 constexpr int kPreviewWidth = 512, kPreviewHeight = 288;
 // Keep browsing a large catalog bounded without rebuilding the current selection.
 constexpr std::size_t kPreviewCacheLimit = 16;
 // Vertex inputs retain original geometry, normals, and UV coordinates.
 struct Vertex { float x, y, z, nx, ny, nz, u, v; };
+
+// Original point-sprite flush truncates normalized RGBA into unsigned byte channels.
+Color pointSpriteColor(Color color) {
+    const auto channel = [](float value) { return std::trunc(std::clamp(value,0.0f,1.0f) * 255) / 255; };
+    return {channel(color.r),channel(color.g),channel(color.b),channel(color.a)};
+}
 
 // Transpose resource matrices from their original row-major JSON encoding.
 Mat4 resourceMatrix(const Json& array) {
@@ -232,11 +237,13 @@ struct Renderer::Impl {
     std::set<std::string> resourceWarnings;
     std::vector<Renderable> terrain;
 
-    // Return the tilted eye position while maintaining the target on the ground.
-    Vec3 eye() const { return target + Vec3{0, -0.62f * distance, 0.785f * distance}; }
+    // Native default looks from positive Y, keeping UFO pads above the sheep barn.
+    Vec3 eye() const { return target + Vec3{0, kCameraGroundOffset, distance}; }
+    // Native zoom widens the vertical FOV below fifty; desktop extensions retain 45 degrees.
+    float fov() const { return kCameraFov + std::max(0.0f,kNativeCameraHeight - distance) * (25.0f * 0.017453292f / 49.2f); }
     // Match rendering and picking to the same perspective camera.
     Mat4 viewProjection() const {
-        return perspective(kCameraFov, boardWidth() / boardHeight(), 0.1f, 250.0f) *
+        return perspective(fov(), boardWidth() / boardHeight(), 1.0f,std::max(100.0f,2 * distance)) *
                lookAt(eye(), target, {0, 0, 1});
     }
     // A zero-sized viewport preserves the existing full-window developer scenes.
@@ -795,6 +802,13 @@ void Renderer::drawScene(const SceneView& scene, bool present) {
     };
     for (const auto& object : r.terrain) append(object);
     for (const auto& object : scene.models) append(object);
+    if (scene.selectedCell) {
+        // Original selection uses its textured rect, not a wireframe footprint.
+        Renderable highlight{"selection",{std::floor(scene.selectedCell->x) + 1,std::floor(scene.selectedCell->y) + 1,0.1f},0,1,scene.cellColor};
+        highlight.animationTransform = scaleMatrix({2,2,1});
+        highlight.overrideMaterialColor = true;
+        append(highlight);
+    }
     const Mat4 camera = r.viewProjection();
     // Render the packaged background around the eye before terrain without depth writes.
     glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
@@ -842,12 +856,13 @@ void Renderer::drawScene(const SceneView& scene, bool present) {
             // Convert native pixel size to a billboard at this exact projected depth.
             constexpr float NativeScreenWidth = 320;
             const float pixels = sprite.pointSizeParameter / cameraDistance * (sprite.screenRelative ? r.boardWidth() / NativeScreenWidth : 1);
-            width = height = pixels * clip[3] * (2 * std::tan(kCameraFov / 2)) / r.boardHeight();
+            width = height = pixels * clip[3] * (2 * std::tan(r.fov() / 2)) / r.boardHeight();
         }
         const Vec3 across = horizontal * (width / 2),up = vertical * (height / 2);
+        const Color color = sprite.pointSizeParameter > 0 ? pointSpriteColor(sprite.color) : sprite.color;
         r.worldQuad(sprite.position - across + up,sprite.position + across + up,
                     sprite.position + across - up,sprite.position - across - up,
-                    sprite.texture,sprite.color,sprite.additive);
+                    sprite.texture,color,sprite.additive);
     }
     for (const auto& ribbon : scene.ribbons) {
         const Vec3 side = normalized(cross(ribbon.to - ribbon.from,r.eye() - ribbon.from)) * (ribbon.width / 2);
@@ -868,13 +883,6 @@ void Renderer::drawScene(const SceneView& scene, bool present) {
     for (const auto& line : scene.lines)
         r.primitive({{line.from.x,line.from.y,line.from.z,0,0,1,0,0},
                      {line.to.x,line.to.y,line.to.z,0,0,1,0,0}}, GL_LINES, camera, line.color);
-    if (scene.selectedCell) {
-        const float x = std::floor(scene.selectedCell->x), y = std::floor(scene.selectedCell->y);
-        // Original towers occupy a two-by-two navigation-cell footprint.
-        r.primitive({{x,y,kOverlayHeight,0,0,1,0,0}, {x+2,y,kOverlayHeight,0,0,1,0,0},
-                     {x+2,y+2,kOverlayHeight,0,0,1,0,0}, {x,y+2,kOverlayHeight,0,0,1,0,0}},
-                    GL_LINE_LOOP, camera, scene.cellColor);
-    }
     glDisable(GL_DEPTH_TEST);
     glViewport(0,0,r.pixelWidth,r.pixelHeight);
     for (const auto& panel : scene.panels)
@@ -996,7 +1004,7 @@ std::optional<Vec2> Renderer::pick(float x, float y) const {
     const Vec3 eye = r.eye(), forward = normalized(r.target-eye);
     const Vec3 right = normalized(cross(forward,{0,0,1}));
     const Vec3 vertical = cross(right,forward);
-    const float tangent = std::tan(kCameraFov/2);
+    const float tangent = std::tan(r.fov()/2);
     const Vec3 ray = forward + right*((2*x/r.boardWidth()-1)*tangent*r.boardWidth()/r.boardHeight()) +
                      vertical*((1-2*y/r.boardHeight())*tangent);
     if (std::abs(ray.z) < 0.0001f) return std::nullopt;
@@ -1049,7 +1057,8 @@ bool Renderer::verifyResources(const std::filesystem::path& output) {
 // Pan within a generous map margin without restricting ordinary exploration.
 void Renderer::pan(float x, float y) {
     auto& r = *impl_;
-    r.target.x = std::clamp(r.target.x+x,-r.mapWidth,r.mapWidth*2);
+    // Native negative X is screen right; keep desktop drags and D/A aligned with that view.
+    r.target.x = std::clamp(r.target.x-x,-r.mapWidth,r.mapWidth*2);
     r.target.y = std::clamp(r.target.y+y,-r.mapHeight,r.mapHeight*2);
 }
 // Apply smooth multiplicative wheel zoom around the current camera target.
@@ -1057,9 +1066,11 @@ void Renderer::zoom(float steps) {
     impl_->distance = std::clamp(impl_->distance*std::exp(-steps*0.12f),kMinimumDistance,kMaximumDistance);
 }
 // Fit the map and treetops inside the actual board rectangle with a small margin.
-void Renderer::resetCamera() {
+void Renderer::resetCamera(bool fit) {
     auto& r = *impl_;
     r.target = {r.mapWidth/2,r.mapHeight/2,0};
+    r.distance = kNativeCameraHeight;
+    if (!fit) return;
     // Test the real perspective rather than assuming a portrait or landscape aspect.
     constexpr float FrameLimit = 0.92f, TreeHeight = 3.0f;
     constexpr int FitIterations = 18;

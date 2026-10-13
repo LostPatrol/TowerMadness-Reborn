@@ -29,7 +29,7 @@
 - `classes.dex`、全部 Android `res/` 与 `resources.arsc` 内容一致。DEX SHA-256 为 `488fdb3171592199751d516d9c1f9bc98355e4acaea67b748d74d1b13bcbc7a0`。
 - 其他差异为 `AndroidManifest.xml`、三项 `META-INF/` 签名成员及按 ABI 替换的 23 个原生库。
 
-因此现有游戏资源/配置基线无需更换。继续用 ARM 包及既有 Ghidra 数据库追溯已恢复规则，优先使用新增 x86 包尝试开发期动态对照。跨 ABI 的原生代码行为尚未逐函数证明等价；资产相同也不证明运行表现完全相同。
+因此现有游戏资源/配置基线无需更换。继续用 ARM 包及既有 Ghidra 数据库追溯已恢复规则；当前成功的动态对照使用原ARM包与API17环境，新x86包在API24仍有原生崩溃，见[ANDROID_REFERENCE.md](ANDROID_REFERENCE.md)。跨 ABI 的原生代码行为尚未逐函数证明等价；资产相同也不证明运行表现完全相同。
 
 ## 签名与证据边界
 

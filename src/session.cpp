@@ -37,6 +37,8 @@ nlohmann::json Game::saveState() const {
         state["enemies"][index]["animation"] = enemyAnimation(enemies[index]);
     for (std::size_t index = 0; index < pendingChildren_.size(); ++index)
         state["pendingChildren"][index]["animation"] = enemyAnimation(pendingChildren_[index]);
+    for (std::size_t index = 0; index < towers.size(); ++index)
+        state["towers"][index]["appearance"] = {{"startedAt",towers[index].appearanceStartedAt},{"previousType",towers[index].previousType}};
     for (std::size_t index = 0; index < projectiles.size(); ++index)
         state["projectiles"][index]["trail"] = {{"position",projectiles[index].trailSample},{"threshold",projectiles[index].trailThreshold}};
     auto holds = nlohmann::json::array();
@@ -67,6 +69,18 @@ void Game::restoreState(const nlohmann::json& state) {
     restored.outcome = static_cast<Outcome>(state.at("outcome").get<int>());
     restored.enemies = state.at("enemies").get<std::deque<Enemy>>();
     restored.towers = state.at("towers").get<std::vector<Tower>>();
+    for (std::size_t index = 0; index < restored.towers.size(); ++index) {
+        auto& tower = restored.towers[index];
+        // Unknown legacy appearance stays usable without inventing its previous upgrade type.
+        try {
+            const auto& appearance = state.at("towers").at(index).at("appearance");
+            const int started = appearance.at("startedAt").get<int>();
+            const std::string previous = appearance.at("previousType").get<std::string>();
+            if (started >= -1 && started <= tower.readyAt && (previous.empty() || restored.technology.at("towers").contains(previous))) {
+                tower.appearanceStartedAt = started; tower.previousType = previous;
+            }
+        } catch (const nlohmann::json::exception&) {}
+    }
     restored.ufos = state.at("ufos").get<std::vector<Ufo>>();
     restored.projectiles = state.at("projectiles").get<std::vector<Projectile>>();
     for (std::size_t index = 0; index < restored.projectiles.size(); ++index) {

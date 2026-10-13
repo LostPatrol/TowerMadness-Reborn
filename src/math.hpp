@@ -64,7 +64,7 @@ inline Mat4 operator*(const Mat4& a, const Mat4& b) {
     return result;
 }
 
-// Compose world translation, yaw, local pivot pitch, and uniform scale.
+// Compose world translation, yaw, uniform scale, and local pivot pitch.
 inline Mat4 modelMatrix(Vec3 position, float rotation, float scale, float pitch = 0, Vec3 pivot = {}) {
     Mat4 m = Mat4::identity();
     const float cosine = std::cos(rotation) * scale;
@@ -74,8 +74,9 @@ inline Mat4 modelMatrix(Vec3 position, float rotation, float scale, float pitch 
     // Pitch is a conventional right-handed rotation around local X.
     m.v[4] = -sine * pitchCosine; m.v[5] = cosine * pitchCosine; m.v[6] = scale * pitchSine;
     m.v[8] = sine * pitchSine; m.v[9] = -cosine * pitchSine; m.v[10] = scale * pitchCosine;
-    const float pivotY = pivot.y * (1 - pitchCosine) + pivot.z * pitchSine;
-    const float pivotZ = pivot.z * (1 - pitchCosine) - pivot.y * pitchSine;
+    // Native build/sale scale includes the articulated turret's local pivot displacement.
+    const float pivotY = scale * (pivot.y * (1 - pitchCosine) + pivot.z * pitchSine);
+    const float pivotZ = scale * (pivot.z * (1 - pitchCosine) - pivot.y * pitchSine);
     m.v[12] = position.x - std::sin(rotation) * pivotY;
     m.v[13] = position.y + std::cos(rotation) * pivotY;
     m.v[14] = position.z + pivotZ;

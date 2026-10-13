@@ -253,6 +253,18 @@ void statusRing(SceneView& scene, Vec3 center, float radius, Color color) {
     }
 }
 
+// Native effect callbacks age in real seconds, independent of fixed-step game time.
+float effectAgeSeconds(const Game& game, const EffectTiming& timing, int bornAt) {
+    const double age = timing.bornSeconds >= 0 ? game.effectClockSeconds() - timing.bornSeconds : (game.timeMs - bornAt) * 0.001;
+    return static_cast<float>(std::max(0.0,age));
+}
+
+// Old saves and zero-duration types keep their usable endpoint instead of dividing by zero.
+float towerAppearanceProgress(const Game& game, const Tower& tower) {
+    if (tower.appearanceStartedAt < 0 || tower.readyAt <= tower.appearanceStartedAt) return 1;
+    return std::clamp(static_cast<float>(game.timeMs - tower.appearanceStartedAt) / (tower.readyAt - tower.appearanceStartedAt),0.0f,1.0f);
+}
+
 // Assemble original mesh instances and the shared desktop command HUD.
 SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover, int speed, int windowWidth, int windowHeight) {
     SceneView scene;
@@ -260,31 +272,51 @@ SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover,
     for (const auto& tower : game.towers) {
         const auto& definition = game.technology.at("towers").at(tower.type);
         const bool waiting = game.timeMs <= tower.readyAt;
-        scene.sprites.push_back({"shadowblob.pvr.png",{tower.x + 1.0f,tower.y + 1.0f,0.035f},2,2,{0,0,0,0.28f},true});
-        const std::string kind = game.technology.at("weapons").at(definition.at("weapon").get<std::string>()).at("type").get<std::string>();
-        if (!waiting && (kind == "boost" || tower.damageBoost > 1)) {
-            const float radius = kind == "boost" ? definition.at("range").get<float>() : 1.1f;
-            statusRing(scene,{tower.x + 1.0f,tower.y + 1.0f,0.06f},radius,
-                {0.35f,1,0.6f,0.4f + 0.1f * std::sin(game.timeMs * 0.006f)});
+        const bool building = waiting && !tower.selling;
+        const bool mine = definition.value("ismine",0) != 0, bait = definition.value("isbait",0) != 0;
+        const bool tesla = definition.value("istesla",0) != 0;
+        const float progress = towerAppearanceProgress(game,tower);
+        const bool upgrading = building && !tower.previousType.empty();
+        const float scale = tower.selling ? 1 - progress : !waiting ? 1 : upgrading ? (progress < 0.5f ? 1 - 2 * progress : 2 * progress - 1) : progress;
+        const std::string drawnType = upgrading && progress < 0.5f ? tower.previousType : tower.type;
+        const auto& drawn = game.technology.at("towers").at(drawnType);
+        if (!mine) {
+            const float shadowScale = tower.selling ? 1 - progress : waiting && !upgrading ? progress : 1;
+            scene.models.push_back({"directionalshadow",{tower.x + 1.18f,tower.y + 1.18f,0.01f},-EffectHalfPi,shadowScale});
+            scene.models.back().animationTransform = scaleMatrix({2.2f,2.2f,1});
+            scene.models.back().unlit = true;
         }
-        const bool directional = kind != "lightning" && kind != "boost" && kind != "mine" && kind != "bait" && tower.type != "Nuke" && tower.type != "H Bomb";
+        const bool directional = !tesla && !tower.type.starts_with("ElectroShock") && !tower.type.starts_with("ElectroBoost")
+            && tower.type != "Nuke" && tower.type != "H Bomb" && tower.type != "Doom Capacitor";
         const float yaw = directional ? tower.heading + TowerHeadingOffset : 0;
-        const float pitch = directional ? -game.towerElevation(tower) : 0;
-        scene.models.push_back({definition.at("model").get<std::string>(),{tower.x + 1.0f,tower.y + 1.0f,TowerGroundOffset},yaw,1,
-                                tower.selling ? Color{1,0.45f,0.4f,0.7f} : waiting ? Color{0.6f,0.85f,1,0.65f} : Color{}});
-        if (definition.contains("turret")) {
-            scene.models.push_back({definition.at("turret").get<std::string>(),
-                {tower.x + 1.0f,tower.y + 1.0f,TowerGroundOffset},yaw});
+        const float pitch = tower.type == "Nuke" || tower.type == "H Bomb" ? 0 : -game.towerElevation(tower);
+        const Vec3 position{tower.x + 1.0f,tower.y + 1.0f,scale - 0.75f};
+        scene.models.push_back({drawn.at("model").get<std::string>(),position,yaw,scale});
+        if (drawn.contains("turret")) {
+            scene.models.push_back({drawn.at("turret").get<std::string>(),position,yaw,scale});
             if (definition.contains("rotationoffset")) {
                 const auto& pivot = definition.at("rotationoffset");
                 scene.models.back().pitchPivot = {pivot[0].get<float>(),pivot[1].get<float>(),pivot[2].get<float>()};
             }
         }
-        scene.models.back().pitch = pitch;
-        if (definition.contains("towerbase")) {
+        if (drawn.contains("turret") || !definition.contains("turret")) scene.models.back().pitch = pitch;
+        if (!mine && !bait && definition.contains("towerbase")) {
             const int base = definition.at("towerbase").get<int>();
-            scene.models.push_back({base == 0 ? "turretbase" : "turretbase_" + std::to_string(base),{tower.x + 1.0f,tower.y + 1.0f,0}});
+            const float baseZ = tower.selling ? -progress : waiting && !upgrading ? progress - 1 : 0;
+            scene.models.push_back({base == 0 ? "turretbase" : "turretbase_" + std::to_string(base),{tower.x + 1.0f,tower.y + 1.0f,baseZ}});
         }
+        if (tesla && (!building || progress >= 0.5f)) {
+            const float phase = 0.5f * game.timeMs;
+            for (const int sign : {1,-1}) {
+                const std::string name = sign == 1 ? "accessory_one" : "accessory_two";
+                if (!definition.contains(name)) continue;
+                scene.models.push_back({definition.at(name).get<std::string>(),position,yaw,scale});
+                scene.models.back().pitch = pitch;
+                scene.models.back().animationTransform = modelMatrix({0,0,sign * 0.25f * std::sin(phase)},sign * phase * DegreesToRadians,1);
+            }
+        }
+        if (tower.damageBoost != 1 && !tower.selling)
+            effectModel(scene,"rangecircle",{tower.x + 1.0f,tower.y + 1.0f,0.02f},{1,1,tower.damageBoost},{64.0f / 255,150.0f / 255,238.0f / 255,1},-EffectHalfPi);
         if (tower.id == selectedId) selected = &tower;
     }
     for (const auto& enemy : game.enemies) {
@@ -330,10 +362,10 @@ SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover,
     }
     for (const auto& ufo : game.ufos)
         if (ufo.state != Ufo::State::Idle) scene.models.push_back({"ufo",{ufo.x,ufo.y,ufo.z},0,1});
-    // Native models and age formulas retain the desktop simulation-clock adaptation.
+    // Native callbacks use realtime; offline checks may supply a deterministic presentation clock.
     for (const auto& beam : game.beams) if (!ended(game)) {
         const Vec3 from{beam.fromX,beam.fromY,beam.fromZ};
-        const float u = std::clamp(static_cast<float>(game.timeMs - beam.bornAt) / std::max(1,beam.expiresAt - beam.bornAt),0.0f,1.0f);
+        const float u = std::clamp(effectAgeSeconds(game,beam.timing,beam.bornAt) * 1000 / std::max(1,beam.expiresAt - beam.bornAt),0.0f,1.0f);
         const float pitch = EffectHalfPi - beam.elevation, length = beam.length;
         const std::uint32_t seed = visualSeed(beam.bornAt,from);
         if (beam.kind == "beam") {
@@ -379,10 +411,11 @@ SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover,
         }
     }
     for (const auto& effect : game.effects) if (!ended(game)) {
-        const float age = std::clamp(static_cast<float>(game.timeMs - effect.bornAt) / std::max(1,effect.expiresAt - effect.bornAt),0.0f,1.0f);
+        const float seconds = effectAgeSeconds(game,effect.timing,effect.bornAt);
+        const float age = std::clamp(seconds * 1000 / std::max(1,effect.expiresAt - effect.bornAt),0.0f,1.0f);
         const float radius = effect.radius > 0 ? effect.radius : 0.4f,diameter = radius * (0.5f + age * 1.5f);
         if (effect.kind == "trail") {
-            const float alpha = 1 - (game.timeMs - effect.bornAt) / 250.0f;
+            const float alpha = 1 - seconds / 0.25f;
             const float width = std::min(effect.radius * alpha * 0.02f,0.2f);
             const Vec3 offset{width,width,width};
             scene.quads.push_back({{effect.position,effect.end,effect.end + offset,effect.position + offset},{1,1,1,alpha / speed},true});
@@ -392,6 +425,8 @@ SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover,
         else if (effect.kind == "plasmaFlash" || effect.kind == "mortarFlash") {
             auto& object = effectModel(scene,"$effect:muzzlefx",effect.position,{0.5f * age,0.5f * age,age},{1,1,1,1 - age * age * age},effect.heading,EffectHalfPi - effect.elevation);
             object.textureScale = {1,0.25f}; object.textureOffset = {0,effect.kind == "plasmaFlash" ? 0.5f : 0.75f};
+        } else if (effect.kind == "boost") {
+            if (age >= 0.25f) effectModel(scene,"rangecircle",effect.position,{age * radius,age * radius,1},{64.0f / 255,150.0f / 255,238.0f / 255,2 * (1 - age)});
         } else if (effect.kind == "groundDamage") {
             effectModel(scene,"crater",{effect.position.x,effect.position.y,0.02f},{radius,radius,1},{1,1,1,1 - age * age * age},visualRandom(visualSeed(effect.bornAt,effect.position)) * 2 * EffectPi);
         } else if (effect.kind == "flak") {
@@ -405,7 +440,7 @@ SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover,
             }
         } else if (effect.kind == "homing") {
             // Native expiry is random, but all draw branches use a fixed 1.5-second divisor.
-            const float u = (game.timeMs - effect.bornAt) / 1500.0f;
+            const float u = seconds / 1.5f;
             const std::uint32_t seed = visualSeed(effect.bornAt,effect.position);
             const float size = 3 * radius, jitter = 0.75f + 0.5f * visualRandom(seed + 1);
             const float yaw = visualRandom(seed + 2) * 2 * EffectPi;
@@ -459,14 +494,8 @@ SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover,
     if (selected) {
         scene.selectedCell = Vec2{static_cast<float>(selected->x),static_cast<float>(selected->y)};
         const float range = game.technology.at("towers").at(selected->type).at("range").get<float>();
-        // This ring is a desktop selection aid; the simulation uses the original radius.
-        constexpr int RingSegments = 64;
-        constexpr float FullCircle = 6.2831853f;
-        for (int segment = 0; segment < RingSegments; ++segment) {
-            const float a = segment * FullCircle / RingSegments,b = (segment + 1) * FullCircle / RingSegments;
-            scene.lines.push_back({{selected->x + 1 + std::cos(a) * range,selected->y + 1 + std::sin(a) * range,0.05f},
-                                   {selected->x + 1 + std::cos(b) * range,selected->y + 1 + std::sin(b) * range,0.05f},{0.4f,0.85f,1,0.8f}});
-        }
+        effectModel(scene,"rangecircle",{selected->x + 1.0f,selected->y + 1.0f,0.15f},
+            {range,range,1},{205.0f / 255,235.0f / 255,139.0f / 255,1});
     }
     const std::string state = game.outcome == Outcome::Won ? "VICTORY" : game.outcome == Outcome::Lost ? "DEFEAT" : game.paused ? "PAUSED" : game.outcome == Outcome::Preparing ? "PREPARE" : "DEFEND";
     scene.texts.push_back({"TOWERMADNESS REBORN  /  " + game.modeId + "  /  " + state,18,14});
@@ -683,7 +712,7 @@ SceneView desktopScene(Renderer& renderer, const Game& game, Desktop& desktop, c
                 const std::string reason = game.buildBlockReason(hover->x,hover->y,type);
                 const Color tint = reason.empty() ? Color{0.3f,1,0.5f,0.55f} : Color{1,0.28f,0.25f,0.5f};
                 scene.selectedCell = Vec2{static_cast<float>(hover->x),static_cast<float>(hover->y)};
-                scene.cellColor = tint;
+                scene.cellColor = reason.empty() ? Color{0,1,0,1} : Color{1,0,0,1};
                 scene.models.push_back({definition.at("model").get<std::string>(),{hover->x + 1.0f,hover->y + 1.0f,TowerGroundOffset},TowerHeadingOffset,1,tint});
                 if (definition.contains("turret")) {
                     scene.models.push_back({definition.at("turret").get<std::string>(),{hover->x + 1.0f,hover->y + 1.0f,TowerGroundOffset},TowerHeadingOffset,1,tint});
@@ -1345,7 +1374,7 @@ int combatVisualVerification(Renderer& renderer, const std::filesystem::path& as
             if ((kind == "homing" || kind == "mortar") && (observedTrail == (type == "Energy Pulse Missile")))
                 throw std::runtime_error("Projectile trail presence disagrees with its original weapon-name suppression.");
             const int sampleDelay = type == "Nuke" || type == "H Bomb" || type == "Proximity Mine III" ? 1000
-                : kind == "railgun" ? 250 : kind == "flamethrower" ? 400 : kind == "homing" ? 100 : kind == "plasma" ? 125 : 50;
+                : kind == "railgun" ? 250 : kind == "boost" ? 300 : kind == "flamethrower" ? 400 : kind == "homing" ? 100 : kind == "plasma" ? 125 : 50;
             for (int elapsed = 0; elapsed < sampleDelay && !ended(game); elapsed += SimulationStepMs) game.tick();
             if (!renderer.changeMap(assets / "data/PlainPlane.map.json")) throw std::runtime_error(renderer.error());
             renderer.setBoardViewport(0,108,990,paletteTop(game,1280,900) - 116); renderer.resetCamera(); renderer.zoom(2);
@@ -1363,11 +1392,126 @@ int combatVisualVerification(Renderer& renderer, const std::filesystem::path& as
     return report.at("passed").get<bool>() ? 0 : 1;
 }
 
-// Verify actual GL rendering and picking at two drawable sizes without audio output.
+// Capture production world geometry at the recovered portrait camera and during legal tower changes.
+nlohmann::json presentationVerification(Renderer& renderer, SDL_Window* window, const Game& baseline,
+                                       const std::filesystem::path& output) {
+    // Match the original reference's logical portrait size without changing the normal desktop minimum.
+    constexpr int ReferenceWidth = 480, ReferenceHeight = 800;
+    Game reference = baseline; reference.restart();
+    SDL_SetWindowMinimumSize(window,ReferenceWidth,700);
+    SDL_SetWindowSize(window,ReferenceWidth,ReferenceHeight); SDL_SyncWindow(window); SDL_PumpEvents(); renderer.resize();
+    renderer.setBoardViewport(0,0,ReferenceWidth,ReferenceHeight); renderer.resetCamera(false);
+    nlohmann::json checks{{"scope","Production world rendering at native portrait pose; desktop HUD omitted. Static projection plus real original frames, not pixel-perfect dynamic equivalence."}};
+    int pixelWidth = 0,pixelHeight = 0; SDL_GetWindowSizeInPixels(window,&pixelWidth,&pixelHeight);
+    checks["drawable"] = {pixelWidth,pixelHeight};
+    // Predictions independently recovered from GAME_alloc and PGL_perspective at 480x800.
+    const std::array<Vec3,4> corners{{{0,0,0},{22,0,0},{0,32,0},{22,32,0}}};
+    const std::array<Vec2,4> expected{{{444.90f,103.44f},{35.10f,103.44f},{458.31f,715.97f},{21.69f,715.97f}}};
+    for (std::size_t index = 0; index < corners.size(); ++index) {
+        const auto projected = renderer.project(corners[index]);
+        if (!projected) throw std::runtime_error("Native camera failed to project a terrain corner.");
+        const double error = std::hypot(projected->x - expected[index].x,projected->y - expected[index].y);
+        checks["corners"].push_back({{"x",projected->x},{"y",projected->y},{"errorPixels",error}});
+        if (error > 0.03) throw std::runtime_error("Native camera differs from recovered portrait projection.");
+    }
+    // Keep the production scene and original resources; only remove the desktop controls for comparison.
+    const auto capture = [&](const std::string& name, int selectedId = -1) {
+        SceneView scene = makeScene(reference,selectedId,std::nullopt,1,ReferenceWidth,ReferenceHeight);
+        scene.texts.clear(); scene.buttons.clear(); scene.panels.clear(); scene.images.clear();
+        if (!reference.towers.empty() && reference.towers.front().selling) {
+            const std::string body = reference.technology.at("towers").at(reference.towers.front().type).at("model");
+            if (std::none_of(scene.models.begin(),scene.models.end(),[&](const Renderable& object) { return object.model == body; }))
+                throw std::runtime_error("Sale incorrectly reused the previous upgrade's body.");
+        }
+        renderer.draw(scene);
+        if (!renderer.capture(output / (name + ".png"))) throw std::runtime_error(renderer.error());
+        nlohmann::json sample{{"image",name + ".png"},{"timeMs",reference.timeMs},{"money",reference.money}};
+        for (const auto& object : scene.models)
+            if (std::abs(object.position.x - 8) < 0.2f && std::abs(object.position.y - 11) < 0.2f)
+                sample["towerModels"].push_back({{"model",object.model},{"scale",object.scale},{"z",object.position.z}});
+        checks["samples"].push_back(sample);
+    };
+    // Sample legal build/upgrade/sale phases before automatic wave dispatch, retaining the original 50 gold.
+    const auto advanceTo = [&](int timeMs) { while (reference.timeMs < timeMs) reference.tick(); };
+    capture("native-camera-480x800");
+    if (!reference.build(7,10)) throw std::runtime_error(reference.message);
+    const int towerId = reference.towers.front().id;
+    advanceTo(125); capture("tower-build-quarter");
+    advanceTo(250); capture("tower-build-half");
+    advanceTo(525); capture("tower-built-selected",towerId);
+    if (!reference.upgrade(towerId)) throw std::runtime_error(reference.message);
+    advanceTo(650); capture("tower-upgrade-old-half");
+    advanceTo(775); capture("tower-upgrade-switch");
+    advanceTo(900); capture("tower-upgrade-new-half");
+    Game restored = baseline; restored.restoreState(reference.saveState());
+    if (restored.saveState() != reference.saveState()) throw std::runtime_error("Mid-upgrade appearance failed to roundtrip.");
+    auto legacy = reference.saveState(); legacy["towers"][0].erase("appearance");
+    restored.restoreState(legacy);
+    if (restored.snapshot() != reference.snapshot() || restored.saveState().at("rng") != reference.saveState().at("rng")
+        || restored.towers.front().appearanceStartedAt != -1)
+        throw std::runtime_error("Legacy tower appearance changed valid gameplay.");
+    legacy["towers"][0]["appearance"] = {{"startedAt",-50},{"previousType","missing-type"}};
+    restored.restoreState(legacy);
+    if (restored.snapshot() != reference.snapshot() || restored.towers.front().appearanceStartedAt != -1)
+        throw std::runtime_error("Invalid optional tower appearance blocked valid gameplay.");
+    checks["appearanceRoundtripAndFallback"] = true;
+    advanceTo(1050); capture("tower-upgraded-selected",towerId);
+    if (!reference.sell(towerId)) throw std::runtime_error(reference.message);
+    advanceTo(1175); capture("tower-sale-quarter");
+    advanceTo(1425); capture("tower-sale-three-quarters");
+    advanceTo(1575); capture("tower-sale-finished");
+    if (!reference.towers.empty() || reference.money != 50) throw std::runtime_error("Pre-wave sale did not restore the original funds.");
+    SDL_SetWindowMinimumSize(window,900,700); SDL_SetWindowSize(window,1280,900); SDL_SyncWindow(window);
+    SDL_PumpEvents(); renderer.resize(); renderer.setBoardViewport(0,0,1280,900); renderer.resetCamera();
+    return checks;
+}
+
+// Verify a real rail shot expires on the actual SDL wall clock while the match remains paused.
+nlohmann::json pausedEffectVerification(Renderer& renderer, const Game& baseline, const std::filesystem::path& output) {
+    Game game = baseline; game.loadMode("Sandbox:Endless_Hard:PlainPlane");
+    if (!game.build(7,10,"Railgun I")) throw std::runtime_error(game.message);
+    for (int tick = 0; tick < 21; ++tick) game.tick();
+    if (!game.sendWave()) throw std::runtime_error(game.message);
+    game.advanceEffects(SDL_GetTicksNS() / 1e9);
+    // Wait for an actual legal shot rather than creating a visual fixture or editing enemy HP.
+    constexpr int MaximumShotWaitMs = 240000;
+    while (game.beams.empty() && !ended(game) && game.timeMs < MaximumShotWaitMs) {
+        game.advanceEffects(SDL_GetTicksNS() / 1e9); game.tick();
+    }
+    if (game.beams.empty()) throw std::runtime_error("Paused realtime check never observed a rail shot.");
+    game.paused = true;
+    const auto frozen = game.saveState();
+    const double started = SDL_GetTicksNS() / 1e9;
+    Profile profile(output / "graphics-profile"); Desktop desktop; desktop.menu = false;
+    nlohmann::json checks{{"scope","Actual SDL wall-clock aging of a natural sandbox rail shot; gameplay and RNG frozen."}};
+    // Rail's recovered lifetime is two real seconds, independent of the selected desktop speed.
+    for (const double sampleSeconds : {0.25,1.0,2.1}) {
+        while (SDL_GetTicksNS() / 1e9 - started < sampleSeconds) {
+            game.advanceEffects(SDL_GetTicksNS() / 1e9);
+            renderer.draw(desktopScene(renderer,game,desktop,profile,-1,std::nullopt,4,1280,900));
+            SDL_PumpEvents(); SDL_Delay(10);
+        }
+        game.advanceEffects(SDL_GetTicksNS() / 1e9);
+        renderer.draw(desktopScene(renderer,game,desktop,profile,-1,std::nullopt,4,1280,900));
+        const bool visible = !game.beams.empty();
+        if (visible != (sampleSeconds < 2) || game.saveState() != frozen)
+            throw std::runtime_error("Paused rail lifetime or frozen gameplay differs from the recovered timing.");
+        const std::string name = "paused-rail-" + std::to_string(static_cast<int>(sampleSeconds * 1000)) + "ms.png";
+        if (!renderer.capture(output / name)) throw std::runtime_error(renderer.error());
+        checks["samples"].push_back({{"elapsedSeconds",SDL_GetTicksNS() / 1e9 - started},{"beamVisible",visible},{"image",name}});
+    }
+    checks["frozenGameplayAndRng"] = true;
+    renderer.setBoardViewport(0,0,1280,900); renderer.resetCamera();
+    return checks;
+}
+
+// Verify actual GL rendering, native presentation, realtime effects, and resized picking without audio.
 int graphicsSmoke(Renderer& renderer, SDL_Window* window, Game& game, const std::filesystem::path& output) {
+    nlohmann::json checks;
+    checks["nativePresentation"] = presentationVerification(renderer,window,game,output);
+    checks["pausedRealtime"] = pausedEffectVerification(renderer,game,output);
     game.build(7,10); game.build(11,14); game.sendWave();
     for (int tick = 0; tick < 450; ++tick) game.tick();
-    nlohmann::json checks;
     checks["graphics"] = renderer.graphicsInfo();
     checks["simulation"] = game.snapshot();
     for (int attempt = 0; attempt < 2; ++attempt) {
@@ -1445,6 +1589,7 @@ int main(int argc, char** argv) {
                 Uint64 previous = SDL_GetTicksNS();
                 Uint64 lastSaveAt = SDL_GetTicks();
                 while (running) {
+                    game.advanceEffects(SDL_GetTicksNS() / 1e9);
                     int width = 0,height = 0; SDL_GetWindowSize(window,&width,&height);
                     float mouseX = 0,mouseY = 0; SDL_GetMouseState(&mouseX,&mouseY);
                     renderer.setBoardViewport(0,108,width - DetailsWidth - 12,paletteTop(game,width,height) - 116);
@@ -1466,6 +1611,8 @@ int main(int argc, char** argv) {
                     }
                     const Uint64 now = SDL_GetTicksNS();
                     const double elapsed = std::min(MaximumFrameSeconds,(now - previous) / 1e9); previous = now;
+                    // Restoring a session or changing levels replaces Game, so reattach its clock.
+                    game.advanceEffects(now / 1e9);
                     const bool* keys = SDL_GetKeyboardState(nullptr);
                     if (!desktop.menu && !game.paused && !desktop.restartConfirm && (!ended(game) || desktop.resultsDismissed) && (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS))
                         renderer.pan(static_cast<float>((keys[SDL_SCANCODE_D] - keys[SDL_SCANCODE_A]) * elapsed * 10),
@@ -1473,6 +1620,7 @@ int main(int argc, char** argv) {
                     if (!desktop.menu && !game.paused && !desktop.restartConfirm && !ended(game)) {
                         accumulator += elapsed * speed;
                         while (accumulator >= SimulationStepMs / 1000.0 && !ended(game)) {
+                            game.advanceEffects(SDL_GetTicksNS() / 1e9);
                             game.tick(); accumulator -= SimulationStepMs / 1000.0;
                             for (const auto& sound : game.soundEvents) audio.play(sound);
                         }

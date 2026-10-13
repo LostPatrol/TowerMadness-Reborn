@@ -1,11 +1,11 @@
 <!-- Original ARM combat-effect geometry, timing, and implementation evidence. -->
 # Combat visuals
 
-本文记录原 ARM `libverde.so` 的静态行为，未观察原作运行。代码地址为 Ghidra 地址（ELF 地址 +0x10000）。复核入口是 `agent/codex/p8-native-effects/{effects,support,callflow,flags,impact-params}/` 中的 `pseudocode.c`、`instructions.tsv`、`strings.tsv`；`literals.tsv` 按 ELF PT_LOAD 映射保留字面值，`mesh-bounds.json` 保留资产顶点范围。反编译器会丢失软浮点参数，因此以下公式已交叉核对 ARM 调用与常数，不能直接照抄伪代码函数签名。
+本文公式来自原 ARM `libverde.so` 的静态行为；未经修改的原ARM游戏现已取得菜单、PlainPlane、Laser建造/选中及首波运行画面，见[ANDROID_REFERENCE.md](ANDROID_REFERENCE.md)，但尚未逐项完成效果动态等价验证。代码地址为 Ghidra 地址（ELF 地址 +0x10000）。复核入口是 `agent/codex/p8-native-effects/{effects,support,callflow,flags,impact-params}/` 中的 `pseudocode.c`、`instructions.tsv`、`strings.tsv`；`literals.tsv` 按 ELF PT_LOAD 映射保留字面值，`mesh-bounds.json` 保留资产顶点范围。反编译器会丢失软浮点参数，因此以下公式已交叉核对 ARM 调用与常数，不能直接照抄伪代码函数签名。
 
 ## 时钟、随机源与渲染约定
 
-`get_current_realtime 002eba84` 返回 double 秒：`mach_absolute_time()*numer/denom/1e9`。效果记录 `+0` 为出生时间、`+8` 为到期时间、`+0x10` 为绘制回调。`GAME_render 0029efa0` 取同一个 realtime，释放 `expiry<=now` 的效果，然后调用各绘制函数。本文 `age=now-born`；`u` 是各节定义的归一化寿命。不能将时间单位误认为游戏毫秒。暂停、加速和渲染中断后的最终动态表现仍需原作对照；桌面若继续用仿真时钟，这是明确的适配差异。
+`get_current_realtime 002eba84` 返回 double 秒：`mach_absolute_time()*numer/denom/1e9`。效果记录 `+0` 为出生时间、`+8` 为到期时间、`+0x10` 为绘制回调。`GAME_render 0029efa0` 取同一个 realtime，释放 `expiry<=now` 的效果，然后调用各绘制函数。本文 `age=now-born`；`u` 是各节定义的归一化寿命。不能将时间单位误认为游戏毫秒。当前桌面交互已采用独立realtime，离线默认仿真时钟；暂停、加速和渲染中断后的最终动态表现仍需原作对照。
 
 `GAME_randFloatExt 0029ceac` 为 `float(lrand48())*2^-31`，`GAME_randIntMinMaxExt 0029cec8` 为 `lo+lrand48()%(hi-lo)`，与战斗 MT 随机流分离。火焰还直接调用 `drand48`。重建可以保留独立视觉随机源，但不能声称序列等价，更不能为闪电帧或粒子消耗战斗 RNG。闪电命中高度的战斗随机样本已经属于伤害规则，应复用已有事件字段。
 
@@ -135,6 +135,8 @@ blast/crater实际用rect VBO、dustcone用cone、flash/debris用3plane；不能
 
 导弹现在按固定1.5秒绘制进度组装五层原模型/点精灵，保留真实impactXYZ及独立视觉抖动；白/蓝闪光使用对应三张原材质。Flak早期blast使用真正点精灵并与主burst共用到原点的相机距离。两类点大小没有plasma/flame的screen-width/320倍率。原trail在非命中移动更新按距离/弹道时间留下无纹理四边形，不再使用烟点近似；Energy Pulse等原武器名前缀禁用trail，保存可选采样点/阈值。
 
-明确适配差异：寿命沿用仿真毫秒，尚未切换原realtime；视觉hash不是lrand48/drand48原序列；plasma/flame屏幕字段尚未标定；point RGBA使用float而非原byte量化，透明排序及trail继承的深度写入状态待动态对照。条件式核爆2D闪光及增幅/诱饵特殊动作未全部恢复。状态环和诱饵/分裂反馈属于桌面可读性辅助。
+交互模式通过`Game::advanceEffects`提供独立单调realtime，`addEffect/addBeam`保存秒制出生/到期时间，`makeScene`据此计算短暂效果年龄，暂停时也可到期；离线验证未提供realtime时沿用确定性Game毫秒。原游戏毫秒仍用于移动投射物、plasma帧、塔建造和敌人动作，不能将所有动画改成墙钟。Renderer对point RGBA执行原byte截断，原材质缺省采用unlit texture×RGBA。
+
+明确适配差异：视觉hash不是lrand48/drand48原序列；plasma/flame屏幕字段尚未标定；透明排序及trail继承的深度写入状态待动态对照。增幅rangecircle及Tesla附件已接入，塔建造/升级/出售见[TOWER_VISUALS.md](TOWER_VISUALS.md)。已有塔选中使用原selection纹理及rangecircle，建造预览范围仍为桌面线；非法选中500ms淡出及升级范围realtime淡出未恢复。条件式核爆2D闪光、诱饵屏幕aura、完整羊动作仍未恢复；诱饵/分裂反馈仍有桌面辅助。原暂停/倍速的最终效果需动态验证。
 
 `--visual-test`已在本机原沙盒真实战斗覆盖12基础类别及6高级形态，包含Energy Pulse Missile，共18种；导弹/炮弹等待真正命中并检查trail存在或原前缀禁用，再捕获生产GL画面。它不改资金、HP或战斗RNG，高级塔直接由Game API建造；不证明手机动态等价或UI升级操作完成。

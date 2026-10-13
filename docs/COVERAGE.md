@@ -9,7 +9,7 @@ $run.WaitForExit()
 $run.ExitCode
 ```
 
-`coverage-checks.json`包含总结果、独立规则结果及116模式逐项记录。某一模式失败时仍继续检查其他模式；失败返回非零退出码。修改玩法规则后运行此入口，以及`--self-test`的自然完整胜负验证。界面/资源另用`--desktop-test`、`--resource-test`；音频解析用`--audio-test`。
+`coverage-checks.json`包含总结果、24项CPU规则/保存检查及116模式逐项记录。某一模式失败时仍继续检查其他模式；失败返回非零退出码。修改玩法规则后运行此入口，以及`--self-test`的自然完整胜负验证。界面/资源另用`--desktop-test`、`--resource-test`；音频解析用`--audio-test`。
 
 | 范围 | 验证内容 |
 | --- | --- |
@@ -26,6 +26,7 @@ $run.ExitCode
 | mine / slow / boost / bait | 原触发延迟、消耗拆除和地块恢复；弱slow不覆盖强效果、相等效果重置时间；加法boost及严格边界；bait改道和原状态爆炸 |
 | 普通tick | stun/slow跨零最后一tick仍生效、严格大于1秒regen及slow缩放、原分裂boss的两子体/金币/状态继承 |
 | 动画状态 | 原时间帧/slot持续时间、眩晕冻结、generation-one帧选择、平滑朝向、分裂slot顺序及尸体冻结/释放；没有原作动态对照 |
+| realtime效果 | 相同1200tick下独立realtime/4倍速时间映射不改变完整保存与战斗RNG；暂停后rail两秒寿命仍可到期且核心保存不变 |
 | Profile / session | 仅输出目录保存profile、最佳成绩、损坏文件备份及默认可用；自然局与活动导弹的逐字段保存/恢复/继续一致，非法版本不破坏当前局 |
 
 ## 数值夹具的边界
@@ -36,6 +37,6 @@ $run.ExitCode
 
 地图路径检查针对`pad+(2,2)`实际释放点。UFO的pad是锚点，固定路径地图可能把锚点放在阻挡草地上，例如AshMountain；因此不能把锚点本身必须能走作为原游戏规则。固定路径、大小地图均包含于116逐项记录。
 
-保存恢复检查比较完整`saveState()` JSON，包括随机引擎、UFO、敌人、塔、投射物及可选animation/trail扩展；自然局恢复后推进40tick，导弹夹具先实际移动/采样再保存，并推进20tick验证继续一致。缺少或损坏trail字段保留核心状态及战斗RNG；旧纯占位扩展不凭空生成尸体，坏视觉扩展降级而保留有效核心。短暂渲染effect不属于原session合同。测试使用指定输出目录的`coverage-profile`，不会触及真实LocalAppData。
+保存恢复检查比较完整`saveState()` JSON，包括随机引擎、UFO、敌人、塔、投射物及可选animation/trail/appearance扩展；自然局恢复后推进40tick，导弹夹具先实际移动/采样再保存，并推进20tick验证继续一致。缺少或损坏trail字段保留核心状态及战斗RNG；旧纯占位扩展不凭空生成尸体，坏视觉扩展降级而保留有效核心。塔appearance扩展保留升级旧模型与起点；其兼容恢复不等于所有升级路径视觉均已验收。短暂渲染Effect/Beam及realtime时钟不属于session合同。测试使用指定输出目录的`coverage-profile`，不会触及真实LocalAppData。
 
-此验证证明已覆盖的本机实现规则可运行，不证明所有116关都能自然获胜，也不构成Android真机动态等价验证。资源存在与原解锁状态的区别见[MODES.md](MODES.md)。
+此验证证明已覆盖的本机实现规则可运行，不证明所有116关都能自然获胜，也不构成Android动态等价验证。未经修改的原ARM菜单/PlainPlane/10金币塔/首波已有运行证据，见[ANDROID_REFERENCE.md](ANDROID_REFERENCE.md)，但原作全效果与玩法等价尚未完成。资源存在与原解锁状态的区别见[MODES.md](MODES.md)。

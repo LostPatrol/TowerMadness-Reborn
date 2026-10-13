@@ -55,6 +55,9 @@ Vec3 trackingDirection(Vec3 previous, Vec3 desired, float traveled) {
 /** Resolve the original fixed or target-dependent tower elevation in radians. */
 float Game::towerElevation(const Tower& tower) const {
     const auto& type = technology.at("towers").at(tower.type);
+    const std::string kind = technology.at("weapons").at(type.at("weapon").get<std::string>()).at("type").get<std::string>();
+    // These native aim callbacks are no-ops; their initialized elevation stays zero.
+    if (kind == "lightning" || kind == "boost" || kind == "mine" || kind == "bait") return 0;
     float elevation = type.value("elevation", 0.0f) * DegreesToRadians;
     if (!type.contains("elevation")) {
         const auto enemy = std::find_if(enemies.begin(), enemies.end(), [&](const Enemy& value) {
@@ -175,7 +178,7 @@ void Game::updateProjectiles() {
                 const float trailWidth = nuclear ? 5 : ballistic ? 2.5f : 3;
                 Effect trail{projectile.position,trailWidth,timeMs + TrailVisualMs,"trail",timeMs,projectile.source.type};
                 trail.end = projectile.trailSample;
-                effects.push_back(std::move(trail));
+                addEffect(std::move(trail));
                 projectile.trailSample = projectile.position;
                 projectile.trailThreshold = progress + (ballistic && !nuclear ? 0.1f : 0.2f);
             }
@@ -210,9 +213,9 @@ void Game::updateProjectiles() {
                     0.25f * (visualRandom(seed + 2) - 0.5f),0.25f * (visualRandom(seed + 3) - 0.5f)};
                 lifetime = static_cast<int>(1500 + 3000 * visualRandom(visualSeed(timeMs,visualPosition)));
             }
-            effects.push_back({visualPosition,projectile.splash,timeMs + lifetime,
+            addEffect({visualPosition,projectile.splash,timeMs + lifetime,
                 nuclear ? "nuke" : projectile.kind,timeMs,projectile.source.type});
-            if (projectile.kind == "mortar") effects.push_back({projectile.position,projectile.splash * (nuclear ? 0.5f : 0.75f),
+            if (projectile.kind == "mortar") addEffect({projectile.position,projectile.splash * (nuclear ? 0.5f : 0.75f),
                 timeMs + (nuclear ? NukeCraterVisualMs : CraterVisualMs),"groundDamage",timeMs,projectile.source.type});
         }
         releaseChildren();

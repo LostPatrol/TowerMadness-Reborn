@@ -233,6 +233,7 @@ bool Game::build(int x, int y, const std::string& type) {
     updateDistances();
     Tower tower; tower.id = nextId_++; tower.x = x; tower.y = y; tower.type = type; tower.refund = cost;
     tower.readyAt = timeMs + (wavesSent == 0 ? 500 : definition.value("buildtime",0));
+    tower.appearanceStartedAt = timeMs;
     tower.nextShotAt = tower.readyAt;
     towers.push_back(tower); money -= cost; message = "Building " + type + ".";
     if (!fixedPath && definition.value("isbait",0)) {
@@ -274,6 +275,7 @@ bool Game::upgrade(int id, const std::string& nextType) {
     const std::string next = nextType.empty() ? upgrades[0].get<std::string>() : nextType;
     const auto& definition = technology.at("towers").at(next);
     const int cost = definition.at("cost").get<int>();
+    tower->previousType = tower->type; tower->appearanceStartedAt = timeMs;
     money -= cost; tower->refund += cost; tower->type = next; tower->target = -1;
     tower->readyAt = timeMs + (wavesSent == 0 ? 500 : definition.value("buildtime",0));
     tower->nextShotAt = tower->readyAt; message = "Upgrading to " + next + ".";
@@ -303,6 +305,7 @@ bool Game::sell(int id) {
     if (!reason.empty()) { message = reason; return false; }
     auto tower = std::find_if(towers.begin(),towers.end(),[id](const Tower& value) { return value.id == id; });
     tower->refund = sellRefund(id);
+    tower->appearanceStartedAt = timeMs;
     tower->selling = true; tower->target = -1; tower->readyAt = timeMs + (wavesSent == 0 ? 500 : 3000);
     score -= std::min(score,10);
     message = "Selling tower; refund when dismantling finishes."; return true;
@@ -496,7 +499,7 @@ void Game::moveEnemies() {
             completeWaveEnemy(enemy.wave,false);
             enemy.alive = false; ++leaked; --lives;
             releaseEnemySlot(enemy.nativeSlot);
-            effects.push_back({{enemy.x,enemy.y,wave.value("height",0.0f) + wave.value("offset",0.0f) + EnemyVisualGroundOffset},
+            addEffect({{enemy.x,enemy.y,wave.value("height",0.0f) + wave.value("offset",0.0f) + EnemyVisualGroundOffset},
                 SheepLeakVisualRadius,timeMs + SheepLeakVisualMs,"sheepLeak",timeMs});
             if (lives <= 0) { lives = 0; outcome = Outcome::Lost; message = "The sheep are gone. Restart to try a new defense."; }
             continue;
@@ -540,13 +543,55 @@ void Game::moveEnemies() {
 }
 
 
+// Read only the presentation clock; it never contributes to simulation state.
+double Game::effectClockSeconds() const {
+    return effectClock_ >= 0 ? effectClock_ : timeMs * 0.001;
+}
+
+// Stamp a visual event using the original realtime lifetime, retaining game metadata.
+void Game::addEffect(Effect effect) {
+    effect.timing.bornSeconds = effectClockSeconds();
+    effect.timing.expiresSeconds = effect.timing.bornSeconds + (effect.expiresAt - effect.bornAt) * 0.001;
+    effects.push_back(std::move(effect));
+}
+
+// Beam lifetimes share the same cosmetic clock as other native effect callbacks.
+void Game::addBeam(Beam beam) {
+    beam.timing.bornSeconds = effectClockSeconds();
+    beam.timing.expiresSeconds = beam.timing.bornSeconds + (beam.expiresAt - beam.bornAt) * 0.001;
+    beams.push_back(std::move(beam));
+}
+
+// Expire native visual records independently of simulation pause and playback speed.
+void Game::pruneEffects() {
+    const double now = effectClockSeconds();
+    std::erase_if(beams,[&](const Beam& beam) {
+        return effectClock_ >= 0 && beam.timing.expiresSeconds >= 0 ? now >= beam.timing.expiresSeconds : timeMs >= beam.expiresAt;
+    });
+    std::erase_if(effects,[&](const Effect& effect) {
+        return effectClock_ >= 0 && effect.timing.expiresSeconds >= 0 ? now >= effect.timing.expiresSeconds : timeMs >= effect.expiresAt;
+    });
+}
+
+// The desktop supplies monotonic real seconds before simulation and while paused.
+void Game::advanceEffects(double realtimeSeconds) {
+    if (!std::isfinite(realtimeSeconds) || realtimeSeconds < 0) return;
+    // Attaching a real clock preserves any already-created offline event's current age.
+    if (effectClock_ < 0) {
+        const double shift = realtimeSeconds - effectClockSeconds();
+        for (auto& beam : beams) { beam.timing.bornSeconds += shift; beam.timing.expiresSeconds += shift; }
+        for (auto& effect : effects) { effect.timing.bornSeconds += shift; effect.timing.expiresSeconds += shift; }
+    }
+    effectClock_ = realtimeSeconds;
+    pruneEffects();
+}
+
 // Apply fixed-step updates independently from drawing frequency or wall-clock speed.
 void Game::tick() {
     soundEvents.clear();
     if (paused || outcome == Outcome::Won || outcome == Outcome::Lost) return;
     timeMs += SimulationStepMs;
-    std::erase_if(beams,[this](const Beam& beam) { return timeMs >= beam.expiresAt; });
-    std::erase_if(effects,[this](const Effect& effect) { return timeMs >= effect.expiresAt; });
+    pruneEffects();
     for (const auto& tower : towers) if (tower.selling && timeMs > tower.readyAt) {
         money += tower.refund;
         if (!map.value("fixedpath",0)) for (int dy = 0; dy < 2; ++dy) for (int dx = 0; dx < 2; ++dx) grid_[tower.x + dx + (tower.y + dy) * width] &= ~9;

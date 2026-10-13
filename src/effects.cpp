@@ -14,6 +14,8 @@ void Game::updateBoosts() {
         if (weapon.at("type") != "boost") continue;
         const float range = definition.at("range").get<float>();
         const float contribution = weapon.at("boost").get<float>();
+        // Original support recomputation emits a short realtime rangecircle pulse.
+        addEffect({{source.x + 1.0f,source.y + 1.0f,0.2f},range,timeMs + 875,"boost",timeMs,source.type});
         // The original scan deliberately includes towers under construction or being sold.
         for (auto& target : towers) {
             const auto& targetDefinition = technology.at("towers").at(target.type);

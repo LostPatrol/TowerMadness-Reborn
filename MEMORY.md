@@ -35,15 +35,15 @@ PlainPlane地形11×16、导航22×32，每tile2单位。terrain0可走不可建
 
 Game::buildBlockReason/upgradeBlockReason/sellBlockReason与命令共用，试放只复制导航格并调用原距离场，不修改message/资金/占位/RNG；sellRefund保留原全额/75%截断与已排期金额。计时HUD使用nextWaveDelayMs/earlyWaveBonus，不另算规则。
 
-Beam携带原炮口/链击XYZ、攻击kind、塔类型、出生时间及发射时heading/elevation/length/radius；Effect携带bornAt/塔类型/炮口姿态，并有death/split/sheepLeak纯表现事件。原beam2/railspiral/2plane、等级色、双层闪电atlas、plasma四帧/炮口火光、火焰、弹坑、普通爆炸和四层核爆已按静态公式接入；地雷III核爆保留地雷弹坑参数，plasma命中无通用爆炸，flak高度复用原已消费第三个战斗RNG样本。规格及适配差异见docs/COMBAT_VISUALS.md。塔炮口模型朝本地-Y，绘制yaw=heading+90°、pitch=-elevation，body离地0.25，炮座仍在0；turret绕原rotationoffset俯仰。Game::towerElevation与muzzle共用原目标/固定角。首关真实激光mesh-tip与攻击起点检查差距0。炮塔朝向平滑和特殊塔动画仍待恢复。
+Beam携带原炮口/链击XYZ、kind、塔类型、仿真出生元数据及发射时姿态；Effect/Beam另有独立realtime寿命。原beam2/railspiral/2plane、双层闪电atlas、plasma帧/炮口火光、火焰、弹坑、爆炸/核爆已按静态公式接入；地雷III保留地雷弹坑，plasma命中无通用爆炸，flak复用原第三个RNG样本。塔炮口本地-Y、当前heading绘制+90°、pitch=-elevation，body离地.25，turret绕原rotationoffset。lightning/boost/mine/bait原Aim为no-op，当前固定零仰角，lightning起点恢复原挂点；首关Laser mesh-tip与攻击起点差距0。完整原visual/target双角度、随机初始yaw/idle、native角差gate和调用顺序仍未恢复。见docs/COMBAT_VISUALS.md、TOWER_VISUALS.md。
 
 Enemy::visualHeadingDegrees直接绘制，不另加90°；行走帧为timeMs/(nativeSlot+trunc(walkanimfactor*trunc(150/speed)))，仅generation==1选subwalk。独立1024循环slot、stun刷新冻结时间、尸体float32三秒倒计时及完整冻结姿态存入可选session.animation扩展，旧/坏视觉扩展降级而保留有效核心。原死亡分段翻转/下沉/缩放及RGB变暗、非飞行directionalshadow模型和护甲aura已按静态证据接入；修改入口docs/ANIMATION.md。尸体仅供绘制和slot占位，不参与战斗/胜负。分裂初始yaw和死亡随机角使用近似，尚未插入原combat RNG消费序列。
 
-Renderer新增非均匀scale、UVscale/offset及point-size billboard换算；视觉hash与战斗RNG分离，闪电每实际呈现一帧换两个不同atlas行。mapPreview使用同一场景路径离屏512×288，恢复活跃地图/相机/GL状态，最多缓存16张。火焰fireball采用additive，状态环用线而不把环VBO纹理直接当quad。
+Renderer保留非均匀scale、UVscale/offset和point billboard；原point RGBA按byte截断。视觉hash不消耗战斗RNG，闪电每呈现帧换不同atlas行。原PGL未初始化固定光照，模型缺省texture×RGBA unlit，移除额外方向光。Gameplay相机从正Y看导航格整数中心，eye=(centerX,centerY+5,Z)，原Z50/FOV45，低Z增加FOV，screen-right=-worldX；project/pick/pan/billboard共用基准。resetCamera(false)保留原Z50；默认桌面战场fit与放宽最大Z为适配。mapPreview离屏512×288、恢复活跃地图/相机/GL状态、缓存16张。见docs/CAMERA.md、RENDERING.md。
 
 导弹五层命中按固定1.5s绘制分母接入，随机expiry1.5..4.5s不拉长动画；保留impactXYZ并使用独立视觉抖动，白/蓝flash三材料。Flak早期blast为真正点精灵，与主burst共用到原origin的相机距离。Flak/导弹固定像素大小没有plasma/flame的屏幕倍率。原trail为无纹理additive四边形，按原距离/弹道秒阈值在非命中更新采样；Energy等武器前缀禁用。播放速度倒数仅影响trail alpha，正常图形模式0启用trail。可选projectile.trail存采样点/阈值，旧/坏视觉字段保留有效核心继续。规格/证据/入口见docs/PROJECTILE_VISUALS.md。
 
-所有表现仍用仿真时钟而非原realtime；视觉hash不等于lrand48/drand48，plasma/flame point-size以桌面战场宽度换算、原屏幕字段未标定。Point RGBA未恢复原byte量化，trail继承深度状态/透明排序、条件式核爆2D闪光、特殊塔动画、塔接地shadowblob及血条/状态辅助仍未完成或近似。短暂effect不保存，冻结尸体及动画状态保存。
+交互短暂Effect/Beam由SDL单调realtime老化，暂停/菜单/失焦继续消退，倍速仅改变仿真及trail alpha；首次接入保留已有事件年龄。离线Game使用确定性仿真秒。短暂事件与realtime不保存；尸体、塔appearance、动画和trail采样保存。塔build/sell按原scale/Z升降、upgrade先旧模型缩回再新模型升起，独立底座、directionalshadow、Tesla双ring及boost rangecircle已接入。出售刚升级的塔使用当前模型，Tesla售塔首半段仍绘制。选中使用原selection rect/Z.1/XY2及rangecircle/Z.15/range/颜色；非法500ms淡出、升级橙色范围淡出及建造范围预览仍未完整恢复。视觉hash不等于lrand48/drand48，原plasma/flame屏幕倍率未标定，trail透明排序、bait屏幕aura、条件核爆2D闪光与完整羊动作未闭合。
 
 ## 工具与验证条件
 
@@ -57,12 +57,12 @@ GUI验收注意：Profile::userDirectory使用SHGetKnownFolderPath，覆盖LOCAL
 
 ## 验收范围与未解决风险
 
-本机RX9070XT已通过22项规则/保存检查、116模式原资金自然开局、116地图实际GL绘制、420PNG/321模型完整加载、36Ogg离线解码。PlainPlane普通50金币操作自然26波保住10羊，鼠标键盘重放胜利/重开/自然失败，15/144FPS调度一致。1280×900和1000×700拾取通过。发布ZIP解压到中文含空格目录、从C:/Windows/Temp及仅Windows PATH启动，菜单和保存继续通过。仍只测试一台Windows，非真正干净OS。
+本机RX9070XT通过24项规则/保存、116模式原资金自然开局、116地图实际GL绘制、420PNG/321模型完整加载、36Ogg离线解码。1280×900和1000×700拾取通过；--smoke-test实际480×800原相机四角与独立静态投影最大差.006逻辑像素，并覆盖合法50金币建/升/售模型阶段、appearance保存/旧坏字段降级及真实wall-clock暂停Rail两秒到期、核心/RNG冻结。当前20261013-084619原生ZIP已在中文含空格目录解压、C:/Windows/Temp及仅Windows PATH实际启动，self/smoke/desktop/input/resource均退出0。仅一台Windows，非真正干净OS；GL/投影检查不等于原作逐像素动态等价。
 
-P8首轮原资金50金币、生产SDL输入重放自然26波保住10羊（523200ms、235击杀、最终1422分）及自然失败成立；23项规则/保存检查、三窗口布局和116地图绘制通过。生产菜单/预览不弃局或改相机、胜利解锁/下一战役/重复胜利及真实保存失败保留当前局通过。--visual-test在原10000金币沙盒合法API建塔/发波覆盖12基础类别及6高级形态的18个真实事件和GL截图，导弹/炮弹等待真正命中并检查trail存在/禁用，不改资金/HP/波/RNG；高级塔直建不等于UI升级路径。测试和截图只证明本机当前实现，不构成原作等价或人类可用性最终验收。
+P8首轮原资金50金币、生产SDL输入自然26波10羊（523200ms、235击杀、1422分）与自然失败成立。三窗口布局、菜单/预览不弃局/改相机、胜利解锁/下一战役/重复胜利、退出保存失败保留当前局通过。--visual-test原10000金币沙盒合法API建塔/发波覆盖12基础类别及6高级形态，导弹/炮弹检查真实命中及trail，不改资金/HP/波/RNG；高级直建不等于UI升级路径。只证明本机当前实现可运行，不构成原作等价或人类可用性最终验收。
 
-没有真机；项目内Android对照环境与版本路线见docs/ANDROID_REFERENCE.md。旧QEMU2+API24 Play x86仍未认证；新增未经修改的官方API24 Google APIs x86开发镜像正常adb29=device，已实际安装并启动原x86 APK，但libcxx.so/系统linker的unwind链SIGSEGV，尚无原菜单或PlainPlane动态证据。没有启用WHPX、改Windows系统功能或重启Windows。行走/死亡/敌人投影有静态实现，动态保真未验；精确炮塔平滑、天空镜头/粒子、羊被抓完整收尾和原手机UI未恢复。原GAME_togglePlaySpeed已证实具有1/2/4倍速，普通UI入口尚未追踪，不能再一概称桌面持续倍速与原作不同；对手临时2倍20秒是另一机制。完整活动链/多诱饵堵路及同刻排序仍有差异。116关并未全部自然通关；长时高压无限局、跨机器、高DPI跨显示器和实际声音播放未验。购买验证与广告仍排除。
+没有手机；API17 default ARM＋SDK25.2.5 classic＋原Google签名完整Phonesky4.3.11已真实运行未改ARM APK，菜单、PlainPlane、50金币10羊、10金币迫击炮建造/选中及首波有PNG。原UI显示V1.21、manifest1.22，摘要不变；单迫击炮参考局第4波丢完10羊，未原作通关。新x86 APK在官方API24 Google APIs仍libcxx.so/系统linker unwind SIGSEGV，旧Play5586仍unauthorized；不改WHPX/系统功能或重启Windows。原ARM动态证据支持镜头/场景方向，完整动态等价未验。GAME_togglePlaySpeed静态1/2/4已知，原UI仅白→绿观察未测倍率。完整活动链/多诱饵堵路/同刻排序、完整羊群/抓羊与Menu world仍未恢复；116关未全部自然通关，密集长时无限、跨机器、高DPI跨显示器、实际声音播放未验。购买验证/广告排除。
 
 性能检查为完整自然局及其轻负载峰值场景的12000帧、关闭VSync且glFinish同步；不能据此保证所有大地图/多小时局的60FPS。无限已发波历史仍保留在状态数组，超长局内存覆盖不足。旧Android存档兼容、联网/排行/多人不在本次交付范围。
 
-原作下一条可继续的对照路线为默认API17 ARM设备5580：已正常启动、原ARM游戏已安装，没有vending stub。官方Play镜像提取Phonesky是没有classes.dex的预优化系统组件，不能普通安装；不能再次只凭minSdk判断它可用。需要合法取得原Google签名、含完整dex的兼容分发APK并验证JAR签名/摘要，然后正常安装启动依赖。既有分发源受403/429/TLS失败，尚未取得完整包；不拼接ODEX、不改签名、不注入安全密钥或模拟服务响应。设备进程须重新核验，不能以历史PID作为存活证据。
+当前可用参考AVD TM_Original_API17_ARM_clean/5592，旧ARM5580已正常停止并保留数据，旧Play5586保留。Phonesky4.3.11普通安装依赖SHA256 04897ec9492ab119c137b18a021ec931f547c91faeb1d73d4a36b78592e2f03a，含dex、1089 payload签名摘要及Google证书已验证，来源/复现见docs/ANDROID_REFERENCE.md。勿再普通安装无dex的预优化Phonesky、拼接ODEX/改签名/模拟响应/注入guest keys。续接须核验实际进程/adb，历史PID不是存活证据。原羊初始化/100ms帧/吃草移动/追羊/抓羊完整静态规格见docs/SHEEP_VISUALS.md，尚未接入；其RNG消费影响战斗，不能用独立视觉随机冒充原会话。原作旧截图的25升级来自被误标的迫击炮，不作为激光依据；原价Laser10→20、Mortar10→25静态链见docs/UPGRADE_PRICE.md；普通UI另实测Mortar50→40→15、混合塔局Laser40→30→10，身份依据见ORIGINAL_TOWER_IDENTITY。资源价格不改。

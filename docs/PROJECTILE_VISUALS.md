@@ -1,7 +1,7 @@
 <!-- Static ARM projectile visual formulas and evidence for native rendering. -->
 # Projectile visuals
 
-This closes the missile, flak and trail formulas left open in [COMBAT_VISUALS.md](COMBAT_VISUALS.md). Evidence is the original ARM `libverde.so`; addresses below are Ghidra addresses (ELF virtual address + `0x10000`). This is static recovery, not observation of the original game running. Use the original meshes, materials and textures.
+This closes the missile, flak and trail formulas left open in [COMBAT_VISUALS.md](COMBAT_VISUALS.md). Evidence is the original ARM `libverde.so`; addresses below are Ghidra addresses (ELF virtual address + `0x10000`). These formulas are static recovery. Unmodified ARM gameplay is now available through [ANDROID_REFERENCE.md](ANDROID_REFERENCE.md), but these projectile effects have not completed dynamic equivalence checks. Use the original meshes, materials and textures.
 
 Primary exports: `agent/codex/p8-native-effects/{effects,support,impact-params}/{instructions.tsv,pseudocode.c,strings.tsv}` and `literals.tsv`. Projectile sampling evidence: `agent/codex/p5-evidence/{instructions.tsv,pseudocode.c,strings.tsv,projectile-literals.json}`; creation defaults: `agent/codex/projectile-evidence`. ARM register arguments and ELF literals were checked where soft-float pseudocode omits arguments. Supplemental checked bytes are retained in `agent/codex/p8-projectile-visuals/checked-literals.json`.
 
@@ -123,4 +123,6 @@ Focused read-only exports are in `agent/codex/p8-projectile-visuals/game-flags`.
 
 ## Remaining limits
 
-Exact original appearance still needs dynamic comparison: camera/pixel calibration, material sorting, inherited trail depth state, original external random seed and consumption sequence, and realtime behavior through pause/speed changes. This specification does not claim these are verified. Native use of simulation time, an independent visual hash, or float sprite RGBA instead of the original byte quantization should remain documented as adaptations. No combat rules need to change to implement these formulas.
+Interactive Effect/Beam lifetimes now use independent monotonic realtime; offline checks default to deterministic game seconds. Projectile movement and trail sampling retain game time, while emitted trail records age in realtime. Point-sprite colors now use unsigned-byte truncation before billboard rendering. The original positive-Y camera basis and unlit material default are implemented; desktop fitting and screen-relative size remain adaptations.
+
+Exact appearance still needs dynamic comparison: pixel calibration, material sorting, inherited trail depth state, original external random seed and consumption sequence, and pause/speed behavior. The independent visual hash does not reproduce the original cosmetic sequence. This specification does not claim dynamic equivalence. No combat rules need to change to implement these formulas.

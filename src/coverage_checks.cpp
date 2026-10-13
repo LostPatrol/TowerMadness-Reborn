@@ -561,6 +561,23 @@ int runCoverageChecks(const std::filesystem::path& assets, const std::filesystem
         try { restored.restoreState(broken); } catch (const std::exception&) { refused = true; }
         require(refused && restored.saveState() == intact,"Invalid restore corrupted the current session.");
     });
+    runCase(report,"realtimeEffectsPreserveCombat",[&] {
+        Game ordinary(assets); require(ordinary.build(7,10) && ordinary.sendWave(),"Effect clock defense setup failed.");
+        Game accelerated = ordinary; accelerated.advanceEffects(100);
+        // Four-times game progression must not accelerate original effect lifetimes or change RNG.
+        for (int tick = 1; tick <= 1200; ++tick) {
+            ordinary.tick(); accelerated.advanceEffects(100 + tick * SimulationStepMs / 4000.0); accelerated.tick();
+        }
+        require(ordinary.saveState() == accelerated.saveState(),"Cosmetic realtime changed complete gameplay or combat RNG state.");
+        auto rail = fixture(assets,"Railgun I"); target(rail); singleShot(rail);
+        require(!rail.beams.empty(),"Real rail shot produced no lifetime record.");
+        rail.advanceEffects(200); rail.paused = true;
+        const auto frozen = rail.saveState();
+        rail.advanceEffects(201);
+        require(!rail.beams.empty() && rail.saveState() == frozen,"Paused realtime changed gameplay or expired a two-second beam early.");
+        rail.advanceEffects(202.01);
+        require(rail.beams.empty() && rail.saveState() == frozen,"Paused visual beam did not expire independently of fixed game time.");
+    });
     report["weaponFamiliesChecked"] = {"beam","plasma","railgun","homing","mortar","flak","flamethrower","lightning","mine","slow","boost","bait"};
     const auto path = output / "coverage-checks.json";
     std::ofstream stream(path); stream << report.dump(2); stream.close();
