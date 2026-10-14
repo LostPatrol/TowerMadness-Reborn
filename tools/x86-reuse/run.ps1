@@ -27,7 +27,7 @@ $stderr = Join-Path $runDirectory "$Mode-$timestamp-stderr.log"
 if (!(Test-Path -LiteralPath $executable)) { throw 'Run tools/x86-reuse/prepare.ps1 and build.ps1 first.' }
 if ($Mode -eq 'play') {
     Write-Output 'Original PlainPlane: click the field and original pie menu to build; Space sends a wave; the bottom-left original Menu hot zone toggles a host pause; close the window to exit.'
-    Write-Output 'This silent prototype still has no original main-menu object and no progress save. Its portrait window is fixed at 480x800.'
+    Write-Output 'This direct-play mode uses the host pause and does not persist progress. Use -Mode menu for the original menu. The silent portrait window is fixed at 480x800.'
 }
 if ($Mode -eq 'menu') {
     Write-Output 'Original MENU object: real main menu / level select / in-game pause. Escape returns from a running game or level select. Close the window to exit.'
@@ -35,8 +35,8 @@ if ($Mode -eq 'menu') {
 # Only the expressly interactive modes open a visible Windows window.
 $style = if ($Mode -eq 'play' -or $Mode -eq 'menu') { 'Normal' } else { 'Hidden' }
 # campaign is a bounded GUI acceptance run, not a map selection: it maps to the host's
-# existing menuauto:campaign operation, whose fixed 120s duration and hidden window are
-# host-owned. Every other mode keeps the historical mode:map operation.
+# existing bounded menuauto:campaign operation; duration and hidden rendering are host-owned.
+# Every other mode keeps the historical mode:map operation.
 $operation = if ($Mode -eq 'campaign') { 'menuauto:campaign' } elseif ([string]::IsNullOrWhiteSpace($Map)) { $Mode } else { $Mode + ':' + $Map }
 $arguments = @(('"' + $package + '"'), $operation, ('"' + $log + '"'))
 $process = Start-Process -FilePath $executable -ArgumentList $arguments -WindowStyle $style -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru

@@ -3,7 +3,7 @@
 
 本实验直接在 Windows x86 进程中执行 Zero 1.22 APK 的原 `libverde.so` 及包内依赖。它保留原 JSON-C、资源解析、地图、科技、波次、游戏对象、战斗、动画、PGL 绘制和选塔逻辑，不链接当前 C++ `Game` 或 `Renderer`。现有 `release/TowerMadness.exe` 及存档保持原基线。
 
-已经在本机完成原 PlainPlane 绘制、Windows 鼠标进入原轮盘并建塔、原外层按钮发波，以及真实击杀/奖励/得分。尚不代表完整游戏移植或全量保真验收。
+已经在本机走通原主菜单、选关、教程、鼠标轮盘建塔、发波战斗、失败结算、本地成绩读回和原 PLAY AGAIN 重试；另有含塔活动波存档恢复证据。尚不代表完整游戏移植或全量保真验收。
 
 ## 结构
 
@@ -36,6 +36,8 @@ Windows 替换的边界为 C 运行库、同步与单线程 GS 存储、文件�
 
 已构建后也可双击 `tools/x86-reuse/play.cmd`。直接进入 PlainPlane；鼠标点击战场/原轮盘建塔，右下原按钮或空格发波，右上原按钮切换速度，关闭窗口退出。固定 480×800、静音、不保存进度。直达关卡模式下的 MENU 按钮仍为 `HOST_PAUSE`（见下）。
 
+原菜单入口使用 `run.ps1 -Mode menu`；该模式持续运行至关闭窗口，Escape返回原菜单。F5/F9为宿主保存/恢复适配，反复换局与对象回收尚待验收。原OBS字节和平台数据写入独立运行包的`data`，开发运行写入输出目录对应的`state`，不会读取旧重建的profile。`-Mode campaign`是隐藏窗口、有界的菜单至终局测试，脚本会请求原API建塔/升级，不能当作纯鼠标通关证据。
+
 `-Map` 选择 `<assets>/<Map>.gamemode`，宿主把它交给原 `GAMEMODE_load`；`-OutputDirectory` 决定日志、trace、result 与 PNG 的根目录，每次运行再建独立时间戳子目录，不覆盖既有证据。
 
 运行模式 `scene` 绘制开局，`input` 用 Windows 鼠标消息操作原轮盘、点原发波按钮并点原倍速热区，`combat` 经原命令建立两座激光塔并发波。新增：`upgrade` 用原 `GAME_buildTower → TOWERS_getIdForCell → GAME_upgradeTower → GAME_sellTower`；`flood` 周期调用原 `GAME_sendNextWave` 直到原 `GAME_hasEnded`；`autoplay` 另用原 `GAME_togglePlaySpeed` 切 4 倍速并发波到底；`levels` 只枚举包内 `*.gamemode`。所有场景每帧查询原 `GAME_hasEnded/GAME_isWon/GAME_getFinalScore/GAME_getFinalLifes`，只有原函数真的报告结束才写终局结果。
@@ -43,8 +45,7 @@ Windows 替换的边界为 C 运行库、同步与单线程 GS 存储、文件�
 原菜单模式：`menu`（可见窗口、真实鼠标、Esc 返回）与 `menuauto`（有界，候选点扫描并截图）。
 宿主调用原 `MENU_alloc → MENU_setResolution → MENU_show → MENU_changePage(mainMenuPage)`，随后完全按原外层逻辑运行
 `MENU_update/MENU_render` 或 `GAME_update/GAME_render`，终局走 `GAME_hasEnded → GAME_silence → MENU_endGame`；
-菜单显示期间不装宿主 stub，不手搓替代界面。平台 selector 仅做明确列举的替换（`sharedApplication`/`setIdleTimerDisabled:`/
-`unlockedFullVersion→1`/`current`/URL/分数/字符串等），dummy 接收者上的未知 selector 记录并返回 0，其余未知仍终止。
+菜单显示期间不装MENU stub，不手搓替代界面。字符串、容器、日期、账户和UIKit消息由明确的平台适配提供，原GAME/MENU/SCORES机器码不变；这不是完整Foundation运行库复用。未知消息和实际调用的未知导入记录并终止。购买验证、广告和联网排名不属于本次范围。
 
 ## 修改入口
 
@@ -65,9 +66,10 @@ Windows 替换的边界为 C 运行库、同步与单线程 GS 存储、文件�
   `upgrade` 金钱 50→40→20→50；`flood`/`autoplay`/`input` 均自然结束。命令与判据见 `execution-requests-stage2.md`。
 - 原菜单驱动执行原 `MENU_alloc/init/show/render/update/handleTouch*` 与 `MENUWORLD_*`，导出证据在 `agent/dsh/menu-evidence`。
   驱动已构建，原主菜单标题/按钮、选关和战役页可见；原NEW GAME→CAMPAIGN→PlainPlane TAP TO START已创建真实GAME。
-  `MENU_setResolution` 接收float逻辑画布尺寸；错误传整数会使UI投影塌缩。局内稳定HUD/战斗、暂停冻结、原保存和胜利链仍待验。
+  `MENU_setResolution` 接收float逻辑画布尺寸；错误传整数会使UI投影塌缩。原教程、建塔扣款、发波、暂停冻结、有塔活动波恢复及失败结算已有实测；自然胜利和解锁链仍待验。
 - 当前 GS 和锁适配针对单线程，Bionic 全线程/TLS/stdio ABI及其他导入尚未完整支持。
-- 关卡选择、设置和原外围生命周期未移植。默认语言返回原文本；音频按用户要求禁用，不能声称音频保真。
+- 原菜单选关已接入，设置/Guide、重开和完整外围生命周期仍需交互验收。默认语言返回原文本；音频按用户要求禁用，不能声称音频保真。
+- 成绩容器已能跨进程读取并再次保存。原SCORES的load/save使用不同日期纪元，实际selector已核对；宿主保持NSDate语义，原日期漂移仍作为已知问题保留，不代表成绩时间正确。
 - HUD字体/屏幕密度、透明状态及驱动/宿主数学库舍入仍需原作对照；不保证逐像素或跨ABI逐位一致。只验证一台Windows机器。
 - 原加载器报告未找到 `robosteal_walk0..19.model`，已保留诊断；其原资源回退与对应敌人尚未验。
 
