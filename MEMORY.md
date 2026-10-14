@@ -59,13 +59,15 @@ REA6.4.0、Ghidra12.1.4、jadx-headless-mcp0.7.1、JADX1.5.6位于agent/codex/to
 
 代理通常127.0.0.1:7897；Windows curl TLS失败可用D:/Git/mingw64/bin/curl.exe。不使用gh，不关闭本机其他服务，尤其MC服务器。任务指令由用户提供；新报告位于agent/report，TODO未经允许不改。
 
-02-x86由本机dsh承担主要研究实现与验收；ChatGPT预算有限，DSH额度充足，不能为省调用降质量。工作区agent/dsh不进Git。原shell沙盒Win32 5不通过修ACL解决；固定project_native提供build/run/只读ghidra/status/snapshot。Web的standard preset也必须通过bridge/restricted-web.patch.yml禁用嵌套pwsh，仅保留workspace-write且拒绝权限升级，避免模型再次停在ACL审批。未修改系统ACL或用户其他服务。
+02-x86由本机dsh承担主要研究实现与验收；ChatGPT预算有限，不降低需求或验证质量。当前DSH已实际返回HTTP402 QUOTA/Insufficient Balance，主会话不运行、目标activation=disarmed；按任务文件余额不足及时终止的要求停止开发，完整移植未完成。不要自动重试、切换付费提供商或改由GPT继续开发；额度恢复并获用户续接后再开始。工作区agent/dsh不进Git，停止现场保存在recovery-20261015-061738（manifest有哈希；WIP未提升）。原shell沙盒Win32 5不通过修ACL解决；固定project_native提供build/run/只读ghidra/status/snapshot。Web的standard preset也必须通过bridge/restricted-web.patch.yml禁用嵌套pwsh，仅保留workspace-write且拒绝权限升级，避免再次停在ACL审批。未修改系统ACL或用户其他服务。
 
 主session-e2ef9fe5-098b-452f-a3a2-f9764733371d与goal-aadc801a-9b70-41f9-9621-86e9d3d47260由独立常驻loopback web持续执行完整目标。控制入口agent/dsh/bridge/persistent/dsh-session.ps1；动态PID/端口看state.json并实际核验，不按历史PID停服务，不同时headless打开同session。Cookie/stdout含本机鉴权信息不得输出。RPC使用payload.args与原cwd反斜杠拼写。status已包含live running、pendingApproval和recentEvents，不能只凭goal active/armed判断工作在推进。stop尚不核验PID复用且只停父cmd，清理时必须定向核验本任务进程树，不能影响其他服务。
 
 开发build固定编译changes/tools/x86-reuse/host.cpp，产品build默认产品源码。产品host已提升冻结snap-mv8nfgra-29db8390，源码SHA256为61ad5b431bbd8a832664ea62f78aa9cd0fcb403e3d7238ff88429c8189caac2c；后续WIP仍由DSH推进，不盲目同步。该候选build80/run81-055546原成绩恢复/失败结算/PLAY AGAIN通过，目视34分排名3。snapshot必须在成功build后、任何后续edit前生成，再与run关联；verified=false本身不是验收。早期snap-mv8m3g7c-84cd0a34同exe/同存档两次恢复通过只证明该输入可重复，不涵盖当前候选、新存档或F5/F9反复换局/对象回收。
 
 终局关键合同：objc_msgSend_fpret同其他汇编dispatcher需豁免STT_NOTYPE/零size hook过滤；缺失该hook曾导致调用原运行库崩溃。installHook修改export入口，originalNSString经已hook入口返回宿主对象，不是真Foundation分配；宿主不执行全部库构造函数，直接objc_getClass/sel_registerName实测会崩，不能当通用查询。Ghidra=ELF VA+0x10000，NSString/alloc/init槽为libverde+0x3DD690/0x3DC124/0x3DC128，旧0x2E开头常量错误。成绩枚举需真实NSFastEnumerationState的itemsPtr/mutationsPtr；当前已读回再保存，但原SCORES混用1970读取与2001日期构造，忠实NSDate语义会保留原日期漂移。TOWERS_getIdForCell需要TOWERS*，不能传GAME*；此前探针自身导致access=2，不是已证实原建塔越界。fade=1不能推断白屏，必须目视稳定页。原函数导出会被下一Ghidra作业覆盖，先保留副本；qa/promotion-review/raw-20261015-0529有原始复制和哈希。自然胜利解锁、完整GUI交互、116关12武器和最终包仍未完成。
+
+续接重点：原GAME建塔坐标为22×32导航格，不能按11×16地形格折半；旧src/checks.cpp五处布防可只读参考。GAME_upgradeTower(game,instanceId,targetTechId)，不是x/y；正确TOWERS*在game+0x10，塔当前科技为字段[1]（以上由WIP实测，产品campaign脚本仍需修正/复测）。合法升级成员必须来自当前科技原upgrades列表，不能盲探id+1..3后以是否扣钱判合法；run99含已否决盲探，不算自然通关证据。最佳合法已记录尝试仍在第10波左右失败，无原胜利/解锁证明。116图矩阵仅少量scene行通过，mode=map是空操作不算载入。恢复时先完成合法升级链的重新构建验证，再推进完整战役与剩余GUI/武器/包验收。
 
 独立包脚本agent/dsh/package/package.ps1已实跑，staging-20261015-043811输入逐项校验；23原库、原资产与420PNG完整复制。包内exe从独立cwd跑scene成功，依赖仅Windows系统DLL；但exe老于WIP，完整GUI/保存/终局未验，非最终交付。详见agent/report/report-codex-20261015-044200-原存档跨进程与独立包预览.md。旧src/release和用户存档仍保留。后续从persistent status/bridge/jobs/status.md核对live工作，方向用steer，不因观察超时重启原生作业。
 
