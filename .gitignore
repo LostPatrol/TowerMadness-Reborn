@@ -4,6 +4,7 @@
 /third_party/
 /agent/codex/
 /agent/grok/
+/agent/dsh/
 /*.apk
 *.user
 *.log

@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdarg>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -58,6 +60,11 @@ int hostTouchSet = 0;
 // Original EAGLView fields used by its unchanged outer button dispatcher.
 std::array<unsigned char, 128> hostView{};
 std::array<unsigned char, 512> hostMenu{};
+// The original Menu hot zone currently toggles a host pause until the original MENU object is connected.
+int hostPauseRequested = 0;
+// The real original MENU object (0x3b4 bytes), its current GAME, and dummy platform receivers.
+void* originalMenu = nullptr;
+int hostApplicationToken = 0, hostGameAccountToken = 0;
 // This private method address is verified against the immutable x86 1.22 ELF.
 constexpr std::uint32_t OriginalViewTouchEnd = 0x28dc19;
 // POSIX rand48 preserves the native visual-random sequence independently of combat MT.
@@ -121,6 +128,13 @@ void* findExport(const std::string& name) {
         if (symbol != image->exports.end()) return image->base + symbol->second.value;
     }
     return nullptr;
+}
+
+/** Fail loudly when a scenario needs an original export that this package lacks. */
+void* requireExport(const char* name) {
+    void* address = findExport(name);
+    if (!address) throw std::runtime_error(std::string("Original export does not exist: ") + name);
+    return address;
 }
 
 /** Resolve explicit host adapters first, then the original bundled libraries. */
@@ -232,18 +246,46 @@ LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM first, LPARAM
     if (activeGame && (message == WM_LBUTTONDOWN || message == WM_LBUTTONUP || (message == WM_MOUSEMOVE && (first & MK_LBUTTON)))) {
         hostTouch.x = static_cast<float>(static_cast<short>(LOWORD(second)));
         hostTouch.y = static_cast<float>(static_cast<short>(HIWORD(second)));
-        const char* method = message == WM_LBUTTONDOWN ? "GAME_touchesBegan" : message == WM_LBUTTONUP ? "GAME_touchesEnded" : "GAME_touchesMoved";
+        const bool menuShowing = originalMenu && *reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(originalMenu) + 4) != 0;
+        void* currentGame = originalMenu ? *reinterpret_cast<void**>(static_cast<unsigned char*>(originalMenu) + 0x15c) : activeGame;
+        const char* phase = message == WM_LBUTTONDOWN ? "down" : message == WM_LBUTTONUP ? "up" : "move";
         if (message == WM_LBUTTONDOWN) SetCapture(window);
         if (message == WM_LBUTTONUP) ReleaseCapture();
-        log(std::string("WINDOWS_POINTER ") + method + " " + std::to_string(hostTouch.x) + "," + std::to_string(hostTouch.y));
-        if (message == WM_LBUTTONUP)
+        log(std::string("WINDOWS_POINTER ") + phase + " " + std::to_string(hostTouch.x) + "," + std::to_string(hostTouch.y));
+        if (message == WM_LBUTTONUP) {
+            // The original EAGLView IMP routes to MENU_handleTouchEnded or GAME_touchesEnded by itself.
             reinterpret_cast<void(__cdecl*)(void*, const char*, void*)>(images.front()->base + OriginalViewTouchEnd)(hostView.data(), "touchesEnded:withEvent:", &hostTouchSet);
-        else reinterpret_cast<void(__cdecl*)(void*, void*)>(findExport(method))(activeGame, &hostTouchSet);
+        }
+        else if (menuShowing) {
+            const char* menuMethod = message == WM_LBUTTONDOWN ? "MENU_handleTouchBegan" : "MENU_handleTouchMoved";
+            reinterpret_cast<void(__cdecl*)(void*, void*)>(findExport(menuMethod))(originalMenu, &hostTouchSet);
+        }
+        else if (currentGame) {
+            const char* gameMethod = message == WM_LBUTTONDOWN ? "GAME_touchesBegan" : "GAME_touchesMoved";
+            reinterpret_cast<void(__cdecl*)(void*, void*)>(findExport(gameMethod))(currentGame, &hostTouchSet);
+        }
         return 0;
     }
     if (activeGame && message == WM_KEYDOWN && first == VK_SPACE) {
-        log("WINDOWS_KEY Space -> original GAME_sendNextWave");
-        reinterpret_cast<void(__cdecl*)(void*)>(findExport("GAME_sendNextWave"))(activeGame); return 0;
+        void* currentGame = originalMenu ? *reinterpret_cast<void**>(static_cast<unsigned char*>(originalMenu) + 0x15c) : activeGame;
+        if (currentGame) {
+            log("WINDOWS_KEY Space -> original GAME_sendNextWave");
+            reinterpret_cast<void(__cdecl*)(void*)>(findExport("GAME_sendNextWave"))(currentGame);
+        }
+        return 0;
+    }
+    if (activeGame && message == WM_KEYDOWN && first == VK_ESCAPE && originalMenu) {
+        // Original semantics: running game -> in-progress main menu; level select -> previous page.
+        void* currentGame = *reinterpret_cast<void**>(static_cast<unsigned char*>(originalMenu) + 0x15c);
+        const void* page = *reinterpret_cast<void**>(originalMenu);
+        if (currentGame) {
+            reinterpret_cast<void(__cdecl*)(void*)>(findExport("MENU_backToMainMenu"))(originalMenu);
+            reinterpret_cast<void(__cdecl*)(void*)>(findExport("MENU_show"))(originalMenu);
+        } else if (page && page == findExport("startGamePage")) {
+            reinterpret_cast<void(__cdecl*)(void*)>(findExport("MAPMENU_backButton"))(originalMenu);
+        }
+        log("WINDOWS_KEY Escape -> original menu back");
+        return 0;
     }
     return DefWindowProcW(window, message, first, second);
 }
@@ -419,38 +461,193 @@ int __cdecl silentSound(const char* name) {
 /** Honor the project-wide silent setting at the platform playback boundary. */
 void __cdecl silentPlayback() {}
 
-/** Keep the unsupported outer menu from dereferencing an uninitialized UIKit scene. */
-void __cdecl unavailableMenu() {
-    log("UNSUPPORTED_OUTER_MENU Original main-menu initialization is not part of this probe.");
-    MessageBoxW(windowHandle, L"This prototype opens PlainPlane directly. The original main menu is not connected yet. Close the window to exit.",
-        L"Original x86 prototype", MB_OK | MB_ICONINFORMATION);
+/** Route the original Menu hot zone to a host pause until the original MENU object is connected. */
+void __cdecl hostMenuButton() {
+    hostPauseRequested = hostPauseRequested ? 0 : 1;
+    // HOST_PAUSE is an explicit adaptation and must never be reported as the original menu.
+    log(hostPauseRequested
+        ? "HOST_PAUSE Original menu button pressed; GAME_update is withheld until the next press."
+        : "HOST_RESUME GAME_resume returns the original simulation clock.");
 }
 
-/** Implement only selectors belonging to the host's pointer event objects. */
+/** Resolve a selector name whether the caller passed the string or its relocated slot. */
+std::string selectorName(const char* selector) {
+    const auto printable = [](const char* text) {
+        if (!text) return false;
+        for (int index = 0; index < 64; ++index) {
+            const unsigned char value = static_cast<unsigned char>(text[index]);
+            if (value == 0) return index > 0;
+            if (value < 32 || value > 126) return false;
+        }
+        return true;
+    };
+    if (printable(selector)) return selector;
+    const auto address = reinterpret_cast<std::uintptr_t>(selector);
+    for (const auto& image : images) {
+        const auto base = reinterpret_cast<std::uintptr_t>(image->base);
+        if (address >= base && address + 4 <= base + image->file.size()) {
+            const char* indirect = *reinterpret_cast<const char* const*>(selector);
+            if (printable(indirect)) return indirect;
+            break;
+        }
+    }
+    return "(unknown)";
+}
+
+// Minimal host-side platform objects. The original code only passes these back into the
+// same handlers (GameAccount key/value sync), so real values are kept instead of nulls.
+struct HostString { char text[512]; };
+HostString hostStrings[8];
+int hostStringCount = 0;
+std::map<std::string, int> hostAccountInts;
+std::map<std::string, std::string> hostAccountStrings;
+
+/** True when the pointer is inside a mapped original image and reads as a short printable C string. */
+bool printableCString(const char* text) {
+    if (!text) return false;
+    const auto address = reinterpret_cast<std::uintptr_t>(text);
+    bool mapped = false;
+    for (const auto& image : images) {
+        const auto base = reinterpret_cast<std::uintptr_t>(image->base);
+        if (address >= base && address < base + image->file.size()) { mapped = true; break; }
+    }
+    if (!mapped) return false;
+    for (int index = 0; index < 128; ++index) {
+        const unsigned char value = static_cast<unsigned char>(text[index]);
+        if (value == 0) return index > 0;
+        if (value < 32 || value > 126) return false;
+    }
+    return true;
+}
+
+/** Create the next host string wrapper holding real UTF-8 bytes. */
+HostString* nextHostString() {
+    HostString* value = &hostStrings[hostStringCount++ % 8];
+    value->text[0] = 0;
+    return value;
+}
+
+/** Read a key argument that may be a host string, a C string, or an opaque CFString. */
+std::string hostKeyText(const void* value) {
+    for (const auto& candidate : hostStrings)
+        if (value == &candidate) return candidate.text;
+    const char* text = static_cast<const char*>(value);
+    if (printableCString(text)) return text;
+    char tag[32]; std::snprintf(tag, sizeof(tag), "obj:%p", value); return tag;
+}
+
+/** Implement only the pointer and platform selectors with known call-site semantics. */
 std::uint32_t __cdecl nativeMessage(void* receiver, const char* selector, ...) {
     // Objective-C messages to nil have a defined zero result.
     if (!receiver) return 0;
-    // Outer EAGLView sends these music-only messages; the probe is expressly silent.
-    if (!std::strcmp(selector, "resetTimeForTune:") || !std::strcmp(selector, "playMusic:loop:")) return 0;
-    log(std::string("POINTER_SELECTOR ") + (selector ? selector : "null"));
+    const std::string name = selectorName(selector);
+    // Music-only messages: the probe is expressly silent.
+    if (name == "resetTimeForTune:" || name == "playMusic:loop:") return 0;
+    // The host pointer objects retain the original NSSet/UITouch contract.
     if (receiver == &hostTouchSet) {
-        if (!std::strcmp(selector, "count")) return 1;
-        if (!std::strcmp(selector, "anyObject")) return reinterpret_cast<std::uint32_t>(&hostTouch);
+        if (name == "count") return 1;
+        if (name == "anyObject") return reinterpret_cast<std::uint32_t>(&hostTouch);
     }
     if (receiver == &hostTouch) {
-        if (!std::strcmp(selector, "view")) return reinterpret_cast<std::uint32_t>(hostView.data());
-        if (!std::strcmp(selector, "tapCount")) return 1;
+        if (name == "view") return reinterpret_cast<std::uint32_t>(hostView.data());
+        if (name == "tapCount") return 1;
     }
-    log(std::string("UNIMPLEMENTED_OBJC_SELECTOR ") + (selector ? selector : "null"));
+    // UIKit lifecycle: the host owns the window and GL context, so only the idle timer is accepted.
+    if (name == "sharedApplication") return reinterpret_cast<std::uint32_t>(&hostApplicationToken);
+    if (name == "setIdleTimerDisabled:") return 0;
+    if (name == "delegate") return 0; // A headless host has no UIKit delegate.
+    // Purchase verification is explicitly out of scope; the full-version menu pages are required.
+    if (name == "unlockedFullVersion") { log("PLATFORM_PURCHASE unlockedFullVersion -> 1 (full build)"); return 1; }
+    // Progress/account sync is kept as a real in-memory key/value contract for this run.
+    if (name == "current") return reinterpret_cast<std::uint32_t>(&hostGameAccountToken);
+    if (name == "stringWithUTF8String:") {
+        va_list arguments; va_start(arguments, selector);
+        const char* text = va_arg(arguments, const char*);
+        va_end(arguments);
+        HostString* value = nextHostString();
+        std::snprintf(value->text, sizeof(value->text), "%s", printableCString(text) ? text : "");
+        log("PLATFORM_STRING utf8 -> " + std::string(value->text));
+        return reinterpret_cast<std::uint32_t>(value);
+    }
+    if (name == "stringWithFormat:") {
+        va_list arguments; va_start(arguments, selector);
+        const char* format = va_arg(arguments, const char*);
+        const char* mode = va_arg(arguments, const char*);
+        va_end(arguments);
+        HostString* value = nextHostString();
+        // The format constant is a CFString this host does not implement; build the documented key.
+        std::snprintf(value->text, sizeof(value->text), "scores_%s", printableCString(mode) ? mode : "");
+        log("PLATFORM_STRING format=" + std::to_string(reinterpret_cast<std::uintptr_t>(format)) + " -> " + std::string(value->text));
+        return reinterpret_cast<std::uint32_t>(value);
+    }
+    if (name.rfind("getInt", 0) == 0) {
+        va_list arguments; va_start(arguments, selector);
+        const void* key = va_arg(arguments, const void*);
+        const int fallback = va_arg(arguments, int);
+        va_end(arguments);
+        const std::string text = hostKeyText(key);
+        const auto found = hostAccountInts.find(text);
+        const int result = found == hostAccountInts.end() ? fallback : found->second;
+        log("PLATFORM_ACCOUNT getInt " + text + " default=" + std::to_string(fallback) + " -> " + std::to_string(result));
+        return static_cast<std::uint32_t>(result);
+    }
+    if (name.rfind("setInt", 0) == 0) {
+        va_list arguments; va_start(arguments, selector);
+        const void* key = va_arg(arguments, const void*);
+        const int value = va_arg(arguments, int);
+        va_end(arguments);
+        const std::string text = hostKeyText(key);
+        hostAccountInts[text] = value;
+        log("PLATFORM_ACCOUNT setInt " + text + "=" + std::to_string(value));
+        return 0;
+    }
+    if (name.rfind("setString", 0) == 0) {
+        va_list arguments; va_start(arguments, selector);
+        const void* key = va_arg(arguments, const void*);
+        const void* value = va_arg(arguments, const void*);
+        va_end(arguments);
+        const std::string text = hostKeyText(key);
+        hostAccountStrings[text] = hostKeyText(value);
+        log("PLATFORM_ACCOUNT setString " + text + "=" + hostAccountStrings[text]);
+        return 0;
+    }
+    if (name == "deleteSavegameForMode:") {
+        va_list arguments; va_start(arguments, selector);
+        const void* key = va_arg(arguments, const void*);
+        va_end(arguments);
+        const std::string text = hostKeyText(key);
+        hostAccountInts.erase(text); hostAccountStrings.erase(text);
+        log("PLATFORM_ACCOUNT deleteSavegame " + text);
+        return 0;
+    }
+    // Ranking and DLC purchase endpoints are out of scope by project rules; log the exact selector.
+    if (name == "reportScore:modename:") { log("PLATFORM_RANKING_EXCLUDED " + name); return 0; }
+    if (name == "openURL:" || name == "URLWithString:") { log("PLATFORM_PURCHASE_EXCLUDED " + name); return 0; }
+    log("UNIMPLEMENTED_OBJC_SELECTOR " + name + " receiver=" + std::to_string(reinterpret_cast<std::uintptr_t>(receiver)));
     ExitProcess(31);
 }
 
 /** Convert Windows cursor coordinates through the original CGPoint return ABI. */
 void __cdecl nativeMessageStruct(float* point, void* receiver, const char* selector, void*) {
-    log(std::string("POINTER_STRUCT_SELECTOR ") + (selector ? selector : "null"));
-    if (receiver == &hostTouch && !std::strcmp(selector, "locationInView:")) { point[0] = hostTouch.x; point[1] = hostTouch.y; return; }
-    if (receiver == hostView.data() && !std::strcmp(selector, "bounds")) { point[0] = point[1] = 0; point[2] = 480; point[3] = 800; return; }
-    log(std::string("UNIMPLEMENTED_OBJC_STRUCT_SELECTOR ") + (selector ? selector : "null")); ExitProcess(32);
+    const std::string name = selectorName(selector);
+    if (receiver == &hostTouch && name == "locationInView:") { point[0] = hostTouch.x; point[1] = hostTouch.y; return; }
+    if (receiver == hostView.data() && name == "bounds") { point[0] = point[1] = 0; point[2] = 480; point[3] = 800; return; }
+    log("UNIMPLEMENTED_OBJC_STRUCT_SELECTOR " + name); ExitProcess(32);
+}
+
+/** Implement the one floating-point platform selector with real NSDate semantics. */
+double __cdecl nativeMessageFpret(void* receiver, const char* selector, ...) {
+    if (!receiver) return 0.0;
+    const std::string name = selectorName(selector);
+    if (name == "timeIntervalSinceReferenceDate") {
+        // Seconds since 2001-01-01, matching NSDate's reference date.
+        FILETIME time{}; GetSystemTimeAsFileTime(&time);
+        const std::uint64_t ticks = (static_cast<std::uint64_t>(time.dwHighDateTime) << 32) | time.dwLowDateTime;
+        constexpr std::uint64_t Reference2001Ticks = 126227808000000000ULL;
+        return static_cast<double>(ticks - Reference2001Ticks) / 10000000.0;
+    }
+    log("UNIMPLEMENTED_OBJC_FPRET " + name);
+    ExitProcess(33);
 }
 
 /** Match i386 Objective-C's callee cleanup of the hidden structure-result pointer. */
@@ -524,12 +721,16 @@ void capture(const std::filesystem::path& path, unsigned width, unsigned height)
     log("ORIGINAL_FRAME " + path.string());
 }
 
-/** Read real player statistics through the original exported getters. */
+/** Read real player statistics and terminal flags through the original exported getters. */
 nlohmann::json playerState(void* game) {
     void* player = reinterpret_cast<void**>(game)[1];
     const auto getter = [&](const char* name) { return reinterpret_cast<int(__cdecl*)(void*)>(findExport(name))(player); };
+    const auto gameGetter = [&](const char* name) { return reinterpret_cast<int(__cdecl*)(void*)>(findExport(name))(game); };
     return {{"money", getter("PLAYER_getMoney")}, {"score", getter("PLAYER_getScore")}, {"lives", getter("PLAYER_getLife")},
-        {"simulationMs", reinterpret_cast<int*>(game)[10]}, {"gameStarted", reinterpret_cast<int*>(game)[6] != 0}};
+        {"simulationMs", reinterpret_cast<int*>(game)[10]}, {"gameStarted", reinterpret_cast<int*>(game)[6] != 0},
+        // Ended/won/final values come from the original terminal evaluators, never from host guesses.
+        {"ended", gameGetter("GAME_hasEnded") != 0}, {"won", gameGetter("GAME_isWon") != 0},
+        {"finalScore", gameGetter("GAME_getFinalScore")}, {"finalLives", gameGetter("GAME_getFinalLifes")}};
 }
 
 /** Resolve tower IDs from the original loaded technology, never a rewritten catalog. */
@@ -543,31 +744,65 @@ int nativeTowerId(void* mode, const char* name) {
     throw std::runtime_error("Original technology does not contain requested tower");
 }
 
+/** Resolve an optional upgrade target without aborting a scenario when a tech omits it. */
+int nativeTowerIdOrNone(void* mode, const char* name) {
+    try { return nativeTowerId(mode, name); } catch (const std::exception&) { return -1; }
+}
+
+// A scenario keeps the existing operation names and adds an optional original gamemode name.
+struct Scenario { std::string operation; std::string modeName = "PlainPlane"; };
+
+/** Split "base" or "base:ModeName" without altering the original export operations. */
+Scenario parseScenario(const std::string& value) {
+    Scenario scenario;
+    const auto separator = value.find(':');
+    scenario.operation = value.substr(0, separator);
+    if (separator != std::string::npos && separator + 1 < value.size()) scenario.modeName = value.substr(separator + 1);
+    return scenario;
+}
+
 /** Load and drive a real mode through original gameplay and rendering exports. */
-void originalScene(const std::filesystem::path& output, const std::string& operation) {
+void originalScene(const std::filesystem::path& output, const Scenario& scenario) {
+    const std::string& operation = scenario.operation;
     reinterpret_cast<void(__cdecl*)()>(findExport("PGL_init"))(); log("PGL_READY");
     reinterpret_cast<void(__cdecl*)()>(findExport("WAVES_init"))(); log("WAVES_READY");
-    auto* mode = reinterpret_cast<void*(__cdecl*)(const char*, int)>(findExport("GAMEMODE_load"))("PlainPlane", 0);
-    if (!mode) throw std::runtime_error("Original GAMEMODE_load rejected PlainPlane");
-    log("GAMEMODE_READY PlainPlane");
+    auto* mode = reinterpret_cast<void*(__cdecl*)(const char*, int)>(findExport("GAMEMODE_load"))(scenario.modeName.c_str(), 0);
+    if (!mode) throw std::runtime_error("Original GAMEMODE_load rejected " + scenario.modeName);
+    log("GAMEMODE_READY " + scenario.modeName);
     auto* game = reinterpret_cast<void*(__cdecl*)(void*, int)>(findExport("GAME_alloc"))(mode, 0);
     if (!game) throw std::runtime_error("Original GAME_alloc returned null");
     log("GAME_READY");
     reinterpret_cast<void(__cdecl*)(void*, int, int)>(findExport("GAME_setResolution"))(game, 480, 800);
-    reinterpret_cast<void(__cdecl*)(void*)>(findExport("GAME_resume"))(game);
+    auto resume = reinterpret_cast<void(__cdecl*)(void*)>(findExport("GAME_resume"));
+    resume(game);
     glViewport(0, 0, 480, 800);
     auto update = reinterpret_cast<void(__cdecl*)(void*)>(findExport("GAME_update"));
     auto render = reinterpret_cast<void(__cdecl*)(void*)>(findExport("GAME_render"));
     auto build = reinterpret_cast<void(__cdecl*)(void*, int, int, int)>(findExport("GAME_buildTower"));
     auto nextWave = reinterpret_cast<void(__cdecl*)(void*)>(findExport("GAME_sendNextWave"));
+    auto toggleSpeed = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_togglePlaySpeed"));
+    auto hasEnded = reinterpret_cast<int(__cdecl*)(void*)>(requireExport("GAME_hasEnded"));
+    auto isWon = reinterpret_cast<int(__cdecl*)(void*)>(requireExport("GAME_isWon"));
+    auto upgrade = reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("GAME_upgradeTower"));
+    auto sell = reinterpret_cast<void(__cdecl*)(void*, int)>(requireExport("GAME_sellTower"));
+    auto idForCell = reinterpret_cast<int(__cdecl*)(void*, int, int)>(requireExport("TOWERS_getIdForCell"));
     const int laser = nativeTowerId(mode, "Kilowatt Laser");
+    const int megawatt = nativeTowerIdOrNone(mode, "Megawatt Laser");
     nlohmann::json trace{{"execution", "Original x86 machine code in native Win32; no CPU interpreter or Android system"},
-        {"mode", "PlainPlane"}, {"laserTypeId", laser}, {"initial", playerState(game)}, {"samples", nlohmann::json::array()}};
+        {"mode", scenario.modeName}, {"operation", operation}, {"laserTypeId", laser}, {"megawattTypeId", megawatt},
+        {"initial", playerState(game)}, {"samples", nlohmann::json::array()}};
     std::ofstream traceOutput(output / (operation + "-trace.jsonl"));
     log("ORIGINAL_PLAYER " + trace.at("initial").dump());
-    const ULONGLONG start = GetTickCount64(); ULONGLONG lastSample = 0;
-    bool built = false, sent = false, capturedBuild = false, capturedCombat = false, opening = false, clicked = false, categoryClicked = false, towerClicked = false, waveClicked = false;
-    const ULONGLONG duration = operation == "play" ? std::numeric_limits<ULONGLONG>::max() : operation == "combat" || operation == "input" ? 35000 : 1000;
+    const ULONGLONG start = GetTickCount64(); ULONGLONG lastSample = 0, lastAutoWave = 0;
+    bool built = false, sent = false, capturedBuild = false, capturedCombat = false, opening = false, clicked = false, categoryClicked = false, towerClicked = false, waveClicked = false, speedClicked = false;
+    bool upgraded = false, sold = false, spedUp = false, ended = false, paused = false;
+    // Bounded scenarios keep terminal evidence reproducible; interactive play stays open until the window closes.
+    const ULONGLONG duration = operation == "play" ? std::numeric_limits<ULONGLONG>::max()
+        : operation == "combat" || operation == "input" ? 35000
+        : operation == "upgrade" ? 12000
+        : operation == "flood" ? 240000
+        : operation == "autoplay" ? 900000
+        : 1000;
     bool windowClosed = false;
     activeGame = game;
     *reinterpret_cast<void**>(hostView.data() + 0x40) = hostMenu.data();
@@ -594,17 +829,62 @@ void originalScene(const std::filesystem::path& output, const std::string& opera
             SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(455, 774));
             SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(455, 774)); waveClicked = true;
         }
-        if (operation == "combat" && elapsed >= 1000 && !built) {
+        // The speed hot zone is x in [W-41.6,W), y in [32,80); this drives the original outer dispatcher.
+        if (operation == "input" && elapsed >= 7000 && !speedClicked) {
+            capture(output / "original-input-speed-before.png", 480, 800);
+            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(460, 56));
+            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(460, 56)); speedClicked = true;
+        }
+        if ((operation == "combat" || operation == "upgrade" || operation == "autoplay") && elapsed >= 1000 && !built) {
             log("ORIGINAL_COMMAND build Kilowatt Laser 5,10"); build(game, laser, 5, 10);
-            log("ORIGINAL_COMMAND build Kilowatt Laser 12,14"); build(game, laser, 12, 14); built = true;
+            if (operation != "upgrade") {
+                log("ORIGINAL_COMMAND build Kilowatt Laser 12,14"); build(game, laser, 12, 14);
+            }
+            built = true;
+        }
+        if (operation == "autoplay" && elapsed >= 700 && !spedUp) {
+            toggleSpeed(game); toggleSpeed(game);
+            log("ORIGINAL_COMMAND togglePlaySpeed x2 -> 4x playback");
+            spedUp = true;
+        }
+        if (operation == "upgrade" && elapsed >= 3500 && !upgraded) {
+            void* towers = reinterpret_cast<void**>(game)[4];
+            const int towerId = idForCell(towers, 5, 10);
+            log("ORIGINAL_COMMAND upgrade towerId=" + std::to_string(towerId) + " type=" + std::to_string(megawatt));
+            if (towerId != -1 && megawatt != -1) upgrade(game, towerId, megawatt);
+            upgraded = true;
+        }
+        if (operation == "upgrade" && elapsed >= 7000 && !sold) {
+            void* towers = reinterpret_cast<void**>(game)[4];
+            const int towerId = idForCell(towers, 5, 10);
+            log("ORIGINAL_COMMAND sell towerId=" + std::to_string(towerId));
+            if (towerId != -1) sell(game, towerId);
+            sold = true;
+        }
+        // Auto-wave cadence is throttled because the original command API has no host-side debounce.
+        if ((operation == "flood" || operation == "autoplay") && elapsed >= 1500 && elapsed - lastAutoWave >= (operation == "flood" ? 2500 : 4000)) {
+            log("ORIGINAL_COMMAND nextWave elapsed=" + std::to_string(elapsed));
+            nextWave(game); lastAutoWave = elapsed;
         }
         if (operation == "combat" && elapsed >= 2200 && !sent) {
             log("ORIGINAL_COMMAND nextWave"); nextWave(game); sent = true;
         }
-        update(game); render(game);
+        if (paused != (hostPauseRequested != 0)) {
+            paused = hostPauseRequested != 0;
+            if (!paused) { resume(game); log("ORIGINAL_COMMAND GAME_resume after host pause"); }
+        }
+        if (!paused) update(game);
+        render(game);
         if (!opening && elapsed >= 600) { capture(output / "original-opening.png", 480, 800); opening = true; }
         if (built && !capturedBuild && elapsed >= 2000) { capture(output / "original-built.png", 480, 800); capturedBuild = true; }
         if (sent && !capturedCombat && elapsed >= 12000) { capture(output / "original-combat.png", 480, 800); capturedCombat = true; }
+        // Record the original terminal evaluator the first time it reports an end.
+        if (!ended && hasEnded(game) != 0) {
+            ended = true;
+            capture(output / (operation + "-end.png"), 480, 800);
+            log(std::string("ORIGINAL_GAME_ENDED won=") + (isWon(game) ? "1" : "0") + " state=" + playerState(game).dump());
+        }
+        if (ended && operation != "play") break;
         if (elapsed >= lastSample) {
             auto state = playerState(game); state["hostElapsedMs"] = elapsed;
             trace["samples"].push_back(state); traceOutput << state.dump() << '\n'; traceOutput.flush(); lastSample = elapsed + 500;
@@ -616,11 +896,87 @@ void originalScene(const std::filesystem::path& output, const std::string& opera
         Sleep(16);
     }
     if (!windowClosed) {
-        render(game); glFinish(); capture(output / (operation == "combat" ? "original-combat-final.png" : operation == "input" ? "original-input-combat.png" : "original-first-frame.png"), 480, 800);
+        render(game); glFinish();
+        capture(output / (operation == "combat" ? "original-combat-final.png" : operation == "input" ? "original-input-combat.png" : "original-first-frame.png"), 480, 800);
     }
+    trace["ended"] = ended;
     trace["final"] = playerState(game);
     std::ofstream(output / (operation + "-result.json")) << trace.dump(2);
     log("ORIGINAL_FINAL " + trace.at("final").dump());
+}
+
+/** Drive the real original MENU/MAPMENU object with the host's Windows pointer. */
+void originalMenuScene(const std::filesystem::path& output, const Scenario& scenario) {
+    const bool scripted = scenario.operation == "menuauto";
+    reinterpret_cast<void(__cdecl*)()>(findExport("PGL_init"))(); log("PGL_READY");
+    glViewport(0, 0, 480, 800);
+    auto menuAlloc = reinterpret_cast<void*(__cdecl*)()>(requireExport("MENU_alloc"));
+    auto menuSetResolution = reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("MENU_setResolution"));
+    auto menuChangePage = reinterpret_cast<void(__cdecl*)(void*, void*)>(requireExport("MENU_changePage"));
+    auto menuShow = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_show"));
+    auto menuUpdate = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_update"));
+    auto menuRender = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_render"));
+    auto worldSetResolution = reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("MENUWORLD_setResolution"));
+    auto gameSetResolution = reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("GAME_setResolution"));
+    auto gameUpdate = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_update"));
+    auto gameRender = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_render"));
+    auto gameHasEnded = reinterpret_cast<int(__cdecl*)(void*)>(requireExport("GAME_hasEnded"));
+    auto gameSilence = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_silence"));
+    auto menuEndGame = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_endGame"));
+    void* menu = menuAlloc();
+    if (!menu) throw std::runtime_error("Original MENU_alloc returned null");
+    originalMenu = menu;
+    activeGame = menu;
+    *reinterpret_cast<void**>(hostView.data() + 0x40) = menu;
+    log("ORIGINAL_MENU_ALLOC " + std::to_string(reinterpret_cast<std::uintptr_t>(menu)));
+    menuSetResolution(menu, 480, 800);
+    // MENU_alloc runs MENU_init before the caller can set the resolution, so fix the world size too.
+    if (void* world = *reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x160)) worldSetResolution(world, 480, 800);
+    menuShow(menu);
+    if (void* mainPage = findExport("mainMenuPage")) { menuChangePage(menu, mainPage); log("ORIGINAL_MENU_PAGE mainMenuPage"); }
+    else log("ORIGINAL_MENU_PAGE_MISSING mainMenuPage");
+    const ULONGLONG start = GetTickCount64();
+    // Bounded so the fixed bridge runner can finish; interactive clicks are still accepted while it runs.
+    const ULONGLONG duration = scripted ? 30000 : 120000;
+    bool capturedMain = false, capturedMap = false, capturedGame = false, capturedPause = false, windowClosed = false;
+    void* lastPage = nullptr; void* lastGame = nullptr;
+    ULONGLONG gameStartAt = 0;
+    if (!scripted) ShowWindow(windowHandle, SW_SHOW);
+    while (GetTickCount64() - start < duration) {
+        const ULONGLONG elapsed = GetTickCount64() - start;
+        void* game = *reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c);
+        void* page = *reinterpret_cast<void**>(menu);
+        const bool showing = *reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(menu) + 4) != 0;
+        if (page != lastPage) { lastPage = page; log("ORIGINAL_MENU_PAGE_CHANGED " + std::to_string(reinterpret_cast<std::uintptr_t>(page))); }
+        if (game && game != lastGame) {
+            lastGame = game; gameStartAt = elapsed;
+            gameSetResolution(game, 480, 800); glViewport(0, 0, 480, 800);
+            log("ORIGINAL_MENU_GAME_STARTED " + std::to_string(reinterpret_cast<std::uintptr_t>(game)));
+        }
+        if (!capturedMain && elapsed >= 1500) { capture(output / "menu-main.png", 480, 800); capturedMain = true; }
+        if (scripted && !capturedPause && game && gameStartAt && elapsed >= gameStartAt + 6000) {
+            reinterpret_cast<void(__cdecl*)(void*)>(findExport("MENU_backToMainMenu"))(menu);
+            reinterpret_cast<void(__cdecl*)(void*)>(findExport("MENU_show"))(menu);
+            log("ORIGINAL_MENU_PAUSE_REQUESTED");
+            capturedPause = true;
+        }
+        if (game == nullptr || showing) { menuUpdate(menu); menuRender(menu); }
+        else {
+            if (gameHasEnded(game)) { gameSilence(game); menuEndGame(menu); log("ORIGINAL_MENU_GAME_ENDED"); }
+            else gameUpdate(game);
+            gameRender(game);
+        }
+        if (!capturedMap && page && page == findExport("startGamePage")) { capture(output / "menu-mapselect.png", 480, 800); capturedMap = true; }
+        if (!capturedGame && game) { capture(output / "menu-in-game.png", 480, 800); capturedGame = true; }
+        SwapBuffers(windowDc);
+        MSG message{}; bool closed = false;
+        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) { if (message.message == WM_QUIT) closed = true; TranslateMessage(&message); DispatchMessageW(&message); }
+        if (closed) { windowClosed = true; break; }
+        Sleep(16);
+    }
+    if (!windowClosed) { menuRender(menu); glFinish(); capture(output / (scripted ? "menu-final.png" : "menu-pause.png"), 480, 800); }
+    log(std::string("ORIGINAL_MENU_FINAL page=") + std::to_string(reinterpret_cast<std::uintptr_t>(*reinterpret_cast<void**>(menu)))
+        + " game=" + std::to_string(reinterpret_cast<std::uintptr_t>(*reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c))));
 }
 
 /** Report a native Windows fault with its corresponding original ELF address. */
@@ -721,13 +1077,25 @@ void registerC() {
 }
 
 /** Enter the selected original export without using a CPU interpreter or Android. */
-void run(const std::filesystem::path& package, const std::string& operation) {
+void run(const std::filesystem::path& package, const std::string& operation, const std::filesystem::path& outputDirectory) {
     const auto directory = package / "lib/x86"; assetsDirectory = package / "assets";
     convertedTextures = package.parent_path().parent_path().parent_path().parent_path() / "assets/textures";
+    const Scenario scenario = parseScenario(operation);
     registerC(); mapImage(directory / "libverde.so");
     for (const auto& entry : std::filesystem::directory_iterator(directory))
         if (entry.path().extension() == ".so" && entry.path().filename() != "libverde.so") mapImage(entry.path());
-    if (operation != "map") { createGraphics(); registerGraphics(package.parent_path() / "gl-signatures.json"); }
+    // Enumerate the original gamemode resources without starting a scene.
+    if (scenario.operation == "levels") {
+        std::vector<std::string> modes;
+        for (const auto& entry : std::filesystem::directory_iterator(assetsDirectory))
+            if (entry.path().extension() == ".gamemode") modes.push_back(entry.path().stem().string());
+        std::sort(modes.begin(), modes.end());
+        std::ofstream(outputDirectory / "levels.json") << nlohmann::json(modes).dump(2);
+        log("ORIGINAL_MODE_FILES " + std::to_string(modes.size()));
+        for (const auto& name : modes) log("ORIGINAL_MODE " + name);
+        return;
+    }
+    if (scenario.operation != "map") { createGraphics(); registerGraphics(package.parent_path() / "gl-signatures.json"); }
     const auto nativeHooks = hooks;
     for (const auto& [name, replacement] : nativeHooks)
         {
@@ -736,9 +1104,9 @@ void run(const std::filesystem::path& package, const std::string& operation) {
         }
     for (auto& image : images) relocate(*image);
     log("RELOCATION_COMPLETE unresolved=" + std::to_string(missingNames.size()));
-    std::ofstream unresolved(package.parent_path() / "unresolved-imports.txt");
+    std::ofstream unresolved(outputDirectory / "unresolved-imports.txt");
     for (const auto& name : missingNames) unresolved << name << '\n';
-    if (operation == "map") return;
+    if (scenario.operation == "map") return;
     redirectGs(package.parent_path() / "gs-instructions.json");
     for (const char* name : {"__wrap_malloc", "__wrap_calloc", "__wrap_realloc", "__wrap_free", "__wrap_memcpy", "__wrap_memset", "__wrap_printf"}) {
         const std::string underlying = std::string(name).substr(7);
@@ -751,16 +1119,24 @@ void run(const std::filesystem::path& package, const std::string& operation) {
     installHook("get_current_realtime", reinterpret_cast<void*>(&nativeRealtime));
     installHook("objc_msgSend", reinterpret_cast<void*>(&nativeMessage));
     installHook("objc_msgSend_stret", reinterpret_cast<void*>(&nativeMessageStructBridge));
+    installHook("objc_msgSend_fpret", reinterpret_cast<void*>(&nativeMessageFpret));
     installHook("SOUND_load", reinterpret_cast<void*>(&silentSound));
     for (const char* name : {"SOUND_play", "SOUND_stop", "SOUND_stopLoopingSounds", "SOUND_setListener"})
         installHook(name, reinterpret_cast<void*>(&silentPlayback));
-    installHook("MENU_backToMainMenu", reinterpret_cast<void*>(&unavailableMenu));
-    installHook("MENU_show", reinterpret_cast<void*>(&silentPlayback));
-    log("ENTER_ORIGINAL " + operation);
-    if (operation == "scene" || operation == "combat" || operation == "play" || operation == "input") { originalScene(package.parent_path(), operation); return; }
-    auto function = reinterpret_cast<void(__cdecl*)()>(findExport(operation));
-    if (!function) throw std::runtime_error("Original export does not exist: " + operation);
-    function(); log("RETURNED_ORIGINAL " + operation);
+    // The original MENU object must run its own code; only the direct-to-level probe uses the stubs.
+    if (scenario.operation != "menu" && scenario.operation != "menuauto") {
+        installHook("MENU_backToMainMenu", reinterpret_cast<void*>(&hostMenuButton));
+        installHook("MENU_show", reinterpret_cast<void*>(&silentPlayback));
+    }
+    log("ENTER_ORIGINAL " + scenario.operation);
+    if (scenario.operation == "menu" || scenario.operation == "menuauto") { originalMenuScene(outputDirectory, scenario); return; }
+    if (scenario.operation == "scene" || scenario.operation == "combat" || scenario.operation == "play" || scenario.operation == "input"
+        || scenario.operation == "upgrade" || scenario.operation == "flood" || scenario.operation == "autoplay") {
+        originalScene(outputDirectory, scenario); return;
+    }
+    auto function = reinterpret_cast<void(__cdecl*)()>(findExport(scenario.operation));
+    if (!function) throw std::runtime_error("Original export does not exist: " + scenario.operation);
+    function(); log("RETURNED_ORIGINAL " + scenario.operation);
 }
 }
 
@@ -768,9 +1144,12 @@ void run(const std::filesystem::path& package, const std::string& operation) {
 int main(int argc, char** argv) {
     if (argc < 4) { std::fprintf(stderr, "Usage: host PACKAGE OPERATION LOG\n"); return 2; }
     logFile = std::fopen(argv[3], "w");
+    // Every trace, PNG, and diagnostic stays beside the log the caller selected.
+    std::filesystem::path outputDirectory = std::filesystem::path(argv[3]).parent_path();
+    if (outputDirectory.empty()) outputDirectory = ".";
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     SetUnhandledExceptionFilter(nativeFault);
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    try { run(argv[1], argv[2]); return 0; }
+    try { run(argv[1], argv[2], outputDirectory); return 0; }
     catch (const std::exception& error) { log("HOST_ERROR " + std::string(error.what())); return 3; }
 }

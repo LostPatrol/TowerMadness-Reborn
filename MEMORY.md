@@ -3,13 +3,13 @@
 
 ## 当前基线
 
-Windows x64原生C++20重建已进入P8首轮交互与表现开发基线，游戏品质及原作动态保真验收仍未完成。2026-10-14已收束现有羊群阶段；用户明确暂停P8并准备检查技术路线，未经恢复指令不继续扩展。现状/证据/决策点见docs/TECHNICAL_ROUTE_REVIEW.md，阶段目标见docs/P8_GAME_QUALITY_PLAN.md。私有仓库LostPatrol/TowerMadness-Reborn，本地main；默认不新建分支/worktree。最终交付不得以模拟器运行，开发期允许Android/ARM模拟器；用户已授权安装项目内原作对照环境。
+Windows x64原生C++20重建停在P8首轮交互与表现基线，保留作参考，不再常规推进。2026-10-15用户通过agent/task/02-x86.md明确选择原x86核心复用路线，目标为完整Windows移植，优先复用原代码与GUI；旧重建不删除，完整移植验收尚未完成。现状/证据/决策点见docs/TECHNICAL_ROUTE_REVIEW.md。私有仓库LostPatrol/TowerMadness-Reborn，本地main；默认不新建分支/worktree。最终交付不得以模拟器运行，开发期允许Android/ARM模拟器；用户已授权安装项目内原作对照环境。
 
 两个原APK均保持不变且不进入Git。既有ARM包SHA-256为0bc4ec90ebf0eab249cab4c39b9390c1f05dafffd83f92adcf09251890b3cb8b；新增Madness_Zero-1.22.apk为真实x86包，SHA-256为7e8d09079c963e36f4ba633712b112f65d410740405e828405404fd729afd3dd。两包同证书、classes.dex和1943项游戏资产相同，仅Info.plist版本码不同；原资源/规则基线无需替换。详见docs/APK_BASELINES.md；跨ABI原生行为尚未逐函数证明相同。
 
 原x86核心复用已通过独立PlainPlane可行性门槛：tools/x86-reuse构建Win32宿主，直接执行原ELF机器码及原GAME/PGL；Windows鼠标经最小UIKit对象进入原EAGLView/GAME触摸逻辑，原轮盘建迫击炮、原按钮发波并发生击杀。激光原命令短局也成立。无需Android/CPU模拟器；现有产品源码/发行版/用户存档未替换。入口tools/x86-reuse/play.cmd，规格docs/X86_CORE_REUSE.md，原库副本及GS元数据在agent/codex/x86-reuse。优先继续原核心路线验证，但未授权以此单关原型直接替换发行主线。
 
-复用原型仅固定480×800、静音、不保存；MENU按钮给出未接入说明。直接C核心启动不初始化完整Apportable/ObjC应用；当前GS/锁只支持单线程，未知导入调用会终止。全武器/关卡、长局、原菜单与保存、DPI/透明状态/跨ABI数学尚未验；robosteal_walk0..19资源缺失日志未闭合。不要把已成功单关描述为完整移植或逐像素等价。
+复用宿主仍固定480×800、静音、不保存；支持原gamemode名参数，新增原升级/出售/终局/倍速验证场景，MENU热区暂为明确的宿主暂停，原主菜单尚未接通。2026-10-15原命令激光建造/升级/出售实际50→40→20→50，原鼠标/倍速路径正常退出；PlainPlane、DividedAttention、MuttonsFolly、Madness和AshMountain原开局正常。无塔连发及两激光4倍速场景均实际到原失败终局，未证明胜利。run.ps1支持OutputDirectory/BuildDirectory，当前增量产物在agent/dsh/build；旧play.cmd仍用旧agent/codex构建，发布入口尚未切换。直接C核心启动不初始化完整Apportable/ObjC应用；当前GS/锁只支持单线程，未知导入调用会终止。全武器/关卡、长局、原菜单与保存、DPI/透明状态/跨ABI数学尚未验；robosteal_walk0..19资源缺失日志未闭合。不要把已成功场景描述为完整移植或逐像素等价。
 
 运行入口release/TowerMadness.exe；发布ZIP含SDL3.dll、assets、许可和中文README。12类武器分别实现beam、plasma、railgun、homing、mortar、flak、flamethrower、lightning、mine、slow、boost、bait，读取四套tech及原禁用/升级配置。116有限模式对应116地图；四战役按胜利进度解锁，其余112通过明确的桌面资源库开放，不能称为原作全部已解锁。DividedAttention胜利解锁Hard及无限；MuttonsFolly胜利解锁Insane。三无限难度和沙盒使用当前地图。
 
@@ -58,6 +58,8 @@ MSVC、CMake、SDL3 3.4.18、OpenGL3.3 core、WIC、nlohmann/json3.12.0；音频
 REA6.4.0、Ghidra12.1.4、jadx-headless-mcp0.7.1、JADX1.5.6位于agent/codex/tools；JDK为C:/java/jdk/21。原数据库agent/codex/ghidra-project/TowerMadness.gpr；Ghidra脚本仅使用独立ghidra-scripts目录，复用-process libverde.so -readOnly -noanalysis。并行headless仍可能争用项目锁，需顺序导出。REA Windows provider拒绝ARM ELF，直接Ghidra为已验证路线。Ghidra地址比ELF值多0x10000，文件映射需确认。JADX全导出7处错误不影响已恢复原生入口。
 
 代理通常127.0.0.1:7897；Windows curl TLS失败可用D:/Git/mingw64/bin/curl.exe。不使用gh，不关闭本机其他服务，尤其MC服务器。任务指令由用户提供；新报告位于agent/report，TODO未经允许不改。
+
+02-x86由本机dsh承担主要研究实现与验收。用户澄清受限的是ChatGPT预算，dsh额度充足，不得向dsh强调省预算以降低质量。工作目录/副本/日志位于agent/dsh，过程目录不进Git。dsh原Windows shell沙盒因SetNamedSecurityInfoW Win32 5不可用；保持workspace-write，不改ACL/系统权限，禁用pwsh。已为dsh挂载有限project_native工具（bridge/load.patch.yml）：仅固定build/run/只读ghidra/status，不开放任意shell或系统命令。build编译固定changes/tools/x86-reuse/host.cpp副本，输出agent/dsh/build；原build.ps1默认仍编译product源码，HostSource参数每次明确覆盖CMake缓存。Codex阶段结束才apply_patch促进产品源码，注意开发exe可能新于product cpp。桥levels/116地图、源码副本构建及menuauto实际运行已通过进程门槛；menuauto-20261015-032639截图只有原3D背景无按钮标题，原GUI尚未通过，不能把exit0等同菜单完成。MENU/MAPMENU/MENUWORLD及保存函数已只读导出到menu-evidence；继续处理原菜单绘制/回调/平台合同，再原保存。当前持久会话session-e2ef9fe5-098b-452f-a3a2-f9764733371d，配置workspace.patch.yml及bridge/load.patch.yml；续接先定向读status/stage6.events和bridge/jobs，核对活跃进程后继续，避免重复分析。
 
 GUI验收注意：Profile::userDirectory使用SHGetKnownFolderPath，覆盖LOCALAPPDATA环境变量不会隔离真实存档；手工测试需先备份profile或使用显式测试目录。现有自动验证入口使用输出目录的测试profile，不会触及真实存档。
 
