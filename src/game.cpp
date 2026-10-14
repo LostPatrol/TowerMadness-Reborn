@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <fstream>
 #include <limits>
@@ -24,12 +25,6 @@ constexpr float HeatDecayPerSecond = 0.05f;
 constexpr int WaveIntervalMs = 20000;
 // The original scoreboard awards forty points for every surviving sheep.
 constexpr int SheepScore = 40;
-// Desktop leak cue lifetime is a visual approximation, independent of sheep loss.
-constexpr int SheepLeakVisualMs = 750;
-// Desktop leak cue size is expressed in world units and never changes gate detection.
-constexpr float SheepLeakVisualRadius = 0.9f;
-// Enemy hit-point presentation shares the original quarter-unit ground offset.
-constexpr float EnemyVisualGroundOffset = 0.25f;
 // Original UFO approach divides the square root of its remaining distance by 400.
 constexpr float UfoApproachDivisor = 400.0f;
 // The original approach keeps this minimum movement per millisecond.
@@ -40,6 +35,12 @@ constexpr float UfoDepartureHeight = 50.0f;
 constexpr float UfoDepartureFactor = 1.4f;
 // Original departure finishes below this remaining-height threshold.
 constexpr float UfoDepartureTolerance = 0.01f;
+// ENEMIES_alloc multiplies the sampled UFO angle by float32 pi, then doubles it.
+constexpr float UfoAnglePi = std::bit_cast<float>(0x40490fdau);
+// Original spin starts fast, slows inbound, and rises again during departure.
+constexpr float UfoInitialRotationRate = 10.0f, UfoInboundRotationRate = 0.2f;
+// Departure spin reads the remaining height before the movement update.
+constexpr float UfoDepartureRotationDivisor = 100.0f, UfoDepartureRotationMinimum = 0.1f;
 // ENEMIES_draw uses reciprocal wave speed times this duration before truncation.
 constexpr float WalkFrameBaseMs = 150.0f;
 // Recovered float32 angle conversion, turn coefficient, and dead zone.
@@ -63,7 +64,8 @@ std::vector<Cell> readCells(const nlohmann::json& values) {
 } // namespace
 
 // Load the selected complete original level and initialize its playable state.
-Game::Game(const std::filesystem::path& assets, const std::string& selectedMode) : assets_(assets) { loadMode(selectedMode); }
+Game::Game(const std::filesystem::path& assets, const std::string& selectedMode, std::uint32_t sessionSeed)
+    : sessionSeed_(sessionSeed), assets_(assets) { loadMode(selectedMode); }
 
 // Resolve a complete packaged level from its original dependency references.
 void Game::loadMode(const std::string& selectedMode) {
@@ -111,7 +113,7 @@ void Game::restart() {
     timeMs = wavesSent = killed = leaked = spawned = 0;
     // ENEMIES_alloc starts lastPadIndex at zero and searches from the next pad.
     nextId_ = 1; lastWaveAt_ = 0; nextPad_ = 1 % static_cast<int>(pads_.size());
-    randomState_ = 1; randomEngine_.seed(randomState_); score = bonus = 0; waveCounters_.clear(); lastBoostAt_ = 0; paused = false; outcome = Outcome::Preparing;
+    randomState_ = sessionSeed_; randomEngine_.seed(randomState_); score = bonus = 0; waveCounters_.clear(); lastBoostAt_ = 0; paused = false; outcome = Outcome::Preparing;
     grid_.resize(width * height);
     for (int y = 0; y < height; ++y) for (int x = 0; x < width; ++x) {
         const int terrain = map.at("terrain")[x / 2 + (y / 2) * (width / 2)].get<int>();
@@ -119,8 +121,14 @@ void Game::restart() {
     }
     updateDistances();
     ufos.clear();
-    for (const Cell pad : pads_) { Ufo ufo; ufo.pad = pad; ufos.push_back(ufo); }
     message = "Choose a tower, build on grass, then send a wave.";
+    initializeAnimals();
+    for (const Cell pad : pads_) {
+        Ufo ufo; ufo.pad = pad;
+        const float halfAngle = randomFloat() * UfoAnglePi;
+        ufo.headingRadians = halfAngle + halfAngle;
+        ufos.push_back(ufo);
+    }
 }
 
 // Honor the original blocked-state mask and prevent diagonal corner cutting.
@@ -202,7 +210,7 @@ bool Game::routesRemain(const std::vector<float>& distances) const {
 
 // Inspect original construction rules without touching the live grid or message.
 std::string Game::buildBlockReason(int x, int y, const std::string& type) const {
-    if (outcome == Outcome::Won || outcome == Outcome::Lost) return "Restart to build a new defense.";
+    if (lives <= 0 || outcome == Outcome::Won || outcome == Outcome::Lost) return "Restart to build a new defense.";
     if (!technology.at("towers").contains(type)) return "Unknown tower.";
     const auto& definition = technology.at("towers").at(type);
     if (definition.value("disabled",false)) return "This tower is disabled in the selected technology.";
@@ -251,7 +259,7 @@ const Tower* Game::towerAt(int x, int y) const {
 
 // Share terminal, readiness, technology, branch and affordability rules with the UI.
 std::string Game::upgradeBlockReason(int id, const std::string& nextType) const {
-    if (outcome == Outcome::Won || outcome == Outcome::Lost) return "Restart to change the defense.";
+    if (lives <= 0 || outcome == Outcome::Won || outcome == Outcome::Lost) return "Restart to change the defense.";
     const auto tower = std::find_if(towers.begin(),towers.end(),[id](const Tower& value) { return value.id == id; });
     if (tower == towers.end()) return "Tower no longer exists.";
     if (tower->selling) return "Tower is being dismantled.";
@@ -284,7 +292,7 @@ bool Game::upgrade(int id, const std::string& nextType) {
 
 // Share terminal and construction-state sale rules with the selected-tower controls.
 std::string Game::sellBlockReason(int id) const {
-    if (outcome == Outcome::Won || outcome == Outcome::Lost) return "Restart to change the defense.";
+    if (lives <= 0 || outcome == Outcome::Won || outcome == Outcome::Lost) return "Restart to change the defense.";
     const auto tower = std::find_if(towers.begin(),towers.end(),[id](const Tower& value) { return value.id == id; });
     if (tower == towers.end()) return "Tower no longer exists.";
     if (tower->selling) return "Tower is being dismantled.";
@@ -398,7 +406,7 @@ void Game::completeWaveEnemy(int wave, bool killedEnemy) {
 
 // Dispatch waves across idle UFOs while preserving every original wave entry.
 bool Game::sendWave() {
-    if (outcome == Outcome::Won || outcome == Outcome::Lost || (!endless && wavesSent >= static_cast<int>(waves.size()))) return false;
+    if (lives <= 0 || outcome == Outcome::Won || outcome == Outcome::Lost || (!endless && wavesSent >= static_cast<int>(waves.size()))) return false;
     for (int offset = 0; offset < static_cast<int>(ufos.size()); ++offset) {
         const int index = (nextPad_ + offset) % static_cast<int>(ufos.size());
         auto& ufo = ufos[index];
@@ -408,6 +416,7 @@ bool Game::sendWave() {
         ufo.wave = wavesSent++; ufo.remaining = waves.at(ufo.wave).at("count").get<int>();
         waveCounters_[ufo.wave] = {ufo.remaining * (waves.at(ufo.wave).value("spawn",0) ? 3 : 1),earlyBonus};
         ufo.x = width * 0.5f; ufo.y = height + 20.0f; ufo.z = 10;
+        ufo.rotationRate = UfoInitialRotationRate;
         ufo.state = Ufo::State::Landing; nextPad_ = (index + 1) % static_cast<int>(ufos.size());
         lastWaveAt_ = timeMs; outcome = Outcome::Running; message = "Wave " + std::to_string(wavesSent) + " incoming.";
         return true;
@@ -447,6 +456,7 @@ void Game::updateUfos() {
         }
         if (ufo.state == Ufo::State::Leaving) {
             const float remainingHeight = UfoDepartureHeight - ufo.z;
+            ufo.rotationRate = remainingHeight / UfoDepartureRotationDivisor + UfoDepartureRotationMinimum;
             if (remainingHeight < UfoDepartureTolerance) {
                 ufo.x = ufo.pad.x + 2.0f; ufo.y = ufo.pad.y + 2.0f; ufo.z = 3.0f;
                 ufo.state = Ufo::State::Idle;
@@ -456,6 +466,7 @@ void Game::updateUfos() {
             continue;
         }
         const float tx = ufo.pad.x + 2.0f;
+        ufo.rotationRate = UfoInboundRotationRate;
         const float ty = ufo.pad.y + 2.0f;
         const float tz = 3.0f;
         const float dx = tx - ufo.x,dy = ty - ufo.y,dz = tz - ufo.z;
@@ -496,12 +507,11 @@ void Game::moveEnemies() {
         if (x < 0 || y < 0 || x >= width || y >= height) continue;
         const bool sheepGate = std::any_of(goals_.begin(),goals_.end(),[x,y](Cell goal) { return goal.x == x && goal.y == y; });
         if (sheepGate) {
+            addSheepIntruder(enemy);
             completeWaveEnemy(enemy.wave,false);
             enemy.alive = false; ++leaked; --lives;
             releaseEnemySlot(enemy.nativeSlot);
-            addEffect({{enemy.x,enemy.y,wave.value("height",0.0f) + wave.value("offset",0.0f) + EnemyVisualGroundOffset},
-                SheepLeakVisualRadius,timeMs + SheepLeakVisualMs,"sheepLeak",timeMs});
-            if (lives <= 0) { lives = 0; outcome = Outcome::Lost; message = "The sheep are gone. Restart to try a new defense."; }
+            if (lives <= 0) { lives = 0; message = "The last sheep is being abducted."; }
             continue;
         }
         if (field[x + y * width] == 0) continue;
@@ -589,7 +599,7 @@ void Game::advanceEffects(double realtimeSeconds) {
 // Apply fixed-step updates independently from drawing frequency or wall-clock speed.
 void Game::tick() {
     soundEvents.clear();
-    if (paused || outcome == Outcome::Won || outcome == Outcome::Lost) return;
+    if (paused || ((outcome == Outcome::Won || outcome == Outcome::Lost) && !hasPendingAbductions())) return;
     timeMs += SimulationStepMs;
     pruneEffects();
     for (const auto& tower : towers) if (tower.selling && timeMs > tower.readyAt) {
@@ -599,19 +609,24 @@ void Game::tick() {
     const auto removed = std::erase_if(towers,[this](const Tower& tower) { return tower.selling && timeMs > tower.readyAt; });
     if (removed) updateDistances();
     for (const auto& tower : towers) if (technology.at("towers").at(tower.type).value("isbait",0) && timeMs == tower.readyAt + SimulationStepMs) updateDistances();
-    if (outcome == Outcome::Preparing) return;
-    updateUfos(); updateProjectiles(); moveEnemies();
-    // GAME_timestep stops tower attacks once loss is recorded in enemy movement.
-    if (outcome != Outcome::Lost) attack();
+    // GAME_timestep gates enemy and projectile updates on game start, not lives.
+    if (outcome != Outcome::Preparing) { updateUfos(); updateProjectiles(); moveEnemies(); }
+    attack();
+    // TOWERS_update precedes the always-active native animal state machine.
+    updateAnimals();
+    // Original loss is final only after the last visible sheep has departed.
+    if (lives <= 0 && !hasPendingAbductions()) {
+        outcome = Outcome::Lost; message = "The sheep are gone. Restart to try a new defense.";
+    }
     for (const auto& tower : towers) if (tower.consumed && !map.value("fixedpath",0))
         for (int dy = 0; dy < 2; ++dy) for (int dx = 0; dx < 2; ++dx) grid_[tower.x + dx + (tower.y + dy) * width] &= ~9;
     if (std::erase_if(towers,[](const Tower& tower) { return tower.consumed; })) updateDistances();
     enemies.insert(enemies.end(),pendingChildren_.begin(),pendingChildren_.end()); pendingChildren_.clear();
     std::erase_if(enemies,[](const Enemy& enemy) { return !enemy.alive; });
-    if (outcome == Outcome::Lost) return;
+    if (outcome == Outcome::Preparing || outcome == Outcome::Lost || outcome == Outcome::Won) return;
     if ((endless || wavesSent < static_cast<int>(waves.size())) && timeMs - lastWaveAt_ > WaveIntervalMs) sendWave();
     const bool allIdle = std::all_of(ufos.begin(),ufos.end(),[](const Ufo& ufo) { return ufo.state == Ufo::State::Idle; });
-    if (!endless && wavesSent == static_cast<int>(waves.size()) && enemies.empty() && allIdle) {
+    if (!endless && wavesSent == static_cast<int>(waves.size()) && enemies.empty() && allIdle && !hasPendingAbductions()) {
         outcome = Outcome::Won; beams.clear(); message = "All original waves cleared. The sheep are safe!";
     }
 }

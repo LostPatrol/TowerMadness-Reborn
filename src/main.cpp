@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -27,8 +28,10 @@ constexpr double MaximumFrameSeconds = 1.0;
 constexpr float TowerHeadingOffset = 1.5707963f, DegreesToRadians = 0.0174532924f;
 // TOWERS_draw raises the body above its separate ground-level base.
 constexpr float TowerGroundOffset = 0.25f;
-// Sheep grazing uses an approximate desktop cadence pending original animation timing.
-constexpr int SheepFrameMs = 400;
+// Native animals share four frames at 100 ms and a 600 ms turn followed by a 2000 ms rise.
+constexpr int SheepFrameMs = 100, SheepTurnMs = 600, SheepRiseMs = 2000;
+// Capture geometry and directional shadows use recovered local transforms.
+constexpr float SheepRiseHeight = 25, SheepShadowFadeMs = 500, SheepShadowDeparture = 4;
 // Selection pages keep large packaged catalogs manageable at ordinary window sizes.
 constexpr int ModesPerPage = 12;
 // Menu, palette, and upgrade actions use separate ranges from the legacy six controls.
@@ -57,7 +60,16 @@ struct Desktop {
     std::unique_ptr<Game> preview;
     std::vector<CatalogEntry> catalog;
     std::vector<std::string> visibleModes;
+    // Interactive modes use the native microsecond seed; verification keeps explicit reproducible seeds.
+    bool randomizeSessionSeed = false;
 };
+
+// Native GAMEMODE creation stores gettimeofday's microsecond part as its session seed.
+std::uint32_t nativeSessionSeed() {
+    constexpr std::int64_t MicrosecondsPerSecond = 1000000;
+    const auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    return static_cast<std::uint32_t>(microseconds % MicrosecondsPerSecond);
+}
 
 // Find a command-line switch without treating a following path as another switch.
 bool hasArgument(int argc, char** argv, const std::string& wanted) {
@@ -93,6 +105,11 @@ bool contains(const HudButton& button, float x, float y) {
 // Detect the frozen end state once for commands and their visible availability.
 bool ended(const Game& game) {
     return game.outcome == Outcome::Won || game.outcome == Outcome::Lost;
+}
+
+// Native input locks at the last reservation while the visible capture still finishes.
+bool finishingLoss(const Game& game) {
+    return game.lives <= 0 && !ended(game);
 }
 
 // Size the shared palette from the current technology and logical window width.
@@ -265,6 +282,55 @@ float towerAppearanceProgress(const Game& game, const Tower& tower) {
     return std::clamp(static_cast<float>(game.timeMs - tower.appearanceStartedAt) / (tower.readyAt - tower.appearanceStartedAt),0.0f,1.0f);
 }
 
+// Capture shadows shrink during the first 500 ms of ascent, after the initial turn.
+float sheepShadowFade(const Game& game, const Sheep& animal) {
+    if (animal.state != 3 && animal.state != -1) return 1;
+    return std::clamp(1 - (game.animalClockMs() - animal.captureStartMs - SheepTurnMs) / SheepShadowFadeMs,0.0f,1.0f);
+}
+
+// Draw native flock models, capture beams, leaked intruders, and their original ground projections.
+void animalScene(SceneView& scene, const Game& game) {
+    const int frame = (static_cast<std::uint32_t>(game.animalClockMs()) / SheepFrameMs) & 3;
+    for (const auto& animal : game.sheep()) {
+        if (animal.state == -1) continue;
+        const float yaw = animal.yawDegrees * DegreesToRadians, fade = sheepShadowFade(game,animal);
+        const float angle = std::abs(std::sin((animal.yawDegrees - 45) * DegreesToRadians));
+        const float length = 1.8f * (1 - angle) + 2.6f * angle;
+        const float offset = 0.1f + 0.15f * std::sin((animal.yawDegrees - 135) * DegreesToRadians);
+        scene.models.push_back({"directionalshadow",{animal.x + offset - SheepShadowDeparture * (1 - fade),animal.y + offset - SheepShadowDeparture * (1 - fade),0.05f},45 * DegreesToRadians});
+        scene.models.back().animationTransform = scaleMatrix({1.7f * fade,length * fade,1}) * modelMatrix({},-135 * DegreesToRadians,animal.size);
+        const std::string prefix = animal.color == 1 ? "sheep_red" : animal.color == 2 ? "sheep_blue" : "sheep";
+        const std::string model = animal.state == 0 ? prefix + "_anim_graze" + std::to_string(frame)
+            : animal.state == 1 ? prefix + "_anim_walk" + std::to_string(frame) : prefix;
+        Mat4 pose = scaleMatrix({animal.size,animal.size,animal.size});
+        if (animal.state == 3) {
+            const float age = static_cast<float>(game.animalClockMs() - animal.captureStartMs);
+            const float turn = std::min(age / SheepTurnMs,1.0f);
+            const float height = age <= SheepTurnMs ? 0.6f * turn : 0.6f + SheepRiseHeight * (age - SheepTurnMs) / SheepRiseMs;
+            pose = modelMatrix({0.4f * turn,0,height},0,1) * rotationY(-90 * turn * DegreesToRadians) * pose;
+            // The vertical native beam shares the sheep's outer yaw but never consumes random samples.
+            scene.models.push_back({"beam2",{animal.x,animal.y,0},yaw,1,{1,1,1,std::sin(age * EffectPi / (SheepTurnMs + SheepRiseMs))}});
+            scene.models.back().animationTransform = scaleMatrix({1,1,50}) * modelMatrix({},std::fmod(age / 10,360.0f) * DegreesToRadians,1);
+            scene.models.back().overrideMaterialColor = true;
+        }
+        scene.models.push_back({model,{animal.x,animal.y,0},yaw});
+        scene.models.back().animationTransform = pose;
+    }
+    for (const auto& intruder : game.intruders()) {
+        const auto& animal = game.sheep().at(intruder.sheepIndex);
+        const float fade = sheepShadowFade(game,animal);
+        scene.models.push_back({"directionalshadow",{intruder.x - SheepShadowDeparture * (1 - fade),intruder.y - SheepShadowDeparture * (1 - fade),0.05f}});
+        scene.models.back().animationTransform = scaleMatrix({2 * intruder.size * fade,2 * intruder.size * fade,1}) * modelMatrix({},-90 * DegreesToRadians,1);
+        std::string model = intruder.model;
+        if (intruder.state == 0 && !intruder.walkModels.empty()) {
+            const int frequency = std::max(1,static_cast<int>(intruder.walkFactor * static_cast<float>(static_cast<int>((1.0f / intruder.speed) * 150))));
+            model = intruder.walkModels.at((game.animalClockMs() / frequency) % intruder.walkModels.size());
+        }
+        const float rise = intruder.state == 1 ? SheepRiseHeight * std::max(0,game.animalClockMs() - animal.captureStartMs - SheepTurnMs) / SheepRiseMs : 0;
+        scene.models.push_back({model,{intruder.x,intruder.y,intruder.z + rise},intruder.yawDegrees * DegreesToRadians,intruder.size});
+    }
+}
+
 // Assemble original mesh instances and the shared desktop command HUD.
 SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover, int speed, int windowWidth, int windowHeight) {
     SceneView scene;
@@ -353,15 +419,15 @@ SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover,
         scene.models.back().animationTransform = deathTransform(corpse,wave);
         scene.models.back().overrideMaterialColor = true;
     }
-    const auto& enclosure = game.map.at("enclosure");
-    for (int index = 0; index < game.lives; ++index) {
-        if (enclosure.empty()) break;
-        const auto& cell = enclosure.at((index * 2) % enclosure.size());
-        scene.models.push_back({"sheep_anim_graze" + std::to_string((game.timeMs / SheepFrameMs + index) % 4),
-            {cell[0].get<float>() + 0.5f,cell[1].get<float>() + 0.5f,0},index * 0.7f,0.6f});
+    animalScene(scene,game);
+    for (const auto& ufo : game.ufos) {
+        if (ufo.state == Ufo::State::Idle) continue;
+        if (ufo.state == Ufo::State::Releasing)
+            effectModel(scene,"beam2",{ufo.x,ufo.y,ufo.z},{2,2,-3},{},static_cast<float>(std::fmod(game.effectClockSeconds() * 100,360)) * DegreesToRadians);
+        // Native UFO draw pitches seven degrees and uses half the packaged model size.
+        scene.models.push_back({"ufo",{ufo.x,ufo.y,ufo.z},ufo.headingRadians + (ufo.rotationRate * 0.01f) * static_cast<float>(game.timeMs),0.5f});
+        scene.models.back().pitch = 7 * DegreesToRadians;
     }
-    for (const auto& ufo : game.ufos)
-        if (ufo.state != Ufo::State::Idle) scene.models.push_back({"ufo",{ufo.x,ufo.y,ufo.z},0,1});
     // Native callbacks use realtime; offline checks may supply a deterministic presentation clock.
     for (const auto& beam : game.beams) if (!ended(game)) {
         const Vec3 from{beam.fromX,beam.fromY,beam.fromZ};
@@ -421,7 +487,6 @@ SceneView makeScene(const Game& game, int selectedId, std::optional<Cell> hover,
             scene.quads.push_back({{effect.position,effect.end,effect.end + offset,effect.position + offset},{1,1,1,alpha / speed},true});
         }
         else if (effect.kind == "death") scene.sprites.push_back({"smokepuff.pvr.png",effect.position + Vec3{0,0,age * 0.7f},diameter,diameter,{0.65f,0.7f,0.6f,1 - age}});
-        else if (effect.kind == "sheepLeak") scene.sprites.push_back({"life.pvr.png",effect.position + Vec3{0,0,age * 1.5f},1,1,{1,0.2f,0.2f,1 - age}});
         else if (effect.kind == "plasmaFlash" || effect.kind == "mortarFlash") {
             auto& object = effectModel(scene,"$effect:muzzlefx",effect.position,{0.5f * age,0.5f * age,age},{1,1,1,1 - age * age * age},effect.heading,EffectHalfPi - effect.elevation);
             object.textureScale = {1,0.25f}; object.textureOffset = {0,effect.kind == "plasmaFlash" ? 0.5f : 0.75f};
@@ -586,14 +651,15 @@ std::string savedSummary(const Profile& profile) {
 // Load preview metadata separately so browsing never replaces the live defense.
 void selectPreview(Desktop& desktop, const std::string& id) {
     desktop.previewMode = id; desktop.preview.reset(); desktop.menuMessage.clear();
-    try { desktop.preview = std::make_unique<Game>(executableDirectory() / "assets",id); }
+    try { desktop.preview = std::make_unique<Game>(executableDirectory() / "assets",id,desktop.randomizeSessionSeed ? nativeSessionSeed() : 1); }
     catch (const std::exception& error) { desktop.menuMessage = "关卡预览无法载入：" + std::string(error.what()); }
 }
 
 // Show a compact, consistent desktop HUD while reusing the original scene and art.
 SceneView desktopScene(Renderer& renderer, const Game& game, Desktop& desktop, const Profile& profile, int selectedId,
                        std::optional<Cell> hover, int speed, int width, int height) {
-    SceneView scene = makeScene(game,selectedId,std::nullopt,speed,width,height);
+    if (finishingLoss(game)) { selectedId = -1; hover.reset(); desktop.buildType.clear(); }
+    SceneView scene = makeScene(game,finishingLoss(game) ? -1 : selectedId,std::nullopt,speed,width,height);
     scene.texts.clear(); scene.buttons.clear();
     const float right = width - DetailsWidth, bottom = paletteTop(game,width,height);
     renderer.setBoardViewport(0,108,width - DetailsWidth - 12,bottom - 116);
@@ -763,6 +829,12 @@ SceneView desktopScene(Renderer& renderer, const Game& game, Desktop& desktop, c
         scene.texts.push_back({"保护羊群，阻止外星人",right + 14,252,{0.8f,0.85f,0.9f,1},16});
     }
     scene.texts.push_back({profile.warning.empty() ? actionReason(game.message) : profile.warning,18,bottom - 34,{1,0.88f,0.64f,1},16});
+    if (finishingLoss(game)) {
+        // Keep the final capture visible rather than covering it with the result modal.
+        scene.buttons.clear(); scene.texts.clear(); scene.selectedCell.reset();
+        scene.texts.push_back({"最后的羊正在被带走…",18,24,AccentColor,24});
+        return scene;
+    }
     if (desktop.restartConfirm || game.paused || (ended(game) && !desktop.resultsDismissed)) {
         // The modal replaces controls so no hidden button can receive its click.
         scene.buttons.clear();
@@ -816,6 +888,7 @@ void requestExit(const Game& game, Desktop& desktop, Profile& profile, int speed
 bool desktopInput(const SDL_Event& event, Game& game, Renderer& renderer, Desktop& desktop,
                   Profile& profile, const SceneView& scene, int& selectedId, int& speed,
                   int width, int height, Audio* audio = nullptr) {
+    if (finishingLoss(game)) return true;
     if (selectedId >= 0 && std::none_of(game.towers.begin(),game.towers.end(),[selectedId](const Tower& tower) { return tower.id == selectedId; })) selectedId = -1;
     int action = -1;
     const bool modal = desktop.restartConfirm || game.paused || (ended(game) && !desktop.resultsDismissed);
@@ -921,6 +994,7 @@ bool desktopInput(const SDL_Event& event, Game& game, Renderer& renderer, Deskto
     else if (action >= 20 && action <= 22) { desktop.category = action - 20; desktop.page = 0; }
     else if (action == 23) {
         command(game,3,selectedId,speed); desktop.restartConfirm = false; desktop.resultsDismissed = false; desktop.buildType.clear();
+        renderer.resetCamera();
     } else if (action == 24) desktop.restartConfirm = false;
     else if (action == 25) renderer.resetCamera();
     else if (action == 26) desktop.resultsDismissed = true;
@@ -928,7 +1002,7 @@ bool desktopInput(const SDL_Event& event, Game& game, Renderer& renderer, Deskto
         try {
             const std::string id = action == 28 ? nextCampaign(game.modeId) : desktop.previewMode;
             if (id.empty() || !modeAvailable(id,desktop,profile) || (action == 28 && game.outcome != Outcome::Won)) return true;
-            Game next(executableDirectory() / "assets",id);
+            Game next(executableDirectory() / "assets",id,desktop.randomizeSessionSeed ? nativeSessionSeed() : 1);
             if (!renderer.changeMap(executableDirectory() / "assets/data" / (next.mode.at("map").get<std::string>() + ".map.json"))) {
                 desktop.menuMessage = game.message = "地图载入失败：" + renderer.error(); return true;
             }
@@ -1505,11 +1579,97 @@ nlohmann::json pausedEffectVerification(Renderer& renderer, const Game& baseline
     return checks;
 }
 
+// Sample genuine natural sheep capture states through the production renderer and locked desktop input.
+nlohmann::json animalPresentationVerification(Renderer& renderer, SDL_Window* window, const Game& baseline,
+                                             const std::filesystem::path& output) {
+    // Portrait camera matches the original reference; the offline sequence advances normal 25 ms ticks.
+    constexpr int Width = 480, Height = 800, MaximumRunMs = 180000;
+    Game game = baseline; game.restart();
+    SDL_SetWindowMinimumSize(window,Width,700); SDL_SetWindowSize(window,Width,Height); SDL_SyncWindow(window);
+    SDL_PumpEvents(); renderer.resize(); renderer.setBoardViewport(0,0,Width,Height); renderer.resetCamera(false);
+    nlohmann::json report{{"scope","Natural unmodified 50-gold undefended game, sampled GL frames. Fixed tick camera steps approximate one-times frame cadence; not a recorded original Android movie."}};
+    // Preserve production world models while omitting desktop controls from portrait comparisons.
+    const auto capture = [&](const std::string& name) {
+        SceneView scene = makeScene(game,-1,std::nullopt,1,Width,Height);
+        scene.texts.clear(); scene.buttons.clear(); scene.panels.clear(); scene.images.clear();
+        renderer.draw(scene);
+        if (!renderer.capture(output / (name + ".png")) || !renderer.error().empty()) throw std::runtime_error(renderer.error());
+        const auto visible = std::count_if(game.sheep().begin(),game.sheep().end(),[](const Sheep& animal) { return animal.state != -1; });
+        report["frames"].push_back({{"image",name + ".png"},{"timeMs",game.timeMs},{"animalClockMs",game.animalClockMs()},
+            {"lives",game.lives},{"visibleSheep",visible},{"intruders",game.intruders().size()},{"outcome",static_cast<int>(game.outcome)}});
+    };
+    capture("sheep-opening");
+    for (int tick = 0; tick < 80; ++tick) game.tick();
+    capture("sheep-grazing-2000ms");
+    if (!game.sendWave()) throw std::runtime_error("Natural sheep movie wave dispatch failed.");
+    while (game.intruders().empty() && game.timeMs < MaximumRunMs) game.tick();
+    if (game.intruders().empty() || game.sheep().front().state == -1 || game.lives != 9)
+        throw std::runtime_error("Reservation failed to retain its visible sheep after immediate life deduction.");
+    capture("sheep-first-reservation");
+    while (game.sheep().front().state != 3 && game.timeMs < MaximumRunMs) game.tick();
+    if (game.sheep().front().state != 3) throw std::runtime_error("Natural abductor never reached its reserved sheep.");
+    const int started = game.sheep().front().captureStartMs;
+    for (const int age : {100,600,1600,2500}) {
+        while (game.animalClockMs() < started + age) game.tick();
+        capture("sheep-capture-" + std::to_string(age) + "ms");
+    }
+    while (game.sheep().front().state != -1) game.tick();
+    capture("sheep-first-hidden");
+    while (game.lives > 0 && game.timeMs < MaximumRunMs) game.tick();
+    if (!finishingLoss(game) || !game.lastAbductionFocus()) throw std::runtime_error("Last reservation ended before the visible capture.");
+    const auto lockedState = game.saveState();
+    Desktop desktop; desktop.menu = false; desktop.buildType = game.baseTowers().front();
+    Profile profile(output / "animal-profile");
+    int selected = -1,speed = 1;
+    SceneView lockedScene = desktopScene(renderer,game,desktop,profile,selected,Cell{7,10},speed,1280,900);
+    for (const auto key : {SDLK_SPACE,SDLK_M,SDLK_R,SDLK_N,SDLK_F5}) {
+        SDL_Event event{}; event.type = SDL_EVENT_KEY_DOWN; event.key.key = key;
+        desktopInput(event,game,renderer,desktop,profile,lockedScene,selected,speed,1280,900);
+    }
+    if (!lockedScene.buttons.empty() || !desktop.buildType.empty() || game.saveState() != lockedState || desktop.menu || game.paused)
+        throw std::runtime_error("Final capture input lock or deferred result presentation failed.");
+    report["lastReservationLocksInput"] = true;
+    Game restored = baseline; restored.restoreState(lockedState);
+    if (restored.saveState() != lockedState) throw std::runtime_error("Last reservation focus failed to roundtrip.");
+    renderer.setBoardViewport(0,0,Width,Height); renderer.resetCamera(false);
+    capture("sheep-last-reservation");
+    const Vec2 focus = *game.lastAbductionFocus();
+    const int lastStarted = game.timeMs;
+    int nextSample = 500;
+    while (!ended(game) && game.timeMs < MaximumRunMs) {
+        game.tick(); restored.tick(); renderer.focusAbduction(focus,SimulationStepMs / 1000.0f);
+        if (game.timeMs - lastStarted >= nextSample) {
+            capture("sheep-last-focus-" + std::to_string(nextSample) + "ms"); nextSample += 500;
+        }
+    }
+    if (game.outcome != Outcome::Lost || game.hasPendingAbductions() || game.saveState() != restored.saveState())
+        throw std::runtime_error("Natural final capture never settled or restored combat diverged.");
+    capture("sheep-defeat-settled");
+    report["lastCaptureRestoreMatches"] = true;
+    report["finalCaptureMilliseconds"] = game.timeMs - lastStarted;
+    SDL_SetWindowMinimumSize(window,900,700); SDL_SetWindowSize(window,1280,900); SDL_SyncWindow(window);
+    SDL_PumpEvents(); renderer.resize();
+    const SceneView result = desktopScene(renderer,game,desktop,profile,-1,std::nullopt,1,1280,900);
+    const auto retry = std::find_if(result.buttons.begin(),result.buttons.end(),[](const HudButton& button) { return button.action == 23; });
+    if (retry == result.buttons.end()) throw std::runtime_error("Settled sheep loss has no retry control.");
+    SDL_Event click{}; click.type = SDL_EVENT_MOUSE_BUTTON_DOWN; click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = retry->x + retry->width / 2; click.button.y = retry->y + retry->height / 2;
+    desktopInput(click,game,renderer,desktop,profile,result,selected,speed,1280,900);
+    const auto center = renderer.project({game.width / 2.0f,game.height / 2.0f,0});
+    const float boardCenterY = 108 + (paletteTop(game,1280,900) - 116) / 2;
+    if (game.outcome != Outcome::Preparing || game.lives != 10 || !center || std::hypot(center->x - 495,center->y - boardCenterY) > 0.01f)
+        throw std::runtime_error("Retry retained the final sheep close-up instead of restoring the battlefield.");
+    report["retryRestoresBattlefieldCamera"] = true;
+    renderer.setBoardViewport(0,0,1280,900); renderer.resetCamera();
+    return report;
+}
+
 // Verify actual GL rendering, native presentation, realtime effects, and resized picking without audio.
 int graphicsSmoke(Renderer& renderer, SDL_Window* window, Game& game, const std::filesystem::path& output) {
     nlohmann::json checks;
     checks["nativePresentation"] = presentationVerification(renderer,window,game,output);
     checks["pausedRealtime"] = pausedEffectVerification(renderer,game,output);
+    checks["animals"] = animalPresentationVerification(renderer,window,game,output);
     game.build(7,10); game.build(11,14); game.sendWave();
     for (int tick = 0; tick < 450; ++tick) game.tick();
     checks["graphics"] = renderer.graphicsInfo();
@@ -1549,9 +1709,10 @@ int main(int argc, char** argv) {
         const bool selfTest = hasArgument(argc,argv,"--self-test"),smoke = hasArgument(argc,argv,"--smoke-test"),inputTest = hasArgument(argc,argv,"--input-test");
         const bool coverage = hasArgument(argc,argv,"--coverage-test"),audioTest = hasArgument(argc,argv,"--audio-test"),resourceTest = hasArgument(argc,argv,"--resource-test"),desktopTest = hasArgument(argc,argv,"--desktop-test");
         const bool benchmark = hasArgument(argc,argv,"--benchmark-test"),visualTest = hasArgument(argc,argv,"--visual-test");
+        const bool developerCheck = selfTest || smoke || inputTest || coverage || audioTest || resourceTest || desktopTest || benchmark || visualTest;
         std::filesystem::path output = directory / "verification";
         for (int index = 1; index + 1 < argc; ++index) if (std::string(argv[index]) == "--output") output = utf8Path(argv[index + 1]);
-        if (selfTest || smoke || inputTest || coverage || audioTest || resourceTest || desktopTest || benchmark || visualTest) std::filesystem::create_directories(output);
+        if (developerCheck) std::filesystem::create_directories(output);
         if (selfTest) return runSimulationChecks(assets,output);
         if (coverage) return runCoverageChecks(assets,output);
         if (audioTest) { Audio audio(assets); std::ofstream report(output / "audio-checks.txt"); return audio.verifyAll(report) ? 0 : 1; }
@@ -1570,7 +1731,7 @@ int main(int argc, char** argv) {
         {
             Renderer renderer;
             if (!renderer.initialize(window,assets,assets / "data/PlainPlane.map.json")) throw std::runtime_error(renderer.error());
-            Game game(assets);
+            Game game(assets,"PlainPlane",developerCheck ? 1 : nativeSessionSeed());
             if (smoke) result = graphicsSmoke(renderer,window,game,output);
             else if (inputTest) result = inputVerification(renderer,window,game,output);
             else if (resourceTest) result = renderer.verifyResources(output) ? 0 : 1;
@@ -1579,7 +1740,7 @@ int main(int argc, char** argv) {
             else if (visualTest) result = combatVisualVerification(renderer,assets,output);
             else {
                 Profile profile(Profile::userDirectory());
-                Desktop desktop; desktop.catalog = loadCatalog(assets);
+                Desktop desktop; desktop.catalog = loadCatalog(assets); desktop.randomizeSessionSeed = true;
                 Audio audio(assets);
                 // The default zero gains never initialize the audio subsystem.
                 audio.setVolumes(profile.data.at("settings").value("volume",0.0f),profile.data.at("settings").value("musicVolume",0.0f));
@@ -1594,7 +1755,7 @@ int main(int argc, char** argv) {
                     float mouseX = 0,mouseY = 0; SDL_GetMouseState(&mouseX,&mouseY);
                     renderer.setBoardViewport(0,108,width - DetailsWidth - 12,paletteTop(game,width,height) - 116);
                     auto picked = renderer.pick(mouseX,mouseY);
-                    const auto hover = !desktop.menu && !game.paused && !desktop.restartConfirm && !ended(game) && picked && onBoard(game,width,height,mouseX,mouseY) ?
+                    const auto hover = !desktop.menu && !game.paused && !desktop.restartConfirm && !ended(game) && !finishingLoss(game) && picked && onBoard(game,width,height,mouseX,mouseY) ?
                         std::optional<Cell>{{static_cast<int>(std::floor(picked->x)),static_cast<int>(std::floor(picked->y))}} : std::nullopt;
                     SceneView scene = desktopScene(renderer,game,desktop,profile,selectedId,hover,speed,width,height);
                     SDL_Event event;
@@ -1614,7 +1775,7 @@ int main(int argc, char** argv) {
                     // Restoring a session or changing levels replaces Game, so reattach its clock.
                     game.advanceEffects(now / 1e9);
                     const bool* keys = SDL_GetKeyboardState(nullptr);
-                    if (!desktop.menu && !game.paused && !desktop.restartConfirm && (!ended(game) || desktop.resultsDismissed) && (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS))
+                    if (!desktop.menu && !game.paused && !desktop.restartConfirm && !finishingLoss(game) && (!ended(game) || desktop.resultsDismissed) && (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS))
                         renderer.pan(static_cast<float>((keys[SDL_SCANCODE_D] - keys[SDL_SCANCODE_A]) * elapsed * 10),
                                      static_cast<float>((keys[SDL_SCANCODE_S] - keys[SDL_SCANCODE_W]) * elapsed * 10));
                     if (!desktop.menu && !game.paused && !desktop.restartConfirm && !ended(game)) {
@@ -1622,8 +1783,12 @@ int main(int argc, char** argv) {
                         while (accumulator >= SimulationStepMs / 1000.0 && !ended(game)) {
                             game.advanceEffects(SDL_GetTicksNS() / 1e9);
                             game.tick(); accumulator -= SimulationStepMs / 1000.0;
-                            for (const auto& sound : game.soundEvents) audio.play(sound);
+                            if (game.lives > 0) for (const auto& sound : game.soundEvents) audio.play(sound);
                         }
+                    }
+                    if (finishingLoss(game)) {
+                        selectedId = -1; desktop.buildType.clear(); rightDrag = false;
+                        if (const auto focus = game.lastAbductionFocus()) renderer.focusAbduction(*focus,static_cast<float>(elapsed));
                     }
                     desktopCompletion(game,desktop,profile);
                     // Keep at most one current session, saving every thirty real seconds and on exit.
@@ -1632,7 +1797,8 @@ int main(int argc, char** argv) {
                         profile.data["session"] = game.saveState(); profile.data["settings"]["speed"] = speed;
                         profile.save(); lastSaveAt = SDL_GetTicks();
                     }
-                    audio.play(desktop.menu ? "menu" : game.outcome == Outcome::Preparing ? "build" : "game"); audio.update();
+                    if (game.lives <= 0 && !desktop.menu) audio.silence();
+                    else { audio.play(desktop.menu ? "menu" : game.outcome == Outcome::Preparing ? "build" : "game"); audio.update(); }
                     scene = desktopScene(renderer,game,desktop,profile,selectedId,hover,speed,width,height);
                     if (!renderer.error().empty()) scene.texts.push_back({"Resource warning: " + renderer.error(),18,136,{1,0.5f,0.4f,1}});
                     if (!audio.warning().empty()) scene.texts.push_back({"Audio warning: " + audio.warning(),18,height - 155.0f,{1,0.5f,0.4f,1}});

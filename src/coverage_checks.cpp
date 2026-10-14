@@ -8,6 +8,7 @@
 #include <fstream>
 #include <functional>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 
 namespace tmreborn {
@@ -26,6 +27,12 @@ constexpr int OpeningSmokeTicks = 600;
 constexpr int PackagedModeCount = 116, TechnologyCount = 4;
 // Float comparisons cover roundoff of float32 operations, never gameplay acceptance thresholds.
 constexpr float FloatTolerance = 0.00001f;
+// Recovered sheep allocation consumes two integer cells, four offsets, then three appearance draws.
+constexpr int SheepAllocationDraws = 9;
+// The original capture turns for 600 ms and hides the sheep at 2600 ms.
+constexpr int SheepTurnMs = 600, SheepHideMs = 2600;
+// Offline fixtures intentionally use a fixed session seed; interactive sessions supply native microseconds.
+constexpr std::uint32_t SheepFixtureSeed = 1;
 
 // Fail one focused case with a useful concrete reason.
 void require(bool condition, const std::string& reason) {
@@ -560,6 +567,78 @@ int runCoverageChecks(const std::filesystem::path& assets, const std::filesystem
         const auto intact = restored.saveState(); bool refused = false;
         try { restored.restoreState(broken); } catch (const std::exception&) { refused = true; }
         require(refused && restored.saveState() == intact,"Invalid restore corrupted the current session.");
+    });
+    runCase(report,"sheepSharedRngCaptureAndPersistence",[&] {
+        Game game(assets,"PlainPlane",SheepFixtureSeed);
+        require(game.sheep().size() == static_cast<std::size_t>(game.lives) && game.animalClockMs() == 0,
+            "Opening sheep allocation or clock changed.");
+        std::mt19937 expected(SheepFixtureSeed);
+        expected.discard(6);
+        const float sizeSample = static_cast<float>(expected()) * 0x1p-32f;
+        const float sizeClass = static_cast<float>(expected()) * 0x1p-32f;
+        const float colorSample = static_cast<float>(expected()) * 0x1p-32f;
+        const float expectedSize = sizeClass < 0.2f ? 0.6f + 0.1f * sizeSample : 0.9f + 0.2f * sizeSample;
+        require(near(game.sheep().front().size,expectedSize) && game.sheep().front().color == (colorSample < 0.1f ? 2 : 0),
+            "Sheep appearance did not use its original seventh through ninth shared RNG samples.");
+        expected.discard((game.sheep().size() - 1) * SheepAllocationDraws);
+        // UFO allocations follow the complete flock and consume one initial heading sample each.
+        expected.discard(game.ufos.size());
+        std::ostringstream engine; engine << expected;
+        require(game.saveState().at("rng") == engine.str(),"Sheep/UFO allocation changed the expected shared MT19937 draw count.");
+        for (const auto& sheep : game.sheep())
+            require(sheep.state == 1 && !sheep.reserved && ((sheep.size >= 0.6f && sheep.size < 0.7f)
+                || (sheep.size >= 0.9f && sheep.size < 1.1f)) && (sheep.color == 0 || sheep.color == 2),
+                "Opening sheep state, color, or recovered size range changed.");
+        game.tick(); require(game.animalClockMs() == SimulationStepMs,"Idle flock did not advance one fixed tick.");
+        game.paused = true; const auto paused = game.saveState(); advance(game,4);
+        require(game.saveState() == paused,"Paused tick changed sheep or shared RNG."); game.paused = false;
+        Game accelerated = game;
+        advance(game,80);
+        for (int frame = 0; frame < 20; ++frame) advance(accelerated,4);
+        require(game.saveState() == accelerated.saveState(),"Four-tick scheduling changed the natural idle flock.");
+        require(game.sendWave(),"Natural undefended sheep capture dispatch failed.");
+        const int openingLives = game.lives;
+        while (game.leaked == 0 && game.timeMs < 60000) game.tick();
+        require(game.leaked > 0 && game.lives < openingLives && !game.intruders().empty()
+            && game.sheep().front().reserved && game.sheep().front().state != -1,
+            "First natural leak did not deduct life immediately while retaining its reserved visible sheep.");
+        while (game.sheep().front().state != 3 && game.timeMs < 90000) game.tick();
+        require(game.sheep().front().state == 3,"Natural intruder never caught its first reserved sheep.");
+        const int captured = game.sheep().front().captureStartMs;
+        const auto capturedState = game.saveState();
+        Game resumed(assets); resumed.restoreState(capturedState);
+        require(resumed.saveState() == capturedState,"Active sheep capture did not roundtrip every field.");
+        while (game.animalClockMs() < captured + SheepTurnMs) { game.tick(); resumed.tick(); }
+        const float turnedYaw = game.sheep().front().yawDegrees;
+        game.tick(); resumed.tick();
+        require(near(game.sheep().front().yawDegrees,turnedYaw),"Capture yaw continued turning at the 600 ms boundary.");
+        while (game.animalClockMs() < captured + SheepHideMs) { game.tick(); resumed.tick(); }
+        require(game.sheep().front().state == 3,"Captured sheep hid before the 2600 ms update boundary.");
+        game.tick(); resumed.tick();
+        require(game.sheep().front().state == -1 && std::any_of(game.intruders().begin(),game.intruders().end(),
+            [](const SheepIntruder& intruder) { return intruder.sheepIndex == 0; }),
+            "2600 ms boundary did not retain the one-tick hidden-sheep/intruder pair.");
+        Game hidden(assets); hidden.restoreState(game.saveState());
+        require(hidden.saveState() == game.saveState(),"Hidden boundary pair could not roundtrip.");
+        game.tick(); resumed.tick(); hidden.tick();
+        require(std::none_of(game.intruders().begin(),game.intruders().end(),
+            [](const SheepIntruder& intruder) { return intruder.sheepIndex == 0; })
+            && game.saveState() == resumed.saveState() && game.saveState() == hidden.saveState(),
+            "Post-2600 capture removal or resumed shared RNG diverged.");
+        for (const bool malformed : {false,true}) {
+            auto legacy = capturedState;
+            if (malformed) legacy["animals"]["intruders"][0]["wave"] = -1;
+            else legacy.erase("animals");
+            Game fallback(assets); fallback.restoreState(legacy);
+            auto actual = fallback.saveState(); actual.erase("animals"); legacy.erase("animals");
+            require(actual == legacy,"Legacy or invalid animal extension altered valid core fields or restored combat RNG.");
+            require(fallback.intruders().empty() && fallback.sheep().front().state == -1,
+                "Legacy animal adaptation left lost sheep available for capture.");
+        }
+        Game seeded(assets,"PlainPlane",742193);
+        const auto seededOpening = seeded.saveState(); advance(seeded,12);
+        Game seededRestored(assets); seededRestored.restoreState(seeded.saveState()); seededRestored.restart();
+        require(seededRestored.saveState() == seededOpening,"Saved native session seed was lost on restart.");
     });
     runCase(report,"realtimeEffectsPreserveCombat",[&] {
         Game ordinary(assets); require(ordinary.build(7,10) && ordinary.sendWave(),"Effect clock defense setup failed.");

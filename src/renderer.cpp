@@ -1087,6 +1087,19 @@ void Renderer::resetCamera(bool fit) {
     }
     r.distance = high;
 }
+
+// Native updateCamera advances remaining look/height deltas by twice the realtime frame interval.
+void Renderer::focusAbduction(Vec2 position, float seconds) {
+    if (!std::isfinite(seconds) || seconds <= 0) return;
+    auto& r = *impl_;
+    // makeSureCameraIsGood preserves target ground Z and the +5 lateral eye offset even after input locks.
+    constexpr float FinalHeight = 10, DeltaRate = 2;
+    const float factor = DeltaRate * seconds;
+    r.target.x += (position.x - r.target.x) * factor;
+    r.target.y += (position.y - r.target.y) * factor;
+    r.target.z = 0;
+    r.distance = std::clamp(r.distance + (FinalHeight - r.distance) * factor,kMinimumDistance,kMaximumDistance);
+}
 // Expose asset or initialization diagnostics to the desktop caller.
 const std::string& Renderer::error() const { return impl_->error; }
 // Expose the real driver string for the validation report.

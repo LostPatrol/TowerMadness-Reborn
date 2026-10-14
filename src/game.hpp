@@ -10,6 +10,7 @@
 #include <deque>
 #include <map>
 #include <array>
+#include <optional>
 #include "math.hpp"
 
 namespace tmreborn {
@@ -20,6 +21,23 @@ inline constexpr int SimulationStepMs = 25;
 inline constexpr int NativeEnemySlotCount = 1024;
 
 struct Cell { int x = 0, y = 0; };
+struct Sheep {
+    // Native states are hidden (-1), eating, grazing, turning, and abduction.
+    int state = 1, color = 0, captureStartMs = 0;
+    float x = 0, y = 0, targetX = 0, targetY = 0;
+    float yawDegrees = 0, startYawDegrees = 0, size = 1;
+    // Reservation is separate from visibility and the gameplay lives counter.
+    bool reserved = false;
+};
+struct SheepIntruder {
+    // Leaked enemies leave combat but retain the original geometry and target sheep.
+    int sheepIndex = -1, state = 0, wave = 0, generation = 0;
+    float x = 0, y = 0, z = 0, yawDegrees = 0, size = 1;
+    float speed = 1, walkFactor = 1;
+    bool flying = false;
+    std::string model;
+    std::vector<std::string> walkModels;
+};
 struct Enemy {
     int id = 0, wave = 0, generation = 0;
     float x = 0, y = 0, heading = 0, traveled = 0, heat = 1;
@@ -82,6 +100,10 @@ struct Ufo {
     int wave = 0, remaining = 0, lastReleaseAt = 0;
     Cell pad{};
     float x = 0, y = 0, z = 0;
+    // ENEMIES_alloc samples the UFO's initial spin after initializing the flock.
+    float headingRadians = 0;
+    // Native draw multiplies the current phase rate by absolute game time.
+    float rotationRate = 10;
 };
 struct Projectile {
     Vec3 position{}, velocity{}, waypoint{}, previous{}, origin{}, endpoint{};
@@ -114,14 +136,14 @@ enum class Outcome { Preparing, Running, Won, Lost };
 class Game {
 public:
     // Load the original normalized map, technology, and complete wave definitions.
-    explicit Game(const std::filesystem::path& assets, const std::string& modeId = "PlainPlane");
+    explicit Game(const std::filesystem::path& assets, const std::string& modeId = "PlainPlane", std::uint32_t sessionSeed = 1);
     // Select a packaged mode while retaining the configured technology and wave rules.
     void loadMode(const std::string& modeId);
     // Enumerate enabled root towers in the original technology palette order.
     std::vector<std::string> baseTowers() const;
     // Restore opening money, sheep, empty towers, and the original navigation grid.
     void restart();
-    // Advance one original 25 ms tick unless paused or the match has ended.
+    // Advance one original 25 ms tick, including terminal abduction completion.
     void tick();
     // Advance cosmetic realtime independently of paused or accelerated game ticks.
     void advanceEffects(double realtimeSeconds);
@@ -159,6 +181,16 @@ public:
     int walkFrame(const Enemy& enemy) const;
     // Inspect frozen visual corpses, including non-drawable legacy slot occupancy.
     const std::vector<EnemyCorpse>& corpses() const;
+    // Inspect original flock state without coupling its visibility to lost lives.
+    const std::vector<Sheep>& sheep() const;
+    // Capture focus is fixed at the last reservation, before further grazing motion.
+    std::optional<Vec2> lastAbductionFocus() const;
+    // Inspect retained abductors independently of the combat enemy deque.
+    const std::vector<SheepIntruder>& intruders() const;
+    // Return the animal subsystem clock, advanced after sheep and intruder updates.
+    int animalClockMs() const;
+    // Keep terminal scenes advancing until every reserved sheep has departed.
+    bool hasPendingAbductions() const;
     // Share recovered target elevation between muzzle geometry and model presentation.
     float towerElevation(const Tower& tower) const;
     // Return a stable summary used by regression checks and diagnostics.
@@ -188,6 +220,14 @@ public:
     std::string message;
 
 private:
+    // Allocate the original single-player flock using the shared combat RNG.
+    void initializeAnimals();
+    // Select a field cell by signed integer modulo, then consume two float offsets.
+    Vec2 generateAnimalFieldPoint();
+    // Advance sheep first, intruders second, and the animal clock last.
+    void updateAnimals();
+    // Reserve the first available sheep and retain a leaked enemy outside combat.
+    void addSheepIntruder(const Enemy& enemy);
     // Stamp original lifetimes without consuming gameplay random state.
     void addEffect(Effect effect);
     void addBeam(Beam beam);
@@ -246,6 +286,12 @@ private:
     void stun(Enemy& enemy, int duration);
 
     // Dead combat entities retain frozen visual state independently of combat lifetime.
+    std::vector<Sheep> sheep_;
+    // Cosmetic target still belongs to the reservation event and survives session continuation.
+    std::optional<Vec2> lastAbductionFocus_;
+    std::vector<SheepIntruder> intruders_;
+    std::vector<Cell> sheepField_;
+    int animalClockMs_ = 0;
     std::array<bool,NativeEnemySlotCount> enemySlots_{};
     std::vector<EnemyCorpse> enemySlotHolds_;
     int nextEnemySlot_ = 0;
@@ -254,6 +300,8 @@ private:
     std::vector<Cell> pads_, goals_;
     int nextId_ = 1, lastWaveAt_ = 0, nextPad_ = 0;
     std::uint32_t randomState_ = 1;
+    // Production uses the original microsecond seed; offline checks default to one.
+    std::uint32_t sessionSeed_ = 1;
     std::mt19937 randomEngine_{1};
     std::filesystem::path assets_;
     std::vector<Enemy> pendingChildren_;

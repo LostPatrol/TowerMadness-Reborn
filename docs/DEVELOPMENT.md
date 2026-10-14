@@ -7,7 +7,9 @@
 
 战场矩形由`paletteTop`和详情栏宽度确定，`Renderer::setBoardViewport`使绘制、投影和拾取共用该区域。`SceneView`提供面板、文字、图标、图片、原模型及世界精灵。交互循环经`Game::advanceEffects`提供单调realtime，短暂Effect/Beam独立于暂停/倍速到期；离线检查缺省使用确定性Game毫秒。移动投射物、塔建造和敌人动作保留仿真时间。Beam保存发射炮口、姿态、长度及塔类型，Effect保存出生元数据；短暂事件不进入存档。公式及适配差异见 COMBAT_VISUALS.md。
 
-相机、材质与塔表现见[CAMERA](CAMERA.md)、[TOWER_VISUALS](TOWER_VISUALS.md)。原视角为地图中心、eyeY+5/height50/FOV45；`resetCamera(false)`用于原默认姿态，普通桌面入口仍自动fit。原材质缺省unlit texture×RGBA，point颜色按byte截断。塔build/sell及升级前后半模型、directionalshadow、Tesla附件、boost圈由`makeScene`组装；原selection及选中range已接入，预览range与升级range反馈仍有适配差异。完整nativeAimSmooth战斗gate、初始随机yaw/idle、诱饵屏幕aura、条件核爆闪光、羊完整动作与Menu world仍未闭合。
+相机、材质与塔表现见[CAMERA](CAMERA.md)、[TOWER_VISUALS](TOWER_VISUALS.md)。原视角为地图中心、eyeY+5/height50/FOV45；`resetCamera(false)`用于原默认姿态，普通桌面入口仍自动fit。原材质缺省unlit texture×RGBA，point颜色按byte截断。塔build/sell及升级前后半模型、directionalshadow、Tesla附件、boost圈由`makeScene`组装；原selection及选中range已接入，预览range与升级range反馈仍有适配差异。完整nativeAimSmooth战斗gate、初始随机yaw/idle、诱饵屏幕aura、条件核爆闪光与Menu world仍未闭合。
+
+羊群与调度见[SHEEP_VISUALS](SHEEP_VISUALS.md)、[SHEEP_SCHEDULING](SHEEP_SCHEDULING.md)。`animals.cpp`先更新羊、再更新入侵者，最后递增独立25ms动物时钟；生命先扣，绑架完成后才失败，期间保留完整战斗调度。`main.cpp::animalScene`组装原矩阵和100ms帧，`Renderer::focusAbduction`按realtime插值至固定预订位置。自然失羊期间输入锁与重试相机通过生产入口验证；原作逐帧等价未验。
 
 外围流程见 FRONTEND.md。关卡浏览使用独立Game；Renderer::mapPreview以同一场景路径离屏绘制原地图，恢复当前地图、镜头和GL状态，最多缓存16张缩略图。生产退出统一经requestExit，保存失败不能直接丢弃当前局。
 
@@ -15,6 +17,7 @@
 | --- | --- |
 | 资源转换 | `tools/prepare-assets.mjs`，格式见 ASSETS.md |
 | 地图、距离场、放置／出售、敌人移动、UFO、计分 | `src/game.cpp` |
+| 羊群初始化、共享MT、吃草/转向、追羊/绑架 | `src/animals.cpp`；显示在 `src/main.cpp` |
 | 原武器分支、整数护甲、击杀和分裂 | `src/combat.cpp`；规则见 PROJECTILE_RULES.md、EFFECT_RULES.md |
 | 炮口、弹道预测、移动投射物 | `src/projectile.cpp` |
 | 减速、增幅及 Tesla 拉动 | `src/effects.cpp` |
@@ -42,7 +45,7 @@ $run.ExitCode
 | 参数 | 验证范围 |
 | --- | --- |
 | `--self-test` | 原50金币普通操作完成26波胜利、自然失败、堵路／出售／暂停、15／144FPS调度一致 |
-| `--coverage-test` | 24项CPU规则/保存检查及116个自然开局、四科技、12武器，含realtime不改变战斗/RNG与暂停到期；边界见 COVERAGE.md |
+| `--coverage-test` | 25项CPU规则/保存检查及116个自然开局、四科技、12武器，含realtime不改变战斗/RNG、羊群调度与保存；边界见 COVERAGE.md |
 | `--smoke-test` | 本机真实GL、原默认相机投影、unlit/point颜色/塔表现、暂停realtime、窗口缩放与坐标往返及截图 |
 | `--input-test` | 将 self-test 合法操作经 SDL 鼠标／键盘及生产输入处理重放，完成胜利、重开、失败 |
 | `--desktop-test` | 生产菜单选择、保存／继续、116地图实际绘制；只使用输出目录的测试 profile |
@@ -60,5 +63,7 @@ $run.ExitCode
 投射物视觉规格见PROJECTILE_VISUALS.md。Projectile的trailSample/trailThreshold由真实移动更新推进；Effect保存A/B，SceneView.quads只绘制原世界几何，不能用相机朝向重新生成trail。可选session.projectiles[].trail保存采样点/阈值；旧或损坏视觉字段从当前位置重新开始，不拒绝有效核心局。影像随机来自math.hpp的独立hash，绝不能消费战斗MT。
 
 开发期原作对照见[Android环境](ANDROID_REFERENCE.md)与[双APK基线](APK_BASELINES.md)。模拟器和下载包只放在agent/codex，发布EXE不依赖它们。
+
+交互新关卡的 `sessionSeed` 取当前时间的微秒部分，离线检查默认1；相同Game重开保留mode种子。先分配羊的9N个共享MT输出，再分配UFO初角。保存可选`animals`包含羊、入侵者、独立时钟与最后镜头锚点；旧/坏扩展用隔离同seed布局兼容，不消费恢复后的战斗RNG。尚未恢复整局随机消费顺序，详见[路线审查](TECHNICAL_ROUTE_REVIEW.md)。
 
 敌人动画与死亡规格见[ANIMATION](ANIMATION.md)：Game维护原时间帧、平滑heading、独立slot及冻结corpse；main.cpp的deathTransform和enemyShadow负责原矩阵组装。可选session.animation保存这些状态，不能让纯表现使用战斗RNG或加入活动敌人/胜负计数。炮塔俯仰必须复用Game::towerElevation，避免模型与攻击炮口分离。

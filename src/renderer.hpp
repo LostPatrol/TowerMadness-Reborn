@@ -144,6 +144,8 @@ public:
     void zoom(float wheelSteps);
     // Restore the original centered camera, optionally fitting the reserved desktop board.
     void resetCamera(bool fit = true);
+    // Follow the last reserved sheep with native realtime delta decay and the fixed +Y eye offset.
+    void focusAbduction(Vec2 position, float realtimeSeconds);
     // Save the presented framebuffer as PNG without changing scene rendering.
     bool capture(const std::filesystem::path& path);
     // Load every prepared texture and model, retaining per-resource failures in a report.

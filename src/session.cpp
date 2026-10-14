@@ -1,5 +1,6 @@
 // Windows session snapshots retain simulation state and the synchronized RNG.
 #include "game.hpp"
+#include <algorithm>
 #include <sstream>
 #include <stdexcept>
 
@@ -13,6 +14,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Tower,id,x,y,target,refund,type,readyAt,nextS
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Ufo,state,wave,remaining,lastReleaseAt,pad,x,y,z)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Projectile,position,velocity,waypoint,previous,origin,endpoint,source,kind,model,target,damage,bornAt,speed,splash,traveled,elapsed,elevation,speedMultiplier,waypointReached,active)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(WaveCounter,remaining,bonus)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Sheep,x,y,targetX,targetY,yawDegrees,size,color,state,reserved,captureStartMs,startYawDegrees)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(SheepIntruder,x,y,z,yawDegrees,size,speed,walkFactor,flying,state,sheepIndex,wave,generation,model,walkModels)
 
 namespace {
 // Legacy saves retain radians but cannot recover their original allocation history.
@@ -28,7 +31,7 @@ nlohmann::json enemyAnimation(const Enemy& enemy) {
 // Save all simulation fields that affect the next tick; visual effects may expire on reload.
 nlohmann::json Game::saveState() const {
     std::ostringstream engine; engine << randomEngine_;
-    nlohmann::json state{{"version",1},{"mode",modeId},{"timeMs",timeMs},{"money",money},{"lives",lives},
+    nlohmann::json state{{"version",1},{"mode",modeId},{"sessionSeed",sessionSeed_},{"timeMs",timeMs},{"money",money},{"lives",lives},
         {"wavesSent",wavesSent},{"score",score},{"bonus",bonus},{"waveCounters",waveCounters_},{"killed",killed},{"leaked",leaked},{"spawned",spawned},
         {"paused",paused},{"outcome",static_cast<int>(outcome)},{"enemies",enemies},{"towers",towers},{"ufos",ufos},
         {"projectiles",projectiles},{"pendingChildren",pendingChildren_},{"waves",waves},{"grid",grid_},
@@ -37,6 +40,10 @@ nlohmann::json Game::saveState() const {
         state["enemies"][index]["animation"] = enemyAnimation(enemies[index]);
     for (std::size_t index = 0; index < pendingChildren_.size(); ++index)
         state["pendingChildren"][index]["animation"] = enemyAnimation(pendingChildren_[index]);
+    for (std::size_t index = 0; index < ufos.size(); ++index) {
+        state["ufos"][index]["headingRadians"] = ufos[index].headingRadians;
+        state["ufos"][index]["rotationRate"] = ufos[index].rotationRate;
+    }
     for (std::size_t index = 0; index < towers.size(); ++index)
         state["towers"][index]["appearance"] = {{"startedAt",towers[index].appearanceStartedAt},{"previousType",towers[index].previousType}};
     for (std::size_t index = 0; index < projectiles.size(); ++index)
@@ -52,13 +59,21 @@ nlohmann::json Game::saveState() const {
         holds.push_back(std::move(raw));
     }
     state["animation"] = {{"nextSlot",nextEnemySlot_},{"slotHolds",holds}};
+    state["animals"] = {{"clockMs",animalClockMs_},{"sheep",sheep_},{"intruders",intruders_}};
+    if (lastAbductionFocus_) state["animals"]["lossFocus"] = *lastAbductionFocus_;
     return state;
 }
 
 // Construct a valid candidate before replacing a working match with stored data.
 void Game::restoreState(const nlohmann::json& state) {
     if (state.at("version") != 1) throw std::runtime_error("Unsupported session version.");
-    Game restored(assets_,state.at("mode").get<std::string>());
+    // Older sessions used the deterministic desktop seed; malformed optional metadata uses that adaptation.
+    std::uint32_t sessionSeed = 1;
+    try {
+        const auto seed = state.at("sessionSeed").get<std::int64_t>();
+        if (seed >= 0 && static_cast<std::uint64_t>(seed) <= UINT32_MAX) sessionSeed = static_cast<std::uint32_t>(seed);
+    } catch (const nlohmann::json::exception&) {}
+    Game restored(assets_,state.at("mode").get<std::string>(),sessionSeed);
     restored.timeMs = state.at("timeMs").get<int>(); restored.money = state.at("money").get<int>();
     restored.lives = state.at("lives").get<int>(); restored.wavesSent = state.at("wavesSent").get<int>();
     restored.score = state.at("score").get<int>(); restored.killed = state.at("killed").get<int>();
@@ -82,6 +97,18 @@ void Game::restoreState(const nlohmann::json& state) {
         } catch (const nlohmann::json::exception&) {}
     }
     restored.ufos = state.at("ufos").get<std::vector<Ufo>>();
+    for (std::size_t index = 0; index < restored.ufos.size(); ++index) try {
+        const float heading = state.at("ufos").at(index).at("headingRadians").get<float>();
+        if (std::isfinite(heading)) restored.ufos[index].headingRadians = heading;
+    } catch (const nlohmann::json::exception&) {
+        // Legacy UFO orientation is unknown and does not consume restored combat randomness.
+    }
+    for (std::size_t index = 0; index < restored.ufos.size(); ++index) try {
+        const float rate = state.at("ufos").at(index).at("rotationRate").get<float>();
+        if (std::isfinite(rate)) restored.ufos[index].rotationRate = rate;
+    } catch (const nlohmann::json::exception&) {
+        // Missing visual angular velocity keeps the native allocation default.
+    }
     restored.projectiles = state.at("projectiles").get<std::vector<Projectile>>();
     for (std::size_t index = 0; index < restored.projectiles.size(); ++index) {
         auto& projectile = restored.projectiles[index];
@@ -179,8 +206,73 @@ void Game::restoreState(const nlohmann::json& state) {
     for (const auto& tower : restored.towers)
         if (!restored.technology.at("towers").contains(tower.type) || tower.x < 0 || tower.y < 0
             || tower.x + 1 >= restored.width || tower.y + 1 >= restored.height) throw std::runtime_error("Invalid saved tower.");
+    bool restoredAnimals = false;
+    try {
+        const auto& animals = state.at("animals");
+        const int clock = animals.at("clockMs").get<int>();
+        auto sheep = animals.at("sheep").get<std::vector<Sheep>>();
+        auto intruders = animals.at("intruders").get<std::vector<SheepIntruder>>();
+        if (clock < 0 || sheep.size() != restored.sheep_.size())
+            throw std::runtime_error("Invalid saved animal clock or flock.");
+        std::vector<bool> claimed(sheep.size(),false);
+        int reserved = 0;
+        for (const auto& animal : sheep) {
+            if (!std::isfinite(animal.x) || !std::isfinite(animal.y) || !std::isfinite(animal.targetX)
+                || !std::isfinite(animal.targetY) || !std::isfinite(animal.yawDegrees) || !std::isfinite(animal.startYawDegrees)
+                || !std::isfinite(animal.size) || animal.size <= 0 || animal.color < 0 || animal.color > 2
+                || animal.state < -1 || animal.state > 3 || animal.captureStartMs < 0 || animal.captureStartMs > clock
+                || ((animal.state == -1 || animal.state == 3) && !animal.reserved))
+                throw std::runtime_error("Invalid saved sheep.");
+            if (animal.reserved) ++reserved;
+        }
+        if (reserved != std::clamp(static_cast<int>(sheep.size()) - restored.lives,0,static_cast<int>(sheep.size())))
+            throw std::runtime_error("Invalid saved sheep reservation count.");
+        for (const auto& intruder : intruders) {
+            if (intruder.sheepIndex < 0 || intruder.sheepIndex >= static_cast<int>(sheep.size())
+                || claimed[intruder.sheepIndex] || !sheep[intruder.sheepIndex].reserved
+                || intruder.state < 0 || intruder.state > 1 || intruder.wave < 0
+                || intruder.wave >= static_cast<int>(restored.waves.size()) || intruder.generation < 0
+                || !std::isfinite(intruder.x) || !std::isfinite(intruder.y) || !std::isfinite(intruder.z)
+                || !std::isfinite(intruder.yawDegrees) || !std::isfinite(intruder.size) || intruder.size <= 0
+                || !std::isfinite(intruder.speed) || intruder.speed <= 0
+                || !std::isfinite(intruder.walkFactor) || intruder.walkFactor <= 0)
+                throw std::runtime_error("Invalid saved sheep intruder.");
+            const auto& animal = sheep[intruder.sheepIndex];
+            if ((intruder.state == 0 && (animal.state == 3 || animal.state == -1))
+                || (intruder.state == 1 && animal.state != 3 && animal.state != -1))
+                throw std::runtime_error("Invalid saved abduction relation.");
+            const auto& wave = restored.waves.at(intruder.wave);
+            const auto& frames = intruder.generation == 1 && wave.contains("subwalk") && !wave.at("subwalk").empty()
+                ? wave.at("subwalk") : wave.at("walk");
+            const auto model = wave.at(intruder.generation == 1 ? "submodel" : "model").get<std::string>();
+            if (intruder.model != model || nlohmann::json(intruder.walkModels) != frames)
+                throw std::runtime_error("Invalid saved intruder model.");
+            claimed[intruder.sheepIndex] = true;
+        }
+        for (std::size_t index = 0; index < sheep.size(); ++index)
+            if ((sheep[index].state == 3 || (sheep[index].reserved && sheep[index].state != -1)) && !claimed[index])
+                throw std::runtime_error("Missing saved sheep intruder.");
+        restored.sheep_ = std::move(sheep); restored.intruders_ = std::move(intruders); restored.animalClockMs_ = clock;
+        restoredAnimals = true;
+    } catch (const std::exception&) {
+        // Constructor placement is a legacy adaptation on its isolated session seed, never the restored combat RNG.
+        restored.intruders_.clear(); restored.animalClockMs_ = restored.timeMs;
+        const int lost = std::max(0,static_cast<int>(restored.sheep_.size()) - restored.lives);
+        for (std::size_t index = 0; index < restored.sheep_.size(); ++index)
+            if (index < static_cast<std::size_t>(lost)) {
+                restored.sheep_[index].reserved = true; restored.sheep_[index].state = -1;
+            }
+    }
+    // Camera focus is optional and cannot invalidate the saved sheep state or combat RNG.
+    try {
+        const auto focus = state.at("animals").at("lossFocus").get<Vec2>();
+        if (std::isfinite(focus.x) && std::isfinite(focus.y)) restored.lastAbductionFocus_ = focus;
+    } catch (const nlohmann::json::exception&) {}
+    if (restored.lives <= 0 && !restored.lastAbductionFocus_ && !restored.sheep_.empty())
+        restored.lastAbductionFocus_ = Vec2{restored.sheep_.back().x,restored.sheep_.back().y};
     restored.updateDistances();
     restored.message = restoredAnimation ? "Saved game restored." : "Saved game restored; animation history reconstructed.";
+    if (!restoredAnimals) restored.message += " Legacy animal state reconstructed.";
     *this = std::move(restored);
 }
 } // namespace tmreborn

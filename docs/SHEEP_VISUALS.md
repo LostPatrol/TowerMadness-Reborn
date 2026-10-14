@@ -97,4 +97,6 @@ fade = elapsed>600 ? max(1-(elapsed-600)/500,0) : 1
 
 ## 适配边界
 
+当前原生实现已接入：`src/animals.cpp`维护共享MT布局、吃草/转向及追羊/捕获；`src/main.cpp::animalScene`绘制100ms帧、翻转/升空/光束与阴影；`session.cpp`保存可选animals扩展。详细原外层时钟、终局与镜头约束见[SHEEP_SCHEDULING.md](SHEEP_SCHEDULING.md)。25项CPU检查及真实GL采样覆盖现有实现，原作稀疏抓羊/失败截图保留在`agent/codex/p8-original-sheep-runtime`，尚非逐帧计时等价验收。
+
 以上明确恢复了布局算法、尺寸分布、姿态、状态顺序、100ms同步动画、追逐/翻转/升空和阴影矩阵。仍需运行时验证：完整原作随机消费顺序、不同地图/游戏种子的逐只精确位置、暂停/倍速/终局时完整调度，以及原GL透明材质状态。不能把新桌面截图或静态恢复称为这些动态验收已通过。

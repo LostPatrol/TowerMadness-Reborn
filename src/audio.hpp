@@ -18,6 +18,8 @@ public:
     void setVolumes(float effects, float music);
     // Play a configured effect or select menu/build/game looping music.
     void play(const std::string& sound);
+    // Stop already-open playback for the original final capture without changing user gains.
+    void silence();
     // Refill bounded music queues and retire completed effect streams.
     void update();
     // Return the last nonfatal audio diagnostic.

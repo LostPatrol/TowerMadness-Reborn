@@ -166,6 +166,9 @@ Audio::Audio(const std::filesystem::path& root) : impl_(std::make_unique<Impl>()
 // Destruction can only close devices previously opened after explicit opt-in.
 Audio::~Audio() { impl_->stop(); }
 
+// This operation only closes streams; it never initializes an audio device.
+void Audio::silence() { impl_->stop(); }
+
 // Positive volumes opt into playback; full mute shuts the subsystem down.
 void Audio::setVolumes(float effects, float music) {
     impl_->effectsVolume = volume(effects);

@@ -3,7 +3,7 @@
 
 ## 当前基线
 
-Windows x64原生C++20重建已进入P8首轮交互与表现开发基线，游戏品质及原作动态保真验收仍未完成。路线见docs/P8_GAME_QUALITY_PLAN.md：PlainPlane样板继续对照原作，再扩展全玩法并重新验收。私有仓库LostPatrol/TowerMadness-Reborn，本地main；默认不新建分支/worktree。最终交付不得以模拟器运行，开发期允许Android/ARM模拟器；用户已授权安装项目内原作对照环境。
+Windows x64原生C++20重建已进入P8首轮交互与表现开发基线，游戏品质及原作动态保真验收仍未完成。2026-10-14已收束现有羊群阶段；用户明确暂停P8并准备检查技术路线，未经恢复指令不继续扩展。现状/证据/决策点见docs/TECHNICAL_ROUTE_REVIEW.md，阶段目标见docs/P8_GAME_QUALITY_PLAN.md。私有仓库LostPatrol/TowerMadness-Reborn，本地main；默认不新建分支/worktree。最终交付不得以模拟器运行，开发期允许Android/ARM模拟器；用户已授权安装项目内原作对照环境。
 
 两个原APK均保持不变且不进入Git。既有ARM包SHA-256为0bc4ec90ebf0eab249cab4c39b9390c1f05dafffd83f92adcf09251890b3cb8b；新增Madness_Zero-1.22.apk为真实x86包，SHA-256为7e8d09079c963e36f4ba633712b112f65d410740405e828405404fd729afd3dd。两包同证书、classes.dex和1943项游戏资产相同，仅Info.plist版本码不同；原资源/规则基线无需替换。详见docs/APK_BASELINES.md；跨ABI原生行为尚未逐函数证明相同。
 
@@ -29,7 +29,7 @@ PlainPlane地形11×16、导航22×32，每tile2单位。terrain0可走不可建
 
 伤害为整数HP。beam先trunc(damage*boost*heat)再护甲截断；flame先boost/护甲再heat截断；flak/lightning/mine忽略boost。线攻击比较垂直距离平方与原radius本值。slow是速度减少比例，弱效果延长强效果，强/相等可重置成更短时间；跨零最后一步仍有效，缩放regen。分裂子代继承slow/stun，heat重置1；deque保持引用稳定，子代可参与后续连锁跳跃/塔/投射物。
 
-无限使用原2000个float32表样本、加权类型、每8波boss及四次HP多项式；地图SHA1种子来自原精确gamemode文本含NUL。Sandbox虽用Hard波资源，必须以10000金币配置计算种子。战斗随机算法恢复为MT19937，当前桌面初始种子1；原会话初始种子/完整消费顺序仍未逐项对齐。
+无限使用原2000个float32表样本、加权类型、每8波boss及四次HP多项式；地图SHA1种子来自原精确gamemode文本含NUL。Sandbox虽用Hard波资源，必须以10000金币配置计算种子。战斗随机为MT19937，交互加载mode时以时间微秒部分作为sessionSeed；离线检查默认1，相同mode重开保留种子。羊初始化9N输出后才分配UFO每pad1输出，森林用独立MT0。整局随机消费/跨ABI浮点仍未逐项对齐。
 
 修改入口见docs/DEVELOPMENT.md；原规则索引见RULES.md、PROJECTILE_RULES.md、EFFECT_RULES.md、MODES.md，场景见RENDERING.md。普通任务勿扫描agent/codex、agent/grok；需要证据时按这些文档定向读取。
 
@@ -43,7 +43,9 @@ Renderer保留非均匀scale、UVscale/offset和point billboard；原point RGBA�
 
 导弹五层命中按固定1.5s绘制分母接入，随机expiry1.5..4.5s不拉长动画；保留impactXYZ并使用独立视觉抖动，白/蓝flash三材料。Flak早期blast为真正点精灵，与主burst共用到原origin的相机距离。Flak/导弹固定像素大小没有plasma/flame的屏幕倍率。原trail为无纹理additive四边形，按原距离/弹道秒阈值在非命中更新采样；Energy等武器前缀禁用。播放速度倒数仅影响trail alpha，正常图形模式0启用trail。可选projectile.trail存采样点/阈值，旧/坏视觉字段保留有效核心继续。规格/证据/入口见docs/PROJECTILE_VISUALS.md。
 
-交互短暂Effect/Beam由SDL单调realtime老化，暂停/菜单/失焦继续消退，倍速仅改变仿真及trail alpha；首次接入保留已有事件年龄。离线Game使用确定性仿真秒。短暂事件与realtime不保存；尸体、塔appearance、动画和trail采样保存。塔build/sell按原scale/Z升降、upgrade先旧模型缩回再新模型升起，独立底座、directionalshadow、Tesla双ring及boost rangecircle已接入。出售刚升级的塔使用当前模型，Tesla售塔首半段仍绘制。选中使用原selection rect/Z.1/XY2及rangecircle/Z.15/range/颜色；非法500ms淡出、升级橙色范围淡出及建造范围预览仍未完整恢复。视觉hash不等于lrand48/drand48，原plasma/flame屏幕倍率未标定，trail透明排序、bait屏幕aura、条件核爆2D闪光与完整羊动作未闭合。
+交互短暂Effect/Beam由SDL单调realtime老化，暂停/菜单/失焦继续消退，倍速仅改变仿真及trail alpha；首次接入保留已有事件年龄。离线Game使用确定性仿真秒。短暂事件与realtime不保存；尸体、塔appearance、动画和trail采样保存。塔build/sell按原scale/Z升降、upgrade先旧模型缩回再新模型升起，独立底座、directionalshadow、Tesla双ring及boost rangecircle已接入。出售刚升级的塔使用当前模型，Tesla售塔首半段仍绘制。选中使用原selection rect/Z.1/XY2及rangecircle/Z.15/range/颜色；非法500ms淡出、升级橙色范围淡出及建造范围预览仍未完整恢复。视觉hash不等于lrand48/drand48，原plasma/flame屏幕倍率未标定，trail透明排序、bait屏幕aura、条件核爆2D闪光未闭合。
+
+src/animals.cpp维护原尺寸/颜色、吃草/移动/转向及预订羊的入侵者，main.cpp::animalScene组装100ms同步帧、600ms翻转/2000ms升空/beam/shadow。每25ms先羊再入侵者，末尾递增独立animal.clock。敌人漏出立即扣生命，lives0锁输入但继续完整战斗至最后羊隐藏，胜利等待无活跃入侵者；隐藏>=2600ms、入侵者删除>2600ms不可合并。最后预订时固定镜头锚点，realtime残余位移插值，最终eyeY+5/Z10/FOV约65.3252，保留倍速；重试重置桌面镜头。可选session.animals保存羊/入侵者/时钟/锚点，坏或旧字段用隔离同seed构造布局兼容，不能消费已恢复战斗RNG，也不等于恢复旧羊历史。UFO保存初始heading/rate，绘制角度来自game clock，hover beam用realtime。静态依据见SHEEP_VISUALS.md、SHEEP_SCHEDULING.md；完整原作动态等价尚未验。
 
 ## 工具与验证条件
 
@@ -57,12 +59,12 @@ GUI验收注意：Profile::userDirectory使用SHGetKnownFolderPath，覆盖LOCAL
 
 ## 验收范围与未解决风险
 
-本机RX9070XT通过24项规则/保存、116模式原资金自然开局、116地图实际GL绘制、420PNG/321模型完整加载、36Ogg离线解码。1280×900和1000×700拾取通过；--smoke-test实际480×800原相机四角与独立静态投影最大差.006逻辑像素，并覆盖合法50金币建/升/售模型阶段、appearance保存/旧坏字段降级及真实wall-clock暂停Rail两秒到期、核心/RNG冻结。当前20261013-084619原生ZIP已在中文含空格目录解压、C:/Windows/Temp及仅Windows PATH实际启动，self/smoke/desktop/input/resource均退出0。仅一台Windows，非真正干净OS；GL/投影检查不等于原作逐像素动态等价。
+本机RX9070XT通过25项规则/保存、116模式原资金自然开局、116地图实际GL绘制、420PNG/321模型完整加载、36Ogg离线解码。1280×900和1000×700拾取通过；--smoke-test实际480×800原相机四角与独立静态投影最大差.006逻辑像素，并覆盖合法50金币建/升/售模型阶段、appearance保存/旧坏字段降级、真实wall-clock暂停Rail两秒到期/核心RNG冻结及自然羊群收尾序列。仅一台Windows，非真正干净OS；GL/投影检查不等于原作逐像素动态等价。当前打包和独立目录验证以2026-10-14收束报告为准。
 
-P8首轮原资金50金币、生产SDL输入自然26波10羊（523200ms、235击杀、1422分）与自然失败成立。三窗口布局、菜单/预览不弃局/改相机、胜利解锁/下一战役/重复胜利、退出保存失败保留当前局通过。--visual-test原10000金币沙盒合法API建塔/发波覆盖12基础类别及6高级形态，导弹/炮弹检查真实命中及trail，不改资金/HP/波/RNG；高级直建不等于UI升级路径。只证明本机当前实现可运行，不构成原作等价或人类可用性最终验收。
+P8首轮原资金50金币、生产SDL输入自然26波10羊（523250ms、235击杀、1422分）与自然失败成立。三窗口布局、菜单/预览不弃局/改相机、胜利解锁/下一战役/重复胜利、退出保存失败保留当前局通过。--visual-test原10000金币沙盒合法API建塔/发波覆盖12基础类别及6高级形态，导弹/炮弹检查真实命中及trail，不改资金/HP/波/RNG；高级直建不等于UI升级路径。只证明本机当前实现可运行，不构成原作等价或人类可用性最终验收。
 
-没有手机；API17 default ARM＋SDK25.2.5 classic＋原Google签名完整Phonesky4.3.11已真实运行未改ARM APK，菜单、PlainPlane、50金币10羊、10金币迫击炮建造/选中及首波有PNG。原UI显示V1.21、manifest1.22，摘要不变；单迫击炮参考局第4波丢完10羊，未原作通关。新x86 APK在官方API24 Google APIs仍libcxx.so/系统linker unwind SIGSEGV，旧Play5586仍unauthorized；不改WHPX/系统功能或重启Windows。原ARM动态证据支持镜头/场景方向，完整动态等价未验。GAME_togglePlaySpeed静态1/2/4已知，原UI仅白→绿观察未测倍率。完整活动链/多诱饵堵路/同刻排序、完整羊群/抓羊与Menu world仍未恢复；116关未全部自然通关，密集长时无限、跨机器、高DPI跨显示器、实际声音播放未验。购买验证/广告排除。
+没有手机；API17 default ARM＋SDK25.2.5 classic＋原Google签名完整Phonesky4.3.11已真实运行未改ARM APK，菜单、PlainPlane、50金币10羊、10金币迫击炮建造/选中及首波有PNG。原UI显示V1.21、manifest1.22，摘要不变；单迫击炮参考局第4波丢完10羊，未原作通关。原作羊群稀疏抓羊/失败PNG在agent/codex/p8-original-sheep-runtime，runtime-0016有4生命和抓羊束、runtime-0024为失败菜单；不是逐帧/同种子/计时对齐验收。新x86 APK在官方API24 Google APIs仍libcxx.so/系统linker unwind SIGSEGV，旧Play5586历史未授权；不改WHPX/系统功能或重启Windows。原ARM动态证据支持镜头/场景方向，完整动态等价未验。GAME_togglePlaySpeed静态1/2/4已知，原UI倍率未实测。完整活动链/多诱饵堵路/同刻排序与Menu world仍未恢复；116关未全部自然通关，密集长时无限、跨机器、高DPI跨显示器、实际声音播放未验。购买验证/广告排除。
 
 性能检查为完整自然局及其轻负载峰值场景的12000帧、关闭VSync且glFinish同步；不能据此保证所有大地图/多小时局的60FPS。无限已发波历史仍保留在状态数组，超长局内存覆盖不足。旧Android存档兼容、联网/排行/多人不在本次交付范围。
 
-当前可用参考AVD TM_Original_API17_ARM_clean/5592，旧ARM5580已正常停止并保留数据，旧Play5586保留。Phonesky4.3.11普通安装依赖SHA256 04897ec9492ab119c137b18a021ec931f547c91faeb1d73d4a36b78592e2f03a，含dex、1089 payload签名摘要及Google证书已验证，来源/复现见docs/ANDROID_REFERENCE.md。勿再普通安装无dex的预优化Phonesky、拼接ODEX/改签名/模拟响应/注入guest keys。续接须核验实际进程/adb，历史PID不是存活证据。原羊初始化/100ms帧/吃草移动/追羊/抓羊完整静态规格见docs/SHEEP_VISUALS.md，尚未接入；其RNG消费影响战斗，不能用独立视觉随机冒充原会话。原作旧截图的25升级来自被误标的迫击炮，不作为激光依据；原价Laser10→20、Mortar10→25静态链见docs/UPGRADE_PRICE.md；普通UI另实测Mortar50→40→15、混合塔局Laser40→30→10，身份依据见ORIGINAL_TOWER_IDENTITY。资源价格不改。
+可复用参考AVD TM_Original_API17_ARM_clean/5592，旧ARM5580已正常停止并保留数据，旧Play5586保留。Phonesky4.3.11普通安装依赖SHA256 04897ec9492ab119c137b18a021ec931f547c91faeb1d73d4a36b78592e2f03a，含dex、1089 payload签名摘要及Google证书已验证，来源/复现见docs/ANDROID_REFERENCE.md。勿再普通安装无dex的预优化Phonesky、拼接ODEX/改签名/模拟响应/注入guest keys。续接须核验实际进程/adb，历史PID不是存活证据。原羊RNG消费影响战斗，不能用独立视觉随机冒充原会话。原作旧截图的25升级来自被误标的迫击炮，不作为激光依据；原价Laser10→20、Mortar10→25静态链见docs/UPGRADE_PRICE.md；普通UI另实测Mortar50→40→15、混合塔局Laser40→30→10，身份依据见ORIGINAL_TOWER_IDENTITY。资源价格不改。
