@@ -3,7 +3,7 @@
 
 ## 当前基线
 
-Windows x64原生C++20重建停在P8首轮交互与表现基线，保留作参考，不再常规推进。2026-10-15用户通过agent/task/02-x86.md明确选择原x86核心复用路线，目标为完整Windows移植，优先复用原代码与GUI；旧重建不删除，完整移植验收尚未完成。现状/证据/决策点见docs/TECHNICAL_ROUTE_REVIEW.md。私有仓库LostPatrol/TowerMadness-Reborn，本地main；默认不新建分支/worktree。最终交付不得以模拟器运行，开发期允许Android/ARM模拟器；用户已授权安装项目内原作对照环境。
+Windows x64原生C++20重建停在P8首轮交互与表现基线，保留作参考，不再常规推进。2026-10-15用户通过agent/task/02-x86.md明确选择原x86核心复用路线，目标为完整Windows移植，优先复用原代码与GUI；旧重建不删除，固定参照Git标签reconstruction-reference-20261014/f4e8e08，原src/release保留。完整移植验收尚未完成。现状/证据/决策点见docs/TECHNICAL_ROUTE_REVIEW.md。私有仓库LostPatrol/TowerMadness-Reborn，本地main；默认不新建分支/worktree。最终交付不得以模拟器运行，开发期允许Android/ARM模拟器；用户已授权安装项目内原作对照环境。
 
 两个原APK均保持不变且不进入Git。既有ARM包SHA-256为0bc4ec90ebf0eab249cab4c39b9390c1f05dafffd83f92adcf09251890b3cb8b；新增Madness_Zero-1.22.apk为真实x86包，SHA-256为7e8d09079c963e36f4ba633712b112f65d410740405e828405404fd729afd3dd。两包同证书、classes.dex和1943项游戏资产相同，仅Info.plist版本码不同；原资源/规则基线无需替换。详见docs/APK_BASELINES.md；跨ABI原生行为尚未逐函数证明相同。
 

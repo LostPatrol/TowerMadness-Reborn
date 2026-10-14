@@ -30,13 +30,21 @@ Windows 替换的边界为 C 运行库、同步与单线程 GS 存储、文件�
 
 ```powershell
 & .\tools\x86-reuse\prepare.ps1
-& .\tools\x86-reuse\build.ps1
-& .\tools\x86-reuse\run.ps1 -Mode play
+& .\tools\x86-reuse\build.ps1 -BuildDirectory <build dir>
+& .\tools\x86-reuse\run.ps1 -Mode play -OutputDirectory <evidence dir>
 ```
 
-已构建后也可双击 `tools/x86-reuse/play.cmd`。直接进入 PlainPlane；鼠标点击战场/原轮盘建塔，右下原按钮或空格发波，右上原按钮切换速度，关闭窗口退出。固定 480×800、静音、不保存进度。原 MENU 按钮目前显示原型说明，不运行完整主菜单。
+已构建后也可双击 `tools/x86-reuse/play.cmd`。直接进入 PlainPlane；鼠标点击战场/原轮盘建塔，右下原按钮或空格发波，右上原按钮切换速度，关闭窗口退出。固定 480×800、静音、不保存进度。直达关卡模式下的 MENU 按钮仍为 `HOST_PAUSE`（见下）。
 
-运行模式 `scene` 绘制开局，`input` 用 Windows 鼠标消息操作原轮盘并点击原发波按钮，`combat` 经原命令建立两座激光塔并发波；后两者运行35秒。`run.ps1`保留独立时间戳日志与真实进程退出码。截图、原统计、逐500ms状态和构建目录位于 `agent/codex/x86-reuse`，不进入发布目录。
+`-Map` 选择 `<assets>/<Map>.gamemode`，宿主把它交给原 `GAMEMODE_load`；`-OutputDirectory` 决定日志、trace、result 与 PNG 的根目录，每次运行再建独立时间戳子目录，不覆盖既有证据。
+
+运行模式 `scene` 绘制开局，`input` 用 Windows 鼠标消息操作原轮盘、点原发波按钮并点原倍速热区，`combat` 经原命令建立两座激光塔并发波。新增：`upgrade` 用原 `GAME_buildTower → TOWERS_getIdForCell → GAME_upgradeTower → GAME_sellTower`；`flood` 周期调用原 `GAME_sendNextWave` 直到原 `GAME_hasEnded`；`autoplay` 另用原 `GAME_togglePlaySpeed` 切 4 倍速并发波到底；`levels` 只枚举包内 `*.gamemode`。所有场景每帧查询原 `GAME_hasEnded/GAME_isWon/GAME_getFinalScore/GAME_getFinalLifes`，只有原函数真的报告结束才写终局结果。
+
+原菜单模式：`menu`（可见窗口、真实鼠标、Esc 返回）与 `menuauto`（有界，候选点扫描并截图）。
+宿主调用原 `MENU_alloc → MENU_setResolution → MENU_show → MENU_changePage(mainMenuPage)`，随后完全按原外层逻辑运行
+`MENU_update/MENU_render` 或 `GAME_update/GAME_render`，终局走 `GAME_hasEnded → GAME_silence → MENU_endGame`；
+菜单显示期间不装宿主 stub，不手搓替代界面。平台 selector 仅做明确列举的替换（`sharedApplication`/`setIdleTimerDisabled:`/
+`unlockedFullVersion→1`/`current`/URL/分数/字符串等），dummy 接收者上的未知 selector 记录并返回 0，其余未知仍终止。
 
 ## 修改入口
 
@@ -47,15 +55,23 @@ Windows 替换的边界为 C 运行库、同步与单线程 GS 存储、文件�
 | 原库/原资产准备 | `prepare.ps1` |
 | GL stdcall/cdecl 参数桥 | `gl-signatures.mjs`，依据项目现有 SDL 官方头文件 |
 | 单独构建/运行 | `build.ps1` / `run.ps1` |
+| 原菜单只读导出 | `agent/dsh/ghidra-scripts/NativeMenuProbe.java` |
 
 原物理库含23个 ELF；没有初始化完整 Apportable/Objective-C 应用及其所有构造器。只沿原 C 核心调用链初始化 `PGL_init → WAVES_init → GAMEMODE_load → GAME_alloc`。此边界是可行性实验的重要条件，不能描述为完整旧平台已兼容。
 
 ## 当前限制与下一步
 
-- 只验证 PlainPlane 短局、激光和迫击炮及这条交互路径；全部武器/关卡、胜负、升级/出售、长局及保存未验。
+- 已实测（native 退出码 0）：`levels` 116 关；`scene` PlainPlane/DividedAttention/MuttonsFolly/Madness/AshMountain 五图开局；
+  `upgrade` 金钱 50→40→20→50；`flood`/`autoplay`/`input` 均自然结束。命令与判据见 `execution-requests-stage2.md`。
+- 原菜单驱动执行原 `MENU_alloc/init/show/render/update/handleTouch*` 与 `MENUWORLD_*`，导出证据在 `agent/dsh/menu-evidence`。
+  驱动已构建；开发副本的 `menuauto` 正常运行30秒，但截图仅有原3D背景，按钮/标题未显示。原菜单和选关交互尚未通过。
 - 当前 GS 和锁适配针对单线程，Bionic 全线程/TLS/stdio ABI及其他导入尚未完整支持。
-- 主菜单、关卡选择、设置和原外围生命周期未移植。默认语言返回原文本；音频按用户要求禁用，不能声称音频保真。
+- 关卡选择、设置和原外围生命周期未移植。默认语言返回原文本；音频按用户要求禁用，不能声称音频保真。
 - HUD字体/屏幕密度、透明状态及驱动/宿主数学库舍入仍需原作对照；不保证逐像素或跨ABI逐位一致。只验证一台Windows机器。
 - 原加载器报告未找到 `robosteal_walk0..19.model`，已保留诊断；其原资源回退与对应敌人尚未验。
 
 当前证据支持优先推进原核心复用，先补齐启动/菜单与平台接口并覆盖代表性武器和完整关卡。现有重建仍保留作对照，不因单关通过立即替换发行主线。
+
+旧重建与初始复用实验保存在 Git 标签 `reconstruction-reference-20261014`（`f4e8e08`），原 `src` 与 `release` 保持可参考。
+委派开发的固定工作区是 `agent/dsh`；专用桥构建最新副本，产品构建默认仍用 `tools/x86-reuse/host.cpp`。
+手工构建副本可传 `build.ps1 -HostSource <absolute-host.cpp> -BuildDirectory <build-directory>`；最终须将已验证副本同步回产品源码。
