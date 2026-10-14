@@ -558,8 +558,39 @@ std::uint32_t __cdecl nativeMessage(void* receiver, const char* selector, ...) {
     if (name == "delegate") return 0; // A headless host has no UIKit delegate.
     // Purchase verification is explicitly out of scope; the full-version menu pages are required.
     if (name == "unlockedFullVersion") { log("PLATFORM_PURCHASE unlockedFullVersion -> 1 (full build)"); return 1; }
+    // Store gating is out of scope; every shipped gamemode is startable in this full build.
+    if (name == "canStartMapWithName:") {
+        va_list arguments; va_start(arguments, selector);
+        const char* mapName = va_arg(arguments, const char*); va_end(arguments);
+        log(std::string("PLATFORM_STORE canStartMapWithName: ") + ((mapName && printableCString(mapName)) ? mapName : "(unprintable)") + " -> 1 (content shipped; purchase gate excluded)");
+        return 1;
+    }
     // Progress/account sync is kept as a real in-memory key/value contract for this run.
     if (name == "current") return reinterpret_cast<std::uint32_t>(&hostGameAccountToken);
+    if (name == "isGameCenter") { log("PLATFORM_CAPABILITY isGameCenter -> 0 (no Game Center on this host)"); return 0; }
+    if (name == "isGameCenterAvailable") { log("PLATFORM_CAPABILITY isGameCenterAvailable -> 0 (no Game Center on this host)"); return 0; }
+    if (name == "flush") { log("PLATFORM_ACCOUNT flush"); return 0; }
+    if (name == "name") {
+        HostString* value = nextHostString();
+        std::snprintf(value->text, sizeof(value->text), "host");
+        log("PLATFORM_STRING name -> host");
+        return reinterpret_cast<std::uint32_t>(value);
+    }
+    if (name == "UTF8String") {
+        for (auto& candidate : hostStrings)
+            if (receiver == &candidate) return reinterpret_cast<std::uint32_t>(candidate.text);
+        log("PLATFORM_STRING UTF8String on a non-host receiver");
+        return reinterpret_cast<std::uint32_t>("");
+    }
+    if (name == "setCurrentContext:") { log("PLATFORM_GL setCurrentContext: (host retains its context)"); return 0; }
+    if (name == "stopAnimation") { log("PLATFORM_UI stopAnimation -> 0"); return 0; }
+    // Campaign/DLC progress accessors: an empty store is a fresh profile (locked); purchase content is excluded.
+    if (name.rfind("unlocked", 0) == 0) {
+        const auto found = hostAccountInts.find(name);
+        const int result = found == hostAccountInts.end() ? 0 : found->second;
+        log("PLATFORM_PROGRESS " + name + " -> " + std::to_string(result) + " (fresh profile)");
+        return static_cast<std::uint32_t>(result);
+    }
     if (name == "stringWithUTF8String:") {
         va_list arguments; va_start(arguments, selector);
         const char* text = va_arg(arguments, const char*);
@@ -580,6 +611,34 @@ std::uint32_t __cdecl nativeMessage(void* receiver, const char* selector, ...) {
         log("PLATFORM_STRING format=" + std::to_string(reinterpret_cast<std::uintptr_t>(format)) + " -> " + std::string(value->text));
         return reinterpret_cast<std::uint32_t>(value);
     }
+    if (name.rfind("getBool", 0) == 0) {
+        va_list arguments; va_start(arguments, selector);
+        const void* key = va_arg(arguments, const void*);
+        const int fallback = va_arg(arguments, int);
+        va_end(arguments);
+        const std::string text = hostKeyText(key);
+        const auto found = hostAccountInts.find(text);
+        const int result = found == hostAccountInts.end() ? fallback : found->second;
+        log("PLATFORM_ACCOUNT getBool " + text + " default=" + std::to_string(fallback) + " -> " + std::to_string(result));
+        return static_cast<std::uint32_t>(result);
+    }
+    if (name.rfind("getString", 0) == 0) {
+        va_list arguments; va_start(arguments, selector);
+        const void* key = va_arg(arguments, const void*);
+        const void* fallback = va_arg(arguments, const void*);
+        va_end(arguments);
+        const std::string text = hostKeyText(key);
+        const auto found = hostAccountStrings.find(text);
+        if (found != hostAccountStrings.end()) {
+            HostString* value = nextHostString();
+            std::snprintf(value->text, sizeof(value->text), "%s", found->second.c_str());
+            log("PLATFORM_ACCOUNT getString " + text + " -> " + std::string(value->text));
+            return reinterpret_cast<std::uint32_t>(value);
+        }
+        // withDefault: semantics require the caller's own default object when the key is absent.
+        log("PLATFORM_ACCOUNT getString " + text + " -> default " + hostKeyText(fallback));
+        return reinterpret_cast<std::uint32_t>(fallback);
+    }
     if (name.rfind("getInt", 0) == 0) {
         va_list arguments; va_start(arguments, selector);
         const void* key = va_arg(arguments, const void*);
@@ -590,6 +649,16 @@ std::uint32_t __cdecl nativeMessage(void* receiver, const char* selector, ...) {
         const int result = found == hostAccountInts.end() ? fallback : found->second;
         log("PLATFORM_ACCOUNT getInt " + text + " default=" + std::to_string(fallback) + " -> " + std::to_string(result));
         return static_cast<std::uint32_t>(result);
+    }
+    if (name.rfind("setBool", 0) == 0) {
+        va_list arguments; va_start(arguments, selector);
+        const void* key = va_arg(arguments, const void*);
+        const int value = va_arg(arguments, int);
+        va_end(arguments);
+        const std::string text = hostKeyText(key);
+        hostAccountInts[text] = value;
+        log("PLATFORM_ACCOUNT setBool " + text + "=" + std::to_string(value));
+        return 0;
     }
     if (name.rfind("setInt", 0) == 0) {
         va_list arguments; va_start(arguments, selector);
@@ -929,18 +998,44 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
     activeGame = menu;
     *reinterpret_cast<void**>(hostView.data() + 0x40) = menu;
     log("ORIGINAL_MENU_ALLOC " + std::to_string(reinterpret_cast<std::uintptr_t>(menu)));
-    menuSetResolution(menu, 480, 800);
-    // MENU_alloc runs MENU_init before the caller can set the resolution, so fix the world size too.
-    if (void* world = *reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x160)) worldSetResolution(world, 480, 800);
+    // menu+0x110/+0x114 hold the FLOAT logical canvas size; MENU_render uses them as glOrthof bounds
+    // and MENU_init passes them to CAMERA_setWindowSize. The original EAGLView passes the view size in
+    // points, so use the host window size in FLOAT bit patterns: menu logical coordinates then equal
+    // Windows pixels and no touch rescale is needed. Integer 480/800 here would be denormal floats.
+    {
+        const std::int32_t logicalWidth = static_cast<std::int32_t>(0x43f00000u);  // 480.0f
+        const std::int32_t logicalHeight = static_cast<std::int32_t>(0x44480000u); // 800.0f
+        menuSetResolution(menu, logicalWidth, logicalHeight);
+        log("ORIGINAL_MENU_LOGICAL widthBits=" + std::to_string(logicalWidth) + " heightBits=" + std::to_string(logicalHeight));
+        if (void* world = *reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x160)) worldSetResolution(world, logicalWidth, logicalHeight);
+    }
     menuShow(menu);
     if (void* mainPage = findExport("mainMenuPage")) { menuChangePage(menu, mainPage); log("ORIGINAL_MENU_PAGE mainMenuPage"); }
     else log("ORIGINAL_MENU_PAGE_MISSING mainMenuPage");
+    // Original vertical tab hit layout lives in libverde rodata (Ghidra 0x372e80.. -> ELF VA 0x362e80..).
+    const auto* imageBase = reinterpret_cast<const unsigned char*>(images.front()->base);
+    const auto rodataFloat = [&](std::uint32_t elfAddress) { return *reinterpret_cast<const float*>(imageBase + elfAddress); };
+    const float tabFirstY = rodataFloat(0x362e80), tabPitch = rodataFloat(0x362e84);
+    const float tabHitTop = rodataFloat(0x362ea8), tabHitBottom = rodataFloat(0x362eac);
+    const float tabXMax = rodataFloat(0x362e8c);
+    std::size_t tabCount = 0;
+    if (const auto* pageBytes = static_cast<const unsigned char*>(*reinterpret_cast<void**>(menu)))
+        while (tabCount < 16 && *reinterpret_cast<const void* const*>(pageBytes + 0x18 + 8 * tabCount)) ++tabCount;
+    log("ORIGINAL_MENU_TABS count=" + std::to_string(tabCount) + " firstY=" + std::to_string(tabFirstY)
+        + " pitch=" + std::to_string(tabPitch) + " hit=" + std::to_string(tabHitTop) + ".." + std::to_string(tabHitBottom)
+        + " xMax=" + std::to_string(tabXMax));
     const ULONGLONG start = GetTickCount64();
     // Bounded so the fixed bridge runner can finish; interactive clicks are still accepted while it runs.
     const ULONGLONG duration = scripted ? 30000 : 120000;
     bool capturedMain = false, capturedMap = false, capturedGame = false, capturedPause = false, windowClosed = false;
     void* lastPage = nullptr; void* lastGame = nullptr;
-    ULONGLONG gameStartAt = 0;
+    ULONGLONG gameStartAt = 0, nextTabClick = 1800, mapSelectAt = 0;
+    std::size_t tabIndex = 0;
+    int mapStep = 0;
+    ULONGLONG mapStepAt = 0;
+    // MAPMENU_touchesEnded only starts the selected entry when the tap is inside these rodata bounds.
+    const float mapHitMinX = rodataFloat(0x362e1c), mapHitMinY = rodataFloat(0x362b58), mapHitMaxY = rodataFloat(0x362e54);
+    log("ORIGINAL_MAP_HIT minX=" + std::to_string(mapHitMinX) + " minY=" + std::to_string(mapHitMinY) + " maxY=" + std::to_string(mapHitMaxY));
     if (!scripted) ShowWindow(windowHandle, SW_SHOW);
     while (GetTickCount64() - start < duration) {
         const ULONGLONG elapsed = GetTickCount64() - start;
@@ -948,12 +1043,49 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
         void* page = *reinterpret_cast<void**>(menu);
         const bool showing = *reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(menu) + 4) != 0;
         if (page != lastPage) { lastPage = page; log("ORIGINAL_MENU_PAGE_CHANGED " + std::to_string(reinterpret_cast<std::uintptr_t>(page))); }
+        if (page == findExport("startGamePage") && mapSelectAt == 0) mapSelectAt = elapsed;
         if (game && game != lastGame) {
             lastGame = game; gameStartAt = elapsed;
             gameSetResolution(game, 480, 800); glViewport(0, 0, 480, 800);
             log("ORIGINAL_MENU_GAME_STARTED " + std::to_string(reinterpret_cast<std::uintptr_t>(game)));
         }
         if (!capturedMain && elapsed >= 1500) { capture(output / "menu-main.png", 480, 800); capturedMain = true; }
+        // Scripted mode clicks each original tab centre (from the rodata hit layout) and records the page result.
+        if (scripted && capturedMain && tabIndex < tabCount && elapsed >= nextTabClick && page == findExport("mainMenuPage")) {
+            nextTabClick = elapsed + 1200;
+            const float clickY = tabFirstY + static_cast<float>(tabIndex) * tabPitch + (tabHitTop + tabHitBottom) * 0.5f;
+            const int clickX = static_cast<int>(tabXMax * 0.5f), pixelY = static_cast<int>(clickY);
+            const std::uintptr_t pageBefore = reinterpret_cast<std::uintptr_t>(page);
+            log("MENU_TAB_CLICK index=" + std::to_string(tabIndex) + " " + std::to_string(clickX) + "," + std::to_string(pixelY));
+            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickX, pixelY));
+            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(clickX, pixelY));
+            const std::uintptr_t pageAfter = reinterpret_cast<std::uintptr_t>(*reinterpret_cast<void**>(menu));
+            log("MENU_TAB_RESULT before=" + std::to_string(pageBefore) + " after=" + std::to_string(pageAfter));
+            ++tabIndex;
+            // Any incidental page (options/scores) goes back to the main menu so the next tab is tried.
+            if (*reinterpret_cast<void**>(menu) != findExport("mainMenuPage") && *reinterpret_cast<void**>(menu) != findExport("startGamePage")) {
+                reinterpret_cast<void(__cdecl*)(void*)>(findExport("MENU_backToMainMenu"))(menu);
+                reinterpret_cast<void(__cdecl*)(void*)>(findExport("MENU_show"))(menu);
+                log("MENU_TAB_REVERT");
+            }
+        }
+        // Scripted level-select flow: switch to the campaign tab, then tap the selected entry.
+        if (scripted && game == nullptr && mapSelectAt != 0 && mapStep == 0 && elapsed >= mapSelectAt + 800) {
+            mapStep = 1; mapStepAt = elapsed + 1200;
+            log("MENU_MAP_TAB campaign 112,785");
+            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(112, 785));
+            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(112, 785));
+        }
+        if (scripted && game == nullptr && mapStep >= 1 && mapStep <= 3 && elapsed >= mapStepAt) {
+            if (mapStep == 1) capture(output / "menu-campaign.png", 480, 800);
+            // The campaign page draws the selected map with an explicit TAP TO START prompt; tap its tile centre.
+            const int mapX = 240, mapY = 350;
+            log("MENU_MAP_CLICK step=" + std::to_string(mapStep) + " " + std::to_string(mapX) + "," + std::to_string(mapY));
+            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(mapX, mapY));
+            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(mapX, mapY));
+            log("MENU_MAP_CLICK_RESULT game=" + std::to_string(reinterpret_cast<std::uintptr_t>(*reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c))));
+            ++mapStep; mapStepAt = elapsed + 2000;
+        }
         if (scripted && !capturedPause && game && gameStartAt && elapsed >= gameStartAt + 6000) {
             reinterpret_cast<void(__cdecl*)(void*)>(findExport("MENU_backToMainMenu"))(menu);
             reinterpret_cast<void(__cdecl*)(void*)>(findExport("MENU_show"))(menu);
@@ -1006,6 +1138,13 @@ LONG WINAPI nativeFault(EXCEPTION_POINTERS* exception) {
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
+/** Locate the first matching byte, matching the original libverde libc import. */
+void* __cdecl nativeMemchr(void* block, int value, std::size_t count) {
+    auto* bytes = static_cast<unsigned char*>(block);
+    for (std::size_t i = 0; i < count; ++i) if (bytes[i] == static_cast<unsigned char>(value)) return bytes + i;
+    return nullptr;
+}
+
 /** Forward ordinary allocation and arithmetic through ABI-compatible Win32 C calls. */
 void registerC() {
     hooks["gettimeofday"] = reinterpret_cast<void*>(&nativeGettimeofday);
@@ -1035,6 +1174,7 @@ void registerC() {
     hooks["realloc"] = reinterpret_cast<void*>(&std::realloc); hooks["free"] = reinterpret_cast<void*>(&std::free);
     hooks["memcpy"] = reinterpret_cast<void*>(&std::memcpy); hooks["memmove"] = reinterpret_cast<void*>(&std::memmove);
     hooks["memset"] = reinterpret_cast<void*>(&std::memset); hooks["memcmp"] = reinterpret_cast<void*>(&std::memcmp);
+    hooks["memchr"] = reinterpret_cast<void*>(&nativeMemchr);
     hooks["strlen"] = reinterpret_cast<void*>(&std::strlen); hooks["strcmp"] = reinterpret_cast<void*>(&std::strcmp);
     hooks["strncmp"] = reinterpret_cast<void*>(&std::strncmp); hooks["strcpy"] = reinterpret_cast<void*>(&std::strcpy);
     hooks["strncpy"] = reinterpret_cast<void*>(&std::strncpy); hooks["strcat"] = reinterpret_cast<void*>(&std::strcat);

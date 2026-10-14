@@ -64,7 +64,8 @@ Windows 替换的边界为 C 运行库、同步与单线程 GS 存储、文件�
 - 已实测（native 退出码 0）：`levels` 116 关；`scene` PlainPlane/DividedAttention/MuttonsFolly/Madness/AshMountain 五图开局；
   `upgrade` 金钱 50→40→20→50；`flood`/`autoplay`/`input` 均自然结束。命令与判据见 `execution-requests-stage2.md`。
 - 原菜单驱动执行原 `MENU_alloc/init/show/render/update/handleTouch*` 与 `MENUWORLD_*`，导出证据在 `agent/dsh/menu-evidence`。
-  驱动已构建；开发副本的 `menuauto` 正常运行30秒，但截图仅有原3D背景，按钮/标题未显示。原菜单和选关交互尚未通过。
+  驱动已构建，原主菜单标题/按钮、选关和战役页可见；原NEW GAME→CAMPAIGN→PlainPlane TAP TO START已创建真实GAME。
+  `MENU_setResolution` 接收float逻辑画布尺寸；错误传整数会使UI投影塌缩。局内稳定HUD/战斗、暂停冻结、原保存和胜利链仍待验。
 - 当前 GS 和锁适配针对单线程，Bionic 全线程/TLS/stdio ABI及其他导入尚未完整支持。
 - 关卡选择、设置和原外围生命周期未移植。默认语言返回原文本；音频按用户要求禁用，不能声称音频保真。
 - HUD字体/屏幕密度、透明状态及驱动/宿主数学库舍入仍需原作对照；不保证逐像素或跨ABI逐位一致。只验证一台Windows机器。
