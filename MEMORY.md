@@ -63,7 +63,9 @@ REA6.4.0、Ghidra12.1.4、jadx-headless-mcp0.7.1、JADX1.5.6位于agent/codex/to
 
 主session-e2ef9fe5-098b-452f-a3a2-f9764733371d与goal-aadc801a-9b70-41f9-9621-86e9d3d47260由独立常驻loopback web持续执行完整目标。控制入口agent/dsh/bridge/persistent/dsh-session.ps1；动态PID/端口看state.json并实际核验，不按历史PID停服务，不同时headless打开同session。Cookie/stdout含本机鉴权信息不得输出。RPC使用payload.args与原cwd反斜杠拼写。status已包含live running、pendingApproval和recentEvents，不能只凭goal active/armed判断工作在推进。stop尚不核验PID复用且只停父cmd，清理时必须定向核验本任务进程树，不能影响其他服务。
 
-开发build固定编译changes/tools/x86-reuse/host.cpp；产品build默认仍用product源码。开发exe/WIP可能新于product；snapshot固定复制候选与源/exe哈希、mtime到bridge/snapshots，verified=false本身不代表测试通过，必须关联实际build/run再提升。原UI教程鼠标链、建塔扣款/发波/暂停冻结，以及原OBS/IBS含塔活动波的一份跨进程恢复已实测且目视正常；新保存输入/新候选复测仍出现失败，恢复稳定性继续查，不能用一次成功涵盖所有状态。CFString/成绩格式/getFloat、NSUserDefaults持久后端已写；F5/F9、无限menu/staged数据目录、终局具体类/自然胜利解锁、升级出售速度/重开/Options/Guide、116关12武器仍需对应验收。原函数与保存流导出在menu-evidence，独立qa快照需按当前版本复核；真实CPP工具编辑历史可定向读history/known-good-through-7258-cpp-edits.json辅助查回归，不盲目回滚。
+开发build固定编译changes/tools/x86-reuse/host.cpp；产品build默认仍用product源码，尚未整体提升最新WIP。snapshot保存源/exe哈希与mtime，verified=false本身不是验收。原教程鼠标链、扣款/发波/暂停冻结已实测；冻结snap-mv8m3g7c-84cd0a34的同一exe/source与同一含塔活动波存档，两次051825/051923均native0，末态一致。它只证明该输入可重复；新存档、F5/F9反复换局与旧对象回收仍需实测。
+
+终局当前基线：campaign-20261015-053637完成原失败判定→SCORES_save→删除对应续玩→切页，native0；但最终截图全白，GUI结算未通过。后继053827从磁盘还原成绩容器后在SCORES_load+0x18e崩溃，跨进程成绩读取未通过。不得把首次写入成功概括成完整成绩/终局支持。关键修复：objc_msgSend_fpret同其他汇编dispatcher一样需豁免STT_NOTYPE/零size hook过滤；Ghidra地址=ELF VA+0x10000，NSString/alloc/init槽为libverde+0x3DD690/0x3DC124/0x3DC128，旧0x2E开头常量错误。运行库未初始化，直接objc_getClass/sel_registerName会崩，不能当通用查询。TOWERS_getIdForCell需要TOWERS*，不能传GAME*；此前该探针自身导致access=2，不是原建塔逻辑已证实越界。原函数导出会被下一次Ghidra作业覆盖，保留副本再审查；qa/promotion-review/raw-20261015-0529有原始复制和哈希。独立qa报告需按源版本核对，不盲目提升/回滚。自然胜利解锁、完整GUI交互、116关12武器和最终包仍未完成。
 
 独立包脚本agent/dsh/package/package.ps1已实跑，staging-20261015-043811输入逐项校验；23原库、原资产与420PNG完整复制。包内exe从独立cwd跑scene成功，依赖仅Windows系统DLL；但exe老于WIP，完整GUI/保存/终局未验，非最终交付。详见agent/report/report-codex-20261015-044200-原存档跨进程与独立包预览.md。旧src/release和用户存档仍保留。后续从persistent status/bridge/jobs/status.md核对live工作，方向用steer，不因观察超时重启原生作业。
 
