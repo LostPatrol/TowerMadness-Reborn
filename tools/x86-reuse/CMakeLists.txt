@@ -1,0 +1,11 @@
+# Build a separate Win32 host that executes the original x86 ELF code.
+cmake_minimum_required(VERSION 3.20)
+project(TowerMadnessX86Probe LANGUAGES CXX)
+if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
+    message(FATAL_ERROR "The original ELF requires a native Windows x86 host.")
+endif()
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+add_executable(TowerMadnessX86Probe host.cpp)
+target_compile_options(TowerMadnessX86Probe PRIVATE /W4 /EHsc)
+target_link_libraries(TowerMadnessX86Probe PRIVATE opengl32 user32 gdi32 windowscodecs ole32)

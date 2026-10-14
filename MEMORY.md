@@ -7,6 +7,10 @@ Windows x64原生C++20重建已进入P8首轮交互与表现开发基线，游�
 
 两个原APK均保持不变且不进入Git。既有ARM包SHA-256为0bc4ec90ebf0eab249cab4c39b9390c1f05dafffd83f92adcf09251890b3cb8b；新增Madness_Zero-1.22.apk为真实x86包，SHA-256为7e8d09079c963e36f4ba633712b112f65d410740405e828405404fd729afd3dd。两包同证书、classes.dex和1943项游戏资产相同，仅Info.plist版本码不同；原资源/规则基线无需替换。详见docs/APK_BASELINES.md；跨ABI原生行为尚未逐函数证明相同。
 
+原x86核心复用已通过独立PlainPlane可行性门槛：tools/x86-reuse构建Win32宿主，直接执行原ELF机器码及原GAME/PGL；Windows鼠标经最小UIKit对象进入原EAGLView/GAME触摸逻辑，原轮盘建迫击炮、原按钮发波并发生击杀。激光原命令短局也成立。无需Android/CPU模拟器；现有产品源码/发行版/用户存档未替换。入口tools/x86-reuse/play.cmd，规格docs/X86_CORE_REUSE.md，原库副本及GS元数据在agent/codex/x86-reuse。优先继续原核心路线验证，但未授权以此单关原型直接替换发行主线。
+
+复用原型仅固定480×800、静音、不保存；MENU按钮给出未接入说明。直接C核心启动不初始化完整Apportable/ObjC应用；当前GS/锁只支持单线程，未知导入调用会终止。全武器/关卡、长局、原菜单与保存、DPI/透明状态/跨ABI数学尚未验；robosteal_walk0..19资源缺失日志未闭合。不要把已成功单关描述为完整移植或逐像素等价。
+
 运行入口release/TowerMadness.exe；发布ZIP含SDL3.dll、assets、许可和中文README。12类武器分别实现beam、plasma、railgun、homing、mortar、flak、flamethrower、lightning、mine、slow、boost、bait，读取四套tech及原禁用/升级配置。116有限模式对应116地图；四战役按胜利进度解锁，其余112通过明确的桌面资源库开放，不能称为原作全部已解锁。DividedAttention胜利解锁Hard及无限；MuttonsFolly胜利解锁Insane。三无限难度和沙盒使用当前地图。
 
 中文菜单/HUD、原塔图标、浏览/建造/选中状态、合法预览/取消、详情升级对比与精确退款、暂停、1/2/4倍速、重开确认及胜负结算已接入。关卡浏览使用独立Game及原地图GL缩略图，明确开始后才替换当前局；显示真实科技/波数/资金/成绩及保存摘要，胜利后记录新解锁并可直接下一战役。Game终局拒绝建/升/售/发波；按钮和键盘共用desktopInput，镜头事件经desktopEvent隔离菜单/模态/详情/建造栏，失焦清理拖动。Esc依次取消确认/菜单/建造/详情，再暂停；退出有明确按钮。战场矩形同时用于绘制、投影和拾取，900×700时也不让HUD遮住出生点和羊圈。修改入口docs/FRONTEND.md。
