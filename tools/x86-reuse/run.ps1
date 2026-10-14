@@ -1,6 +1,6 @@
 # Start the original-code prototype or run one bounded verification scenario.
 param(
-    [ValidateSet('play','scene','input','combat','upgrade','flood','autoplay','menu','menuauto','levels','map')][string]$Mode = 'play',
+    [ValidateSet('play','scene','input','combat','upgrade','flood','autoplay','menu','menuauto','campaign','levels','map')][string]$Mode = 'play',
     [string]$Map = 'PlainPlane',
     [string]$OutputDirectory = '',
     [string]$BuildDirectory = ''
@@ -34,12 +34,26 @@ if ($Mode -eq 'menu') {
 }
 # Only the expressly interactive modes open a visible Windows window.
 $style = if ($Mode -eq 'play' -or $Mode -eq 'menu') { 'Normal' } else { 'Hidden' }
-# The operation carries the original gamemode basename for scene-like runs.
-$operation = if ([string]::IsNullOrWhiteSpace($Map)) { $Mode } else { $Mode + ':' + $Map }
+# campaign is a bounded GUI acceptance run, not a map selection: it maps to the host's
+# existing menuauto:campaign operation, whose fixed 120s duration and hidden window are
+# host-owned. Every other mode keeps the historical mode:map operation.
+$operation = if ($Mode -eq 'campaign') { 'menuauto:campaign' } elseif ([string]::IsNullOrWhiteSpace($Map)) { $Mode } else { $Mode + ':' + $Map }
 $arguments = @(('"' + $package + '"'), $operation, ('"' + $log + '"'))
 $process = Start-Process -FilePath $executable -ArgumentList $arguments -WindowStyle $style -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
 $process.WaitForExit()
 $result = [pscustomobject]@{ mode=$Mode; map=$Map; operation=$operation; nativeExitCode=$process.ExitCode; runDirectory=$runDirectory; log=$log; stdout=$stdout; stderr=$stderr }
+if ($Mode -eq 'campaign') {
+    # The real selected map is the original game's own canStartMapWithName: call, never -Map.
+    $selectedMap = $null
+    if (Test-Path -LiteralPath $log) {
+        $mapLine = Select-String -LiteralPath $log -Pattern 'PLATFORM_STORE canStartMapWithName: ' | Select-Object -First 1 -ExpandProperty Line
+        if ($mapLine -and $mapLine -match 'canStartMapWithName: (.+?) -> 1') { $selectedMap = $Matches[1] }
+    }
+    $result | Add-Member -NotePropertyName scenario -NotePropertyValue 'campaign'
+    $result | Add-Member -NotePropertyName mapKnob -NotePropertyValue $Map
+    $result | Add-Member -NotePropertyName selectedMap -NotePropertyValue $selectedMap
+    $result | Add-Member -NotePropertyName mapClaim -NotePropertyValue 'selectedMap comes from the original canStartMapWithName: call; map/mapKnob is a test knob, not a verified map'
+}
 $result | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutputDirectory "$Mode-$timestamp-run.json") -Encoding utf8
 $result | Format-List
 if ($process.ExitCode -ne 0) { throw "The original-code probe failed with native exit $($process.ExitCode); inspect $log" }

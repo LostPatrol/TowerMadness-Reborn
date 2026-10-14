@@ -59,7 +59,13 @@ REA6.4.0、Ghidra12.1.4、jadx-headless-mcp0.7.1、JADX1.5.6位于agent/codex/to
 
 代理通常127.0.0.1:7897；Windows curl TLS失败可用D:/Git/mingw64/bin/curl.exe。不使用gh，不关闭本机其他服务，尤其MC服务器。任务指令由用户提供；新报告位于agent/report，TODO未经允许不改。
 
-02-x86由本机dsh承担主要研究实现与验收。用户澄清受限的是ChatGPT预算，dsh额度充足，不得要求省调用而降质量。过程目录agent/dsh不进Git。原Windows shell沙盒因SetNamedSecurityInfoW Win32 5不可用；保持workspace-write，不改ACL，禁用pwsh。已挂载有限project_native工具（bridge/load.patch.yml），只提供固定build/run/只读ghidra/status。build编译固定changes/tools/x86-reuse/host.cpp，输出agent/dsh/build；默认产品build仍编译product源码，每次HostSource明确覆盖CMake缓存。codex阶段结束才apply_patch提升已验副本，注意开发exe可能新于product cpp。原菜单主体/page/selector/保存流函数导出位于menu-evidence；独立qa/requirements与findings是带时间的快照，旧F1/F2不可见/首关未启动已解决，CFString/成绩/原保存等仍重要。主会话session-e2ef9fe5-098b-452f-a3a2-f9764733371d，配置workspace.patch.yml及bridge/load.patch.yml；续接先定向读status/stage7.events、bridge/jobs与qa快照，核对活跃进程后继续，避免重复分析。
+02-x86由本机dsh承担主要研究实现与验收。ChatGPT预算有限，dsh额度充足，不得要求省调用而降质量。过程目录agent/dsh不进Git。原Windows shell沙盒Win32 5未改ACL；workspace-write且pwsh禁用。有限project_native工具仅固定build/run/只读ghidra/status，build编译固定changes/tools/x86-reuse/host.cpp，输出agent/dsh/build；默认产品build仍用product源码。开发exe与WIP可能新于product，提升前要核对实际构建/运行版本，不能复制未验WIP冒充已验源码。
+
+DSH已迁移到独立常驻loopback web，主session-e2ef9fe5-098b-452f-a3a2-f9764733371d，goal-aadc801a-9b70-41f9-9621-86e9d3d47260完整目标active/armed。控制脚本agent/dsh/bridge/persistent/dsh-session.ps1，state.json记录PID/端口，cookie与stdout含本机鉴权信息不要输出。已实测status/queue/steer/resume；RPC payload必须{args:...}，session cwd必须原记录的E:\TowerMadness-Reborn\agent\dsh拼写。不要同时headless打开同session，writer互斥；headless每轮退出会终止goal连续驱动。当前服务PID41948/port64793只是历史线索，续接先实际RPC/进程核验，不按历史PID停服务。未修的stop只停父cmd且未核验PID复用，清理前需定向检查整棵本任务进程树，不碰其他服务。
+
+开发副本已实测原教程Windows鼠标链、轮盘建塔50→40、发波、暂停clock冻结，以及原OBS6076B含塔活动波同/跨进程恢复。关键跨进程证据menuauto-20261015-042157：40金币/42525ms恢复后44金币/4分/1生命/80600ms，第3/26波，codex目视塔/敌人/HUD正常。CFString内容键、真实格式化模式_beaten键/getFloat ABI已修；NSUserDefaults/profile-store已写，F5/F9/无限menu/staged数据路径等仍待对应交互验收，最新cpp尚未提升。终局alloc确切类/自然胜利解锁/后续战役、升级出售速度、Options/Guide、116关12武器仍未完整验。qa/save-audit对旧041114错误回调路径有效，不要把旧结论否定已过42xx；原函数/objc/page/保存流导出在menu-evidence。
+
+独立包脚本agent/dsh/package/package.ps1实际完成staging-20261015-043811：23so、1944原资产、420PNG，2390输入逐项hash/长度匹配，2394文件约99.4MB。包内exe从独立cwd跑scene native0，输出agent/codex/native-package-check-20261015-0440；dumpbin仅5个Windows系统DLL。该包exe老于WIP且未验完整GUI/保存/终局，非最终交付。main/user旧release/src未替换。后续先通过persistent脚本看live goal/seq、bridge/jobs、status和verified快照，再方向steer；不重启原生作业来响应观察超时。
 
 GUI验收注意：Profile::userDirectory使用SHGetKnownFolderPath，覆盖LOCALAPPDATA环境变量不会隔离真实存档；手工测试需先备份profile或使用显式测试目录。现有自动验证入口使用输出目录的测试profile，不会触及真实存档。
 
