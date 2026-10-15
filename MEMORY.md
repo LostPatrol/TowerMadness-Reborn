@@ -9,7 +9,7 @@ Windows x64原生C++20重建停在P8首轮交互与表现基线，保留作参�
 
 原x86核心复用已通过独立PlainPlane可行性门槛：tools/x86-reuse构建Win32宿主，直接执行原ELF机器码及原GAME/PGL；Windows鼠标经最小UIKit对象进入原EAGLView/GAME触摸逻辑，原轮盘建迫击炮、原按钮发波并发生击杀。激光原命令短局也成立。无需Android/CPU模拟器；现有产品源码/发行版/用户存档未替换。入口tools/x86-reuse/play.cmd，规格docs/X86_CORE_REUSE.md，原库副本及GS元数据在agent/codex/x86-reuse。优先继续原核心路线验证，但未授权以此单关原型直接替换发行主线。
 
-复用宿主固定480×800、静音。原菜单NEW GAME→CAMPAIGN→PlainPlane→教程→鼠标轮盘建塔→发波战斗/暂停冻结→失败结算→PLAY AGAIN新局已真实运行；结算图由Codex目视确认。run.ps1 -Mode menu是原菜单持续运行入口，旧play.cmd仍为直达PlainPlane探针；需重建才使用新源码。此前原命令激光建造/升级/出售实际50→40→20→50，五图开局正常；自然胜利/完整战役仍未验。MENU_setResolution接收float逻辑尺寸，不能传整数位模式；GAME_setResolution是int。进度、存档与成绩使用宿主平台适配，不等于完整Foundation兼容。GS/锁只支持单线程，未知导入/selector终止。全武器/关卡、长局、DPI/透明状态/跨ABI数学未完整验；robosteal_walk0..19缺失未闭合。不要把检查点描述为完整移植或逐像素等价。
+复用宿主固定480×800、静音。原菜单、选关、教程、鼠标轮盘建塔、发波战斗/暂停冻结、失败结算/重试已有实测。WIP的原PlainPlane自然胜利已成立：campaign-20261015-130009，433075ms、8羊、1417分，原Victory页已目视；原代码写unlocked_medium与战役推进。此run随后因NSLocale preferredLanguages未实现退出，后继适配与完整胜利后流程仍需验，不能称完整战役通过。run.ps1 -Mode menu为原菜单入口，旧play.cmd为直达探针。MENU_setResolution接收float逻辑尺寸，GAME_setResolution是int。平台对象为宿主适配，不是完整Foundation。GS/锁仅单线程；全武器、各关实际战斗、DPI/透明/跨ABI数学未完整验，robosteal_walk0..19动画缺失未闭合。
 
 用户测试入口agent/codex/user-test/launch-current-x86.cmd指向已验证product-build/Release/TowerMadnessX86Probe.exe（源码61ad5b43检查点），用原menu模式；日志/测试state隔离到user-test下。exe依赖项目现有原包和PNG，不能单独搬走。此入口只便于手测，未恢复暂停的完整开发目标。
 
@@ -63,13 +63,17 @@ REA6.4.0、Ghidra12.1.4、jadx-headless-mcp0.7.1、JADX1.5.6位于agent/codex/to
 
 02-x86由本机dsh承担主要研究实现与验收；ChatGPT预算有限，不降低需求或验证质量。此前DSH真实HTTP402额度耗尽后按任务要求停止，现场保存在recovery-20261015-061738（manifest有哈希；WIP未提升）。2026-10-15用户明确确认“已补充，可以继续”，已恢复同一会话/目标，真实模型工具调用和新build108重新推进；完整移植未完成。再次遇到实际余额不足仍应及时停止，不自动切换付费渠道或由GPT接手实现。工作区agent/dsh不进Git。原shell沙盒Win32 5不通过修ACL解决；固定project_native提供build/run/只读ghidra/status/snapshot。Web的standard preset也必须通过bridge/restricted-web.patch.yml禁用嵌套pwsh，仅保留workspace-write且拒绝权限升级，避免再次停在ACL审批。未修改系统ACL或用户其他服务。
 
-主session-e2ef9fe5-098b-452f-a3a2-f9764733371d与goal-aadc801a-9b70-41f9-9621-86e9d3d47260由独立常驻loopback web持续执行完整目标。控制入口agent/dsh/bridge/persistent/dsh-session.ps1；动态PID/端口看state.json并实际核验，不按历史PID停服务，不同时headless打开同session。Cookie/stdout含本机鉴权信息不得输出。RPC使用payload.args与原cwd反斜杠拼写。status已包含live running、pendingApproval和recentEvents，不能只凭goal active/armed判断工作在推进。stop尚不核验PID复用且只停父cmd，清理时必须定向核验本任务进程树，不能影响其他服务。
+主session-e2ef9fe5-098b-452f-a3a2-f9764733371d与goal-aadc801a-9b70-41f9-9621-86e9d3d47260使用常驻loopback web。控制入口agent/dsh/bridge/persistent/dsh-session.ps1；动态PID/端口看state.json并实际核验，不同时headless开同session。旧服务退出后PID曾被其他程序复用，启动/停止已加cmd.exe及固定dsh路径/patch身份检查；stop仍仅停父cmd，不用它代替完整作业收束。Cookie/stdout含鉴权不得输出。RPC为payload.args与原cwd反斜杠拼写；必须看live running而非只看goal active。
 
 开发build固定编译changes/tools/x86-reuse/host.cpp，产品build默认产品源码。产品host已提升冻结snap-mv8nfgra-29db8390，源码SHA256为61ad5b431bbd8a832664ea62f78aa9cd0fcb403e3d7238ff88429c8189caac2c；后续WIP仍由DSH推进，不盲目同步。该候选build80/run81-055546原成绩恢复/失败结算/PLAY AGAIN通过，目视34分排名3。snapshot必须在成功build后、任何后续edit前生成，再与run关联；verified=false本身不是验收。早期snap-mv8m3g7c-84cd0a34同exe/同存档两次恢复通过只证明该输入可重复，不涵盖当前候选、新存档或F5/F9反复换局/对象回收。
 
 终局关键合同：objc_msgSend_fpret同其他汇编dispatcher需豁免STT_NOTYPE/零size hook过滤；缺失该hook曾导致调用原运行库崩溃。installHook修改export入口，originalNSString经已hook入口返回宿主对象，不是真Foundation分配；宿主不执行全部库构造函数，直接objc_getClass/sel_registerName实测会崩，不能当通用查询。Ghidra=ELF VA+0x10000，NSString/alloc/init槽为libverde+0x3DD690/0x3DC124/0x3DC128，旧0x2E开头常量错误。成绩枚举需真实NSFastEnumerationState的itemsPtr/mutationsPtr；当前已读回再保存，但原SCORES混用1970读取与2001日期构造，忠实NSDate语义会保留原日期漂移。TOWERS_getIdForCell需要TOWERS*，不能传GAME*；此前探针自身导致access=2，不是已证实原建塔越界。fade=1不能推断白屏，必须目视稳定页。原函数导出会被下一Ghidra作业覆盖，先保留副本；qa/promotion-review/raw-20261015-0529有原始复制和哈希。自然胜利解锁、完整GUI交互、116关12武器和最终包仍未完成。
 
-续接重点：原GAME建塔坐标为22×32导航格，不能按11×16地形格折半；旧src/checks.cpp五处布防可只读参考。GAME_upgradeTower(game,instanceId,targetTechId)，不是x/y；正确TOWERS*在game+0x10，塔当前科技为字段[1]（以上由WIP实测，产品campaign脚本仍需修正/复测）。合法升级成员必须来自当前科技原upgrades列表，不能盲探id+1..3后以是否扣钱判合法；run99含已否决盲探，不算自然通关证据。最佳合法已记录尝试仍在第10波左右失败，无原胜利/解锁证明。116图矩阵仅少量scene行通过，mode=map是空操作不算载入。恢复时先完成合法升级链的重新构建验证，再推进完整战役与剩余GUI/武器/包验收。
+续接重点：原GAME坐标为22×32导航格，不能按11×16地形格折半；旧checks.cpp五塔布防和合法逐级升级策略已在原核心赢首关。GAME_upgradeTower(game,instanceId,targetTechId)，TOWERS*在game+0x10，塔当前科技为字段[1]；不能盲探相邻ID。run99含盲探不计自然通关。新进程142512实际读回unlocked_medium=1、lastgamemode=DividedAttention并由原选关创建第二关；后继143426用原命令建五塔并开波，未证明第二关通关。143712一次保存/恢复/旧GAME帧边界回收、143957新进程同6082字节状态继续已通过；不等于反复F9稳定。
+
+原116地图载入/绘制已全通过：agent/dsh/evidence/map-matrix/full116-20261015-130003，116独立gamemode、CSV/JSONL各116行、232 PNG、0失败，与包内集合完全一致。固定产品exe FA11B986...，源码仍61ad5b43检查点；原map/waves引用从各gamemode读，Arena引用Sparta.waves等别名不是错误。mode=map为空操作不计。DSH独立审核与Codex代表图目视均完成；这不证明116关战斗/通关。后续集中完整战役、原GUI、倍速、12武器、存档与独立包。
+
+本次用户指定2026-10-15北京时间14:21:22开始再工作一小时，15:06冻结新增、15:21阶段暂停，不能标完整目标完成。保护脚本在agent/dsh/qa，v2运行记录见phase-stop-20261015-142122-v2.process.json；PS的ConvertFrom-Json会把ISO转DateTime，需保留Kind转DateTimeOffset，不能将文化格式字符串重新Parse丢UTC。早期提前暂停证据保留，主会话已恢复；最终以实际goal状态与阶段报告为准。
 
 独立包脚本agent/dsh/package/package.ps1已实跑，staging-20261015-043811输入逐项校验；23原库、原资产与420PNG完整复制。包内exe从独立cwd跑scene成功，依赖仅Windows系统DLL；但exe老于WIP，完整GUI/保存/终局未验，非最终交付。详见agent/report/report-codex-20261015-044200-原存档跨进程与独立包预览.md。旧src/release和用户存档仍保留。后续从persistent status/bridge/jobs/status.md核对live工作，方向用steer，不因观察超时重启原生作业。
 
