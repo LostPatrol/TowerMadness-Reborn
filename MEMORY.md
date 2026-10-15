@@ -11,6 +11,8 @@ Windows x64原生C++20重建停在P8首轮交互与表现基线，保留作参�
 
 复用宿主固定480×800、静音。原菜单NEW GAME→CAMPAIGN→PlainPlane→教程→鼠标轮盘建塔→发波战斗/暂停冻结→失败结算→PLAY AGAIN新局已真实运行；结算图由Codex目视确认。run.ps1 -Mode menu是原菜单持续运行入口，旧play.cmd仍为直达PlainPlane探针；需重建才使用新源码。此前原命令激光建造/升级/出售实际50→40→20→50，五图开局正常；自然胜利/完整战役仍未验。MENU_setResolution接收float逻辑尺寸，不能传整数位模式；GAME_setResolution是int。进度、存档与成绩使用宿主平台适配，不等于完整Foundation兼容。GS/锁只支持单线程，未知导入/selector终止。全武器/关卡、长局、DPI/透明状态/跨ABI数学未完整验；robosteal_walk0..19缺失未闭合。不要把检查点描述为完整移植或逐像素等价。
 
+用户测试入口agent/codex/user-test/launch-current-x86.cmd指向已验证product-build/Release/TowerMadnessX86Probe.exe（源码61ad5b43检查点），用原menu模式；日志/测试state隔离到user-test下。exe依赖项目现有原包和PNG，不能单独搬走。此入口只便于手测，未恢复暂停的完整开发目标。
+
 运行入口release/TowerMadness.exe；发布ZIP含SDL3.dll、assets、许可和中文README。12类武器分别实现beam、plasma、railgun、homing、mortar、flak、flamethrower、lightning、mine、slow、boost、bait，读取四套tech及原禁用/升级配置。116有限模式对应116地图；四战役按胜利进度解锁，其余112通过明确的桌面资源库开放，不能称为原作全部已解锁。DividedAttention胜利解锁Hard及无限；MuttonsFolly胜利解锁Insane。三无限难度和沙盒使用当前地图。
 
 中文菜单/HUD、原塔图标、浏览/建造/选中状态、合法预览/取消、详情升级对比与精确退款、暂停、1/2/4倍速、重开确认及胜负结算已接入。关卡浏览使用独立Game及原地图GL缩略图，明确开始后才替换当前局；显示真实科技/波数/资金/成绩及保存摘要，胜利后记录新解锁并可直接下一战役。Game终局拒绝建/升/售/发波；按钮和键盘共用desktopInput，镜头事件经desktopEvent隔离菜单/模态/详情/建造栏，失焦清理拖动。Esc依次取消确认/菜单/建造/详情，再暂停；退出有明确按钮。战场矩形同时用于绘制、投影和拾取，900×700时也不让HUD遮住出生点和羊圈。修改入口docs/FRONTEND.md。
