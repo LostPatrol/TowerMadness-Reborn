@@ -3,6 +3,8 @@
 
 ## 当前基线
 
+2026-10-15用户因成本原因暂停Codex目标，拟使用Claude接续。交接入口为docs/CLAUDE_HANDOFF.md，包含版本哈希、可用测试入口、堆损坏证据、构建步骤和本地未入Git资料清单。此次仅整理交接，不恢复开发或DSH自动续跑；后续按用户继续指令执行。
+
 Windows x64原生C++20重建停在P8首轮交互与表现基线，保留作参考，不再常规推进。2026-10-15用户通过agent/task/02-x86.md明确选择原x86核心复用路线，目标为完整Windows移植，优先复用原代码与GUI；旧重建不删除，固定参照Git标签reconstruction-reference-20261014/f4e8e08，原src/release保留。完整移植验收尚未完成。现状/证据/决策点见docs/TECHNICAL_ROUTE_REVIEW.md。私有仓库LostPatrol/TowerMadness-Reborn，本地main；默认不新建分支/worktree。最终交付不得以模拟器运行，开发期允许Android/ARM模拟器；用户已授权安装项目内原作对照环境。
 
 两个原APK均保持不变且不进入Git。既有ARM包SHA-256为0bc4ec90ebf0eab249cab4c39b9390c1f05dafffd83f92adcf09251890b3cb8b；新增Madness_Zero-1.22.apk为真实x86包，SHA-256为7e8d09079c963e36f4ba633712b112f65d410740405e828405404fd729afd3dd。两包同证书、classes.dex和1943项游戏资产相同，仅Info.plist版本码不同；原资源/规则基线无需替换。详见docs/APK_BASELINES.md；跨ABI原生行为尚未逐函数证明相同。
@@ -73,7 +75,7 @@ REA6.4.0、Ghidra12.1.4、jadx-headless-mcp0.7.1、JADX1.5.6位于agent/codex/to
 
 原116地图载入/绘制已全通过：agent/dsh/evidence/map-matrix/full116-20261015-130003，116独立gamemode、CSV/JSONL各116行、232 PNG、0失败，与包内集合完全一致。固定产品exe FA11B986...，源码仍61ad5b43检查点；原map/waves引用从各gamemode读，Arena引用Sparta.waves等别名不是错误。mode=map为空操作不计。DSH独立审核与Codex代表图目视均完成；这不证明116关战斗/通关。后续集中完整战役、原GUI、倍速、12武器、存档与独立包。
 
-本次用户指定2026-10-15北京时间14:21:22开始再工作一小时，15:06冻结新增、15:21阶段暂停，不能标完整目标完成。保护脚本在agent/dsh/qa，v2运行记录见phase-stop-20261015-142122-v2.process.json；PS的ConvertFrom-Json会把ISO转DateTime，需保留Kind转DateTimeOffset，不能将文化格式字符串重新Parse丢UTC。早期提前暂停证据保留，主会话已恢复；最终以实际goal状态与阶段报告为准。
+2026-10-15的一小时阶段已结束，未标完整目标完成。保护脚本在agent/dsh/qa，v2记录见phase-stop-20261015-142122-v2.process.json；PS的ConvertFrom-Json会把ISO转DateTime，转换DateTimeOffset须保留Kind，不能重新Parse文化格式字符串丢UTC。当前以末尾实际停止状态和交接文档为准，不按历史“已恢复”记录自动启动。
 
 独立包脚本agent/dsh/package/package.ps1已实跑，staging-20261015-043811输入逐项校验；23原库、原资产与420PNG完整复制。包内exe从独立cwd跑scene成功，依赖仅Windows系统DLL；但exe老于WIP，完整GUI/保存/终局未验，非最终交付。后继staging-20261015-145216含已撤销的堆损坏候选，也禁止作为新交付。现有测试入口agent/codex/user-test/launch-current-x86.cmd仍指向产品FA11B986…，15:12开局场景重新运行native0。旧src/release和用户存档仍保留。用persistent status核对live工作，方向用steer，不因观察超时重启原生作业。
 
