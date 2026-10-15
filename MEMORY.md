@@ -69,13 +69,17 @@ REA6.4.0、Ghidra12.1.4、jadx-headless-mcp0.7.1、JADX1.5.6位于agent/codex/to
 
 终局关键合同：objc_msgSend_fpret同其他汇编dispatcher需豁免STT_NOTYPE/零size hook过滤；缺失该hook曾导致调用原运行库崩溃。installHook修改export入口，originalNSString经已hook入口返回宿主对象，不是真Foundation分配；宿主不执行全部库构造函数，直接objc_getClass/sel_registerName实测会崩，不能当通用查询。Ghidra=ELF VA+0x10000，NSString/alloc/init槽为libverde+0x3DD690/0x3DC124/0x3DC128，旧0x2E开头常量错误。成绩枚举需真实NSFastEnumerationState的itemsPtr/mutationsPtr；当前已读回再保存，但原SCORES混用1970读取与2001日期构造，忠实NSDate语义会保留原日期漂移。TOWERS_getIdForCell需要TOWERS*，不能传GAME*；此前探针自身导致access=2，不是已证实原建塔越界。fade=1不能推断白屏，必须目视稳定页。原函数导出会被下一Ghidra作业覆盖，先保留副本；qa/promotion-review/raw-20261015-0529有原始复制和哈希。自然胜利解锁、完整GUI交互、116关12武器和最终包仍未完成。
 
-续接重点：原GAME坐标为22×32导航格，不能按11×16地形格折半；旧checks.cpp五塔布防和合法逐级升级策略已在原核心赢首关。GAME_upgradeTower(game,instanceId,targetTechId)，TOWERS*在game+0x10，塔当前科技为字段[1]；不能盲探相邻ID。run99含盲探不计自然通关。新进程142512实际读回unlocked_medium=1、lastgamemode=DividedAttention并由原选关创建第二关；后继143426用原命令建五塔并开波，未证明第二关通关。143712一次保存/恢复/旧GAME帧边界回收、143957新进程同6082字节状态继续已通过；不等于反复F9稳定。
+续接重点：原GAME坐标为22×32导航格，不能按11×16地形格折半；旧checks.cpp五塔布防和合法逐级升级策略已在原核心赢首关。GAME_upgradeTower(game,instanceId,targetTechId)，TOWERS*在game+0x10，塔当前科技为字段[1]；不能盲探相邻ID。run99含盲探不计自然通关。新进程142512实际读回unlocked_medium=1、lastgamemode=DividedAttention并由原选关创建第二关；后继143426用原命令建五塔并开波，未证明第二关通关。143712一次保存/恢复/旧GAME帧边界回收、143957新进程同6082字节状态继续已通过；不等于反复F9稳定。后续build121两次menuauto（145024/145122）在F9恢复后暂停转换因0xC0000374堆损坏退出，候选撤销，禁止提升或交付；活动GAME替换的构造/释放合同仍需直接修复，不能以空白教程局成功或单次继续成功代替验收。详情agent/dsh/qa/game-free-ownership-findings.md及handoff-codex-20261015.md，最新候选以实际复验为准。
 
 原116地图载入/绘制已全通过：agent/dsh/evidence/map-matrix/full116-20261015-130003，116独立gamemode、CSV/JSONL各116行、232 PNG、0失败，与包内集合完全一致。固定产品exe FA11B986...，源码仍61ad5b43检查点；原map/waves引用从各gamemode读，Arena引用Sparta.waves等别名不是错误。mode=map为空操作不计。DSH独立审核与Codex代表图目视均完成；这不证明116关战斗/通关。后续集中完整战役、原GUI、倍速、12武器、存档与独立包。
 
 本次用户指定2026-10-15北京时间14:21:22开始再工作一小时，15:06冻结新增、15:21阶段暂停，不能标完整目标完成。保护脚本在agent/dsh/qa，v2运行记录见phase-stop-20261015-142122-v2.process.json；PS的ConvertFrom-Json会把ISO转DateTime，需保留Kind转DateTimeOffset，不能将文化格式字符串重新Parse丢UTC。早期提前暂停证据保留，主会话已恢复；最终以实际goal状态与阶段报告为准。
 
-独立包脚本agent/dsh/package/package.ps1已实跑，staging-20261015-043811输入逐项校验；23原库、原资产与420PNG完整复制。包内exe从独立cwd跑scene成功，依赖仅Windows系统DLL；但exe老于WIP，完整GUI/保存/终局未验，非最终交付。详见agent/report/report-codex-20261015-044200-原存档跨进程与独立包预览.md。旧src/release和用户存档仍保留。后续从persistent status/bridge/jobs/status.md核对live工作，方向用steer，不因观察超时重启原生作业。
+独立包脚本agent/dsh/package/package.ps1已实跑，staging-20261015-043811输入逐项校验；23原库、原资产与420PNG完整复制。包内exe从独立cwd跑scene成功，依赖仅Windows系统DLL；但exe老于WIP，完整GUI/保存/终局未验，非最终交付。后继staging-20261015-145216含已撤销的堆损坏候选，也禁止作为新交付。现有测试入口agent/codex/user-test/launch-current-x86.cmd仍指向产品FA11B986…，15:12开局场景重新运行native0。旧src/release和用户存档仍保留。用persistent status核对live工作，方向用steer，不因观察超时重启原生作业。
+
+本轮最终开发副本冻结于snap-mv97geg7-eeb49ce9：source c3bee896…，exe c4c24a8e…，明确unbuiltChanges=true；不能声称匹配。最后已编译的129（source cf24d2ba…）关闭分配器诊断仍0xC0000374；开启诊断的两次成功仅改变堆布局/复现条件，不能验收。修正帧内旧GAME指针及排队恢复后堆损坏仍未解决；ENEMIES反序列化与对象池仅是待查方向。先读agent/dsh/handoff-codex-20261015.md、qa/d2-second-free-findings.md核对证据。源码未提升，完整目标未完成。
+
+15:21阶段停止已核验：Codex目标paused；DSH目标blocked/revision13、activation=disarmed、running=false，截止session/cancel成功，无原生测试进程。goals/pause拒绝blocked→paused，不能误报该RPC成功；未为改标签重启任务。恢复副本agent/dsh/recovery-20261015-152127完整，后续经用户继续指令再恢复，先核对live状态。
 
 GUI验收注意：Profile::userDirectory使用SHGetKnownFolderPath，覆盖LOCALAPPDATA环境变量不会隔离真实存档；手工测试需先备份profile或使用显式测试目录。现有自动验证入口使用输出目录的测试profile，不会触及真实存档。
 

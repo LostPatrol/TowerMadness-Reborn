@@ -3,7 +3,7 @@
 
 本实验直接在 Windows x86 进程中执行 Zero 1.22 APK 的原 `libverde.so` 及包内依赖。它保留原 JSON-C、资源解析、地图、科技、波次、游戏对象、战斗、动画、PGL 绘制和选塔逻辑，不链接当前 C++ `Game` 或 `Renderer`。现有 `release/TowerMadness.exe` 及存档保持原基线。
 
-已经在本机走通原主菜单、选关、教程、鼠标轮盘建塔、发波战斗、失败结算、本地成绩读回和原 PLAY AGAIN 重试；另有含塔活动波存档恢复证据。尚不代表完整游戏移植或全量保真验收。
+已经在本机走通原主菜单、选关、教程、鼠标轮盘建塔、发波战斗、失败结算、本地成绩读回和原 PLAY AGAIN 重试；另有含塔活动波存档恢复证据。原核心首关自然胜利及解锁、116 张地图载入和绘制也已有证据；完整战役和所有菜单流程尚未验收。后续开发候选在活动对局恢复后释放旧对象时暴露堆损坏，相关候选未提升为产品，单次恢复成功不能视为存档功能稳定。
 
 ## 结构
 
@@ -40,7 +40,7 @@ Windows 替换的边界为 C 运行库、同步与单线程 GS 存储、文件�
 
 `-Map` 选择 `<assets>/<Map>.gamemode`，宿主把它交给原 `GAMEMODE_load`；`-OutputDirectory` 决定日志、trace、result 与 PNG 的根目录，每次运行再建独立时间戳子目录，不覆盖既有证据。
 
-运行模式 `scene` 绘制开局，`input` 用 Windows 鼠标消息操作原轮盘、点原发波按钮并点原倍速热区，`combat` 经原命令建立两座激光塔并发波。新增：`upgrade` 用原 `GAME_buildTower → TOWERS_getIdForCell → GAME_upgradeTower → GAME_sellTower`；`flood` 周期调用原 `GAME_sendNextWave` 直到原 `GAME_hasEnded`；`autoplay` 另用原 `GAME_togglePlaySpeed` 切 4 倍速并发波到底；`levels` 只枚举包内 `*.gamemode`。所有场景每帧查询原 `GAME_hasEnded/GAME_isWon/GAME_getFinalScore/GAME_getFinalLifes`，只有原函数真的报告结束才写终局结果。
+运行模式 `scene` 绘制开局，`input` 用 Windows 鼠标消息操作原轮盘、点原发波按钮并点原倍速热区，`combat` 经原命令建立两座激光塔并发波。新增：`upgrade` 用原 `GAME_buildTower → TOWERS_getIdForCell → GAME_upgradeTower → GAME_sellTower`；`flood` 周期调用原 `GAME_sendNextWave` 直到原 `GAME_hasEnded`；`autoplay` 另调用原 `GAME_togglePlaySpeed` 并发波到底，实际倍率尚未验证，当前采样约为实时速度；`levels` 只枚举包内 `*.gamemode`。所有场景每帧查询原 `GAME_hasEnded/GAME_isWon/GAME_getFinalScore/GAME_getFinalLifes`，只有原函数真的报告结束才写终局结果。
 
 原菜单模式：`menu`（可见窗口、真实鼠标、Esc 返回）与 `menuauto`（有界，候选点扫描并截图）。
 宿主调用原 `MENU_alloc → MENU_setResolution → MENU_show → MENU_changePage(mainMenuPage)`，随后完全按原外层逻辑运行
