@@ -1,6 +1,8 @@
 <!-- Frozen native reconstruction route, evidence boundaries, and review decisions. -->
 # 当前技术路线审查
 
+本文保留 2026-10-14 的重建路线审查。当前原 x86 开发基线以 [X86_CORE_REUSE.md](X86_CORE_REUSE.md) 和 [BASELINE_AUDIT.md](BASELINE_AUDIT.md) 为准。
+
 2026-10-14 收束基线：P8 保持暂停。本文件供检查现有路线与效果，尚未认定原作保真或 P8 总体完成。本次仅整理已有实现、重新验证和打包。
 
 后续独立实验已证明：原x86核心可在Windows直接绘制PlainPlane，原轮盘建塔、原按钮发波并推进真实战斗。见[X86_CORE_REUSE.md](X86_CORE_REUSE.md)。这为优先推进原核心复用提供实际依据；下文描述的既有C++重建仍保留，发行主线尚未替换。

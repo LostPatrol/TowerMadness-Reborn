@@ -5,6 +5,7 @@
 /agent/codex/
 /agent/grok/
 /agent/dsh/
+/agent/claude/
 /data/
 /*.apk
 *.user

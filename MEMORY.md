@@ -1,98 +1,41 @@
-<!-- Current native baseline, durable recovery decisions, and unresolved fidelity limits. -->
+<!-- Current development baseline, essential local inputs, and unresolved limits only. -->
 # Project memory
 
-## 当前基线
+## 当前真实基线
 
-2026-10-15用户因成本原因暂停Codex目标，拟使用Claude接续。交接入口为docs/CLAUDE_HANDOFF.md，包含版本哈希、可用测试入口、堆损坏证据、构建步骤和本地未入Git资料清单。此次仅整理交接，不恢复开发或DSH自动续跑；后续按用户继续指令执行。
+任务 03-correction 已审计并整顿主线。当前唯一开发入口为 tools/x86-reuse；不再恢复历史 DSH 自动目标，不从 agent/dsh/changes 或 agent/claude 复制整份 WIP。接续先读 docs/X86_CORE_REUSE.md 与 docs/BASELINE_AUDIT.md，旧 docs/CLAUDE_HANDOFF.md 仅为跳转页。未继续推进完整移植功能。
 
-Windows x64原生C++20重建停在P8首轮交互与表现基线，保留作参考，不再常规推进。2026-10-15用户通过agent/task/02-x86.md明确选择原x86核心复用路线，目标为完整Windows移植，优先复用原代码与GUI；旧重建不删除，固定参照Git标签reconstruction-reference-20261014/f4e8e08，原src/release保留。完整移植验收尚未完成。现状/证据/决策点见docs/TECHNICAL_ROUTE_REVIEW.md。私有仓库LostPatrol/TowerMadness-Reborn，本地main；默认不新建分支/worktree。最终交付不得以模拟器运行，开发期允许Android/ARM模拟器；用户已授权安装项目内原作对照环境。
+原 x86 核心在 Win32 宿主直接执行 ELF 机器码，复用原 GAME/MENU/PGL 和资源；Windows 适配 C ABI、OpenGL、输入和最小平台对象。固定480×800、静音，不初始化扬声器。最终不得依赖模拟器。原 APK/ELF 不改；内存私有映射允许明确的平台适配和直接缺陷修复。
 
-两个原APK均保持不变且不进入Git。既有ARM包SHA-256为0bc4ec90ebf0eab249cab4c39b9390c1f05dafffd83f92adcf09251890b3cb8b；新增Madness_Zero-1.22.apk为真实x86包，SHA-256为7e8d09079c963e36f4ba633712b112f65d410740405e828405404fd729afd3dd。两包同证书、classes.dex和1943项游戏资产相同，仅Info.plist版本码不同；原资源/规则基线无需替换。详见docs/APK_BASELINES.md；跨ABI原生行为尚未逐函数证明相同。
+旧 src/release 是已停止常规推进的 x64/SDL3 重建，参考标签 reconstruction-reference-20261014/f4e8e08。旧重建的完整保存、12武器等不能算作 x86 已完成。参考 docs/TECHNICAL_ROUTE_REVIEW.md、DEVELOPMENT.md 及各规则/表现文档。
 
-原x86核心复用已通过独立PlainPlane可行性门槛：tools/x86-reuse构建Win32宿主，直接执行原ELF机器码及原GAME/PGL；Windows鼠标经最小UIKit对象进入原EAGLView/GAME触摸逻辑，原轮盘建迫击炮、原按钮发波并发生击杀。激光原命令短局也成立。无需Android/CPU模拟器；现有产品源码/发行版/用户存档未替换。入口tools/x86-reuse/play.cmd，规格docs/X86_CORE_REUSE.md，原库副本及GS元数据在agent/codex/x86-reuse。优先继续原核心路线验证，但未授权以此单关原型直接替换发行主线。
+任务03的关键修复：TOWERS_fromIBS 从104字节同步前缀分配104字节，却写+0x68/+0x6c两个运行字段；原TOWER_alloc实际分配112字节。独立内存围栏已捕获这一越界。tower-restore.hpp只修正该塔恢复分配，原读取/校验/存档字节保持不变，禁止改成通用malloc加大或跳过GAME_free。F9及脚本恢复统一排队到帧边界，旧GAME先释放再重建；OBS/IBS包装对象正常释放。旧“IBS别名/共享动物地址/先后释放顺序即根因”推断不作结论。
 
-复用宿主固定480×800、静音。原菜单、选关、教程、鼠标轮盘建塔、发波战斗/暂停冻结、失败结算/重试已有实测。WIP的原PlainPlane自然胜利已成立：campaign-20261015-130009，433075ms、8羊、1417分，原Victory页已目视；原代码写unlocked_medium与战役推进。此run随后因NSLocale preferredLanguages未实现退出，后继适配与完整胜利后流程仍需验，不能称完整战役通过。run.ps1 -Mode menu为原菜单入口，旧play.cmd为直达探针。MENU_setResolution接收float逻辑尺寸，GAME_setResolution是int。平台对象为宿主适配，不是完整Foundation。GS/锁仅单线程；全武器、各关实际战斗、DPI/透明/跨ABI数学未完整验，robosteal_walk0..19动画缺失未闭合。
+当前host.cpp SHA256：731eac007f466d993aeb0d60fcb54a58fb8248f8759bd27706b950a28a797a1a。
+tower-restore.hpp SHA256：2b0705e5529fa85c5df1a01c59167b8d894e14a707307298b45cce9bf50a6327。
+验证EXE SHA256：77d58c7c52f998fd3398da026e0d88f63729efb3f0d3274f32b5387475274eb1。
+构建和后续运行均须看实际build-manifest，不靠以上哈希代替新验证。
 
-用户测试入口agent/codex/user-test/launch-current-x86.cmd指向已验证product-build/Release/TowerMadnessX86Probe.exe（源码61ad5b43检查点），用原menu模式；日志/测试state隔离到user-test下。exe依赖项目现有原包和PNG，不能单独搬走。此入口只便于手测，未恢复暂停的完整开发目标。
+默认build/run目录agent/codex/x86-reuse/current；tools/x86-reuse/play.cmd和agent/codex/user-test/launch-current-x86.cmd进入同一原菜单。build.ps1先冻结输入、默认clean-first，可显式-Incremental；run.ps1绑定源码/EXE/脚本并检查实际验收步骤。native0不等于验收成功；原map空操作已删除。menuauto -Map continue/restorestress是测试旋钮，不是地图选择；campaign也由原菜单/账户决定地图。
 
-运行入口release/TowerMadness.exe；发布ZIP含SDL3.dll、assets、许可和中文README。12类武器分别实现beam、plasma、railgun、homing、mortar、flak、flamethrower、lightning、mine、slow、boost、bait，读取四套tech及原禁用/升级配置。116有限模式对应116地图；四战役按胜利进度解锁，其余112通过明确的桌面资源库开放，不能称为原作全部已解锁。DividedAttention胜利解锁Hard及无限；MuttonsFolly胜利解锁Insane。三无限难度和沙盒使用当前地图。
+F5/F9用menu-save-hotkey.bin，测试跨进程继续用menu-save.bin；不手工互相替代。输出根/evidence对应同级state，不读取旧重建真实用户profile。旧profile使用SHGetKnownFolderPath，改LOCALAPPDATA环境变量不能隔离，后续勿碰。
 
-中文菜单/HUD、原塔图标、浏览/建造/选中状态、合法预览/取消、详情升级对比与精确退款、暂停、1/2/4倍速、重开确认及胜负结算已接入。关卡浏览使用独立Game及原地图GL缩略图，明确开始后才替换当前局；显示真实科技/波数/资金/成绩及保存摘要，胜利后记录新解锁并可直接下一战役。Game终局拒绝建/升/售/发波；按钮和键盘共用desktopInput，镜头事件经desktopEvent隔离菜单/模态/详情/建造栏，失焦清理拖动。Esc依次取消确认/菜单/建造/详情，再暂停；退出有明确按钮。战场矩形同时用于绘制、投影和拾取，900×700时也不让HUD遮住出生点和羊圈。修改入口docs/FRONTEND.md。
+## 证据边界和未解决风险
 
-Profile和完整局内状态位于LocalAppData/TowerMadness-Reborn/profile.json；带版本、临时文件替换、损坏文件备份，保存实体、投射物、UFO、状态、计分、活动波计数及MT19937。菜单/重开确认冻结仿真，30秒及退出自动保存。requestExit共用窗口关闭/菜单退出：保存失败保留当前局，再次明确退出才丢弃未保存进度，手动保存成功清除失败状态。声音默认两项音量0，绝不初始化设备；原36Ogg已离线解码，用户自行调高音量后才可打开音频。
+任务03实际验证含塔活动局两次menuauto、13次F9恢复及14次旧GAME释放、暂停冻结和恢复后时钟推进、跨进程继续、四图scene、原激光50→40→20→50。诊断仅用于定位，交付宿主走普通CRT。此门槛不证明任意存档/地图/长时恢复均稳定。
 
-Android包com.limbicsoftware.towermadnesszero，minSdk9/targetSdk17。既有静态基线仅armeabi，新增对照包仅x86。核心libverde.so是Apportable Objective-C/iOS移植，非Unity；ARM库4324动态函数符号，Ghidra识别10390函数。保留数据库供定向导出，不把伪代码当可编译源码。
+历史首关campaign-20261015-130009确有原Victory（8羊、1417分），随后preferredLanguages缺失退出，不是完整战役通过。历史116图的CSV/JSONL/232 PNG已独立复核，集合完全一致、116开局图各不相同；但旧每次运行没有源码/EXE哈希绑定，只能作历史载入绘制证据，不能当当前版本116图验收，更不是116关通关。
 
-## 数据、规则与修改入口
+尚未验收：完整胜利继续/四战役与解锁链、原全部GUI与12武器、真实倍速、长时无限、多地图恢复、DPI/跨机器、最终独立包。原SCORES读1970但用2001纪元构造日期，日期漂移不应由通用NSDate语义造假修复。robosteal_walk0..19模型缺失仍未闭合。
 
-tools/prepare-assets.mjs可重复生成202统一TMMS网格、420标准PNG、36实际Ogg及全配置，116gamemode显式引用闭合。2广告CgBI图排除。清单6个旧缺失边中cube/default已由PGL_init证实为内置checkerboard/UVscale8并实现；剩余5个全局旧边未被单人模型使用，保留原清单。材质缺tex表示纯色；必须读取texture.file别名，例如woodmapboxshadow对应uialphaelements。
+## 本地输入与工具
 
-模型矩阵保留原行序，渲染转列序；模型UV配PNG topdown。地表atlas为bottom-origin，格底V=(H-pos-size)/H、格顶V=(H-pos)/H，勿再次反转模型UV。地图专用basetileAtlas/transitionAtlas、原组合过渡及森林已恢复。树林按x外/y内、MT种子0、unsigned modulo选模型、两次随机*.47轴偏移；缺省grove1..5，显式空treeModels禁树。
+两个原APK均不进Git；x86 Madness_Zero-1.22.apk SHA256为7e8d09079c963e36f4ba633712b112f65d410740405e828405404fd729afd3dd；ARM包SHA256为0bc4ec90ebf0eab249cab4c39b9390c1f05dafffd83f92adcf09251890b3cb8b。两包配置/游戏资产基线见docs/APK_BASELINES.md。
 
-PGL_loadTexture已证实缺省NEAREST min/mag、REPEAT S/T，再应用min/mag/wraps/wrapt；材质缓存保留texture描述名与file别名及采样器，不要再次统一CLAMP。skybox底面UV超出1、moon tscale20依赖重复。GAME_drawSkybox将原模型平移到相机位置；已接入普通/月球天空模型，精确镜头仍待动态对照。证据agent/codex/p8-render-evidence。
+运行必需：agent/codex/x86-reuse/package（23库及原资产）、其上级GS/GL JSON、assets/textures、third_party/json.hpp。原x86 libverde SHA256为adc78904cc5e89145fb9f4eca720d22cc48a89b634da1f95f4f053477c0ee7f6；任务03对原包1967条库/资产内容逐项校验一致。仅clone Git不能重现本地运行环境。
 
-PlainPlane地形11×16、导航22×32，每tile2单位。terrain0可走不可建，1可建且fixedpath时阻挡，2阻挡不可建。建塔使用bit2及实际塔占位检查；固定路径塔不改变导航格。开放地图8邻接禁切角，塔2×2，可奇数格放置。pads是UFO锚点，实际spawn=pad+(2,2)，不能要求锚点可走；AshMountain等固定路径锚点位于阻挡格。诱饵bit1|bit8可走，建成后替代羊圈距离场目标。
+本机VisualStudio18 Community/MSVC14.51、Win32 CMake、Windows SDK；Node为C:/Users/LostPatrol_2/AppData/Local/hermes/node/node.exe。REA Windows provider不接受ELF；使用已存在的Ghidra12.1.4直接headless（JDK C:/java/jdk/21）可行。数据库agent/codex/x86-reuse/ghidra/NativeX86.gpr；顺序-readOnly -noanalysis，导出到新目录，禁止覆盖关键旧证据。原Android对照环境和工具保留，详见docs/ANDROID_REFERENCE.md。
 
-固定25ms、自动发波严格>20s。第一波earlybonus0，其余提前奖励20-trunc(elapsedMs/1000)，待原波计数归零且最后移除为击杀才加入bonus，单人不加钱。原计数spawn非零一律count*3；分裂父怪漏掉只减1，不能按场上清空补发奖励。最终分=score+bonus+40*lives。售塔延迟后退累计投资全额/75%且扣min(score,10)。
+审计现场agent/codex/correction；清理清单cleanup-files.json，争议原文retired-audit-inputs.zip；旧源码和交接before/。保留agent/dsh/menu-evidence、ghidra-scripts、evidence、关键恢复快照；其余状态/报告不作为当前指令。桥凭据和服务stdout不提交、不输出。另有本机默认DSH服务，不属于本任务；勿按历史PID终止。
 
-伤害为整数HP。beam先trunc(damage*boost*heat)再护甲截断；flame先boost/护甲再heat截断；flak/lightning/mine忽略boost。线攻击比较垂直距离平方与原radius本值。slow是速度减少比例，弱效果延长强效果，强/相等可重置成更短时间；跨零最后一步仍有效，缩放regen。分裂子代继承slow/stun，heat重置1；deque保持引用稳定，子代可参与后续连锁跳跃/塔/投射物。
-
-无限使用原2000个float32表样本、加权类型、每8波boss及四次HP多项式；地图SHA1种子来自原精确gamemode文本含NUL。Sandbox虽用Hard波资源，必须以10000金币配置计算种子。战斗随机为MT19937，交互加载mode时以时间微秒部分作为sessionSeed；离线检查默认1，相同mode重开保留种子。羊初始化9N输出后才分配UFO每pad1输出，森林用独立MT0。整局随机消费/跨ABI浮点仍未逐项对齐。
-
-修改入口见docs/DEVELOPMENT.md；原规则索引见RULES.md、PROJECTILE_RULES.md、EFFECT_RULES.md、MODES.md，场景见RENDERING.md。普通任务勿扫描agent/codex、agent/grok；需要证据时按这些文档定向读取。
-
-Game::buildBlockReason/upgradeBlockReason/sellBlockReason与命令共用，试放只复制导航格并调用原距离场，不修改message/资金/占位/RNG；sellRefund保留原全额/75%截断与已排期金额。计时HUD使用nextWaveDelayMs/earlyWaveBonus，不另算规则。
-
-Beam携带原炮口/链击XYZ、kind、塔类型、仿真出生元数据及发射时姿态；Effect/Beam另有独立realtime寿命。原beam2/railspiral/2plane、双层闪电atlas、plasma帧/炮口火光、火焰、弹坑、爆炸/核爆已按静态公式接入；地雷III保留地雷弹坑，plasma命中无通用爆炸，flak复用原第三个RNG样本。塔炮口本地-Y、当前heading绘制+90°、pitch=-elevation，body离地.25，turret绕原rotationoffset。lightning/boost/mine/bait原Aim为no-op，当前固定零仰角，lightning起点恢复原挂点；首关Laser mesh-tip与攻击起点差距0。完整原visual/target双角度、随机初始yaw/idle、native角差gate和调用顺序仍未恢复。见docs/COMBAT_VISUALS.md、TOWER_VISUALS.md。
-
-Enemy::visualHeadingDegrees直接绘制，不另加90°；行走帧为timeMs/(nativeSlot+trunc(walkanimfactor*trunc(150/speed)))，仅generation==1选subwalk。独立1024循环slot、stun刷新冻结时间、尸体float32三秒倒计时及完整冻结姿态存入可选session.animation扩展，旧/坏视觉扩展降级而保留有效核心。原死亡分段翻转/下沉/缩放及RGB变暗、非飞行directionalshadow模型和护甲aura已按静态证据接入；修改入口docs/ANIMATION.md。尸体仅供绘制和slot占位，不参与战斗/胜负。分裂初始yaw和死亡随机角使用近似，尚未插入原combat RNG消费序列。
-
-Renderer保留非均匀scale、UVscale/offset和point billboard；原point RGBA按byte截断。视觉hash不消耗战斗RNG，闪电每呈现帧换不同atlas行。原PGL未初始化固定光照，模型缺省texture×RGBA unlit，移除额外方向光。Gameplay相机从正Y看导航格整数中心，eye=(centerX,centerY+5,Z)，原Z50/FOV45，低Z增加FOV，screen-right=-worldX；project/pick/pan/billboard共用基准。resetCamera(false)保留原Z50；默认桌面战场fit与放宽最大Z为适配。mapPreview离屏512×288、恢复活跃地图/相机/GL状态、缓存16张。见docs/CAMERA.md、RENDERING.md。
-
-导弹五层命中按固定1.5s绘制分母接入，随机expiry1.5..4.5s不拉长动画；保留impactXYZ并使用独立视觉抖动，白/蓝flash三材料。Flak早期blast为真正点精灵，与主burst共用到原origin的相机距离。Flak/导弹固定像素大小没有plasma/flame的屏幕倍率。原trail为无纹理additive四边形，按原距离/弹道秒阈值在非命中更新采样；Energy等武器前缀禁用。播放速度倒数仅影响trail alpha，正常图形模式0启用trail。可选projectile.trail存采样点/阈值，旧/坏视觉字段保留有效核心继续。规格/证据/入口见docs/PROJECTILE_VISUALS.md。
-
-交互短暂Effect/Beam由SDL单调realtime老化，暂停/菜单/失焦继续消退，倍速仅改变仿真及trail alpha；首次接入保留已有事件年龄。离线Game使用确定性仿真秒。短暂事件与realtime不保存；尸体、塔appearance、动画和trail采样保存。塔build/sell按原scale/Z升降、upgrade先旧模型缩回再新模型升起，独立底座、directionalshadow、Tesla双ring及boost rangecircle已接入。出售刚升级的塔使用当前模型，Tesla售塔首半段仍绘制。选中使用原selection rect/Z.1/XY2及rangecircle/Z.15/range/颜色；非法500ms淡出、升级橙色范围淡出及建造范围预览仍未完整恢复。视觉hash不等于lrand48/drand48，原plasma/flame屏幕倍率未标定，trail透明排序、bait屏幕aura、条件核爆2D闪光未闭合。
-
-src/animals.cpp维护原尺寸/颜色、吃草/移动/转向及预订羊的入侵者，main.cpp::animalScene组装100ms同步帧、600ms翻转/2000ms升空/beam/shadow。每25ms先羊再入侵者，末尾递增独立animal.clock。敌人漏出立即扣生命，lives0锁输入但继续完整战斗至最后羊隐藏，胜利等待无活跃入侵者；隐藏>=2600ms、入侵者删除>2600ms不可合并。最后预订时固定镜头锚点，realtime残余位移插值，最终eyeY+5/Z10/FOV约65.3252，保留倍速；重试重置桌面镜头。可选session.animals保存羊/入侵者/时钟/锚点，坏或旧字段用隔离同seed构造布局兼容，不能消费已恢复战斗RNG，也不等于恢复旧羊历史。UFO保存初始heading/rate，绘制角度来自game clock，hover beam用realtime。静态依据见SHEEP_VISUALS.md、SHEEP_SCHEDULING.md；完整原作动态等价尚未验。
-
-## 工具与验证条件
-
-MSVC、CMake、SDL3 3.4.18、OpenGL3.3 core、WIC、nlohmann/json3.12.0；音频新增项目局部stb_vorbis1.22，固定commit和摘要在setup-dependencies.ps1。MSVC静态运行库，运行依赖仅SDL3和Windows系统DLL。VisualStudio18 Community（MSVC14.51、SDK10.0.26100、CMake4.3.1）。Node在C:/Users/LostPatrol_2/AppData/Local/hermes/node/node.exe。build.ps1默认clean-first，曾确认工具保留旧时间戳导致增量编译漏新代码；需快速增量时显式-Incremental。
-
-REA6.4.0、Ghidra12.1.4、jadx-headless-mcp0.7.1、JADX1.5.6位于agent/codex/tools；JDK为C:/java/jdk/21。原数据库agent/codex/ghidra-project/TowerMadness.gpr；Ghidra脚本仅使用独立ghidra-scripts目录，复用-process libverde.so -readOnly -noanalysis。并行headless仍可能争用项目锁，需顺序导出。REA Windows provider拒绝ARM ELF，直接Ghidra为已验证路线。Ghidra地址比ELF值多0x10000，文件映射需确认。JADX全导出7处错误不影响已恢复原生入口。
-
-代理通常127.0.0.1:7897；Windows curl TLS失败可用D:/Git/mingw64/bin/curl.exe。不使用gh，不关闭本机其他服务，尤其MC服务器。任务指令由用户提供；新报告位于agent/report，TODO未经允许不改。
-
-02-x86由本机dsh承担主要研究实现与验收；ChatGPT预算有限，不降低需求或验证质量。此前DSH真实HTTP402额度耗尽后按任务要求停止，现场保存在recovery-20261015-061738（manifest有哈希；WIP未提升）。2026-10-15用户明确确认“已补充，可以继续”，已恢复同一会话/目标，真实模型工具调用和新build108重新推进；完整移植未完成。再次遇到实际余额不足仍应及时停止，不自动切换付费渠道或由GPT接手实现。工作区agent/dsh不进Git。原shell沙盒Win32 5不通过修ACL解决；固定project_native提供build/run/只读ghidra/status/snapshot。Web的standard preset也必须通过bridge/restricted-web.patch.yml禁用嵌套pwsh，仅保留workspace-write且拒绝权限升级，避免再次停在ACL审批。未修改系统ACL或用户其他服务。
-
-主session-e2ef9fe5-098b-452f-a3a2-f9764733371d与goal-aadc801a-9b70-41f9-9621-86e9d3d47260使用常驻loopback web。控制入口agent/dsh/bridge/persistent/dsh-session.ps1；动态PID/端口看state.json并实际核验，不同时headless开同session。旧服务退出后PID曾被其他程序复用，启动/停止已加cmd.exe及固定dsh路径/patch身份检查；stop仍仅停父cmd，不用它代替完整作业收束。Cookie/stdout含鉴权不得输出。RPC为payload.args与原cwd反斜杠拼写；必须看live running而非只看goal active。
-
-开发build固定编译changes/tools/x86-reuse/host.cpp，产品build默认产品源码。产品host已提升冻结snap-mv8nfgra-29db8390，源码SHA256为61ad5b431bbd8a832664ea62f78aa9cd0fcb403e3d7238ff88429c8189caac2c；后续WIP仍由DSH推进，不盲目同步。该候选build80/run81-055546原成绩恢复/失败结算/PLAY AGAIN通过，目视34分排名3。snapshot必须在成功build后、任何后续edit前生成，再与run关联；verified=false本身不是验收。早期snap-mv8m3g7c-84cd0a34同exe/同存档两次恢复通过只证明该输入可重复，不涵盖当前候选、新存档或F5/F9反复换局/对象回收。
-
-终局关键合同：objc_msgSend_fpret同其他汇编dispatcher需豁免STT_NOTYPE/零size hook过滤；缺失该hook曾导致调用原运行库崩溃。installHook修改export入口，originalNSString经已hook入口返回宿主对象，不是真Foundation分配；宿主不执行全部库构造函数，直接objc_getClass/sel_registerName实测会崩，不能当通用查询。Ghidra=ELF VA+0x10000，NSString/alloc/init槽为libverde+0x3DD690/0x3DC124/0x3DC128，旧0x2E开头常量错误。成绩枚举需真实NSFastEnumerationState的itemsPtr/mutationsPtr；当前已读回再保存，但原SCORES混用1970读取与2001日期构造，忠实NSDate语义会保留原日期漂移。TOWERS_getIdForCell需要TOWERS*，不能传GAME*；此前探针自身导致access=2，不是已证实原建塔越界。fade=1不能推断白屏，必须目视稳定页。原函数导出会被下一Ghidra作业覆盖，先保留副本；qa/promotion-review/raw-20261015-0529有原始复制和哈希。自然胜利解锁、完整GUI交互、116关12武器和最终包仍未完成。
-
-续接重点：原GAME坐标为22×32导航格，不能按11×16地形格折半；旧checks.cpp五塔布防和合法逐级升级策略已在原核心赢首关。GAME_upgradeTower(game,instanceId,targetTechId)，TOWERS*在game+0x10，塔当前科技为字段[1]；不能盲探相邻ID。run99含盲探不计自然通关。新进程142512实际读回unlocked_medium=1、lastgamemode=DividedAttention并由原选关创建第二关；后继143426用原命令建五塔并开波，未证明第二关通关。143712一次保存/恢复/旧GAME帧边界回收、143957新进程同6082字节状态继续已通过；不等于反复F9稳定。后续build121两次menuauto（145024/145122）在F9恢复后暂停转换因0xC0000374堆损坏退出，候选撤销，禁止提升或交付；活动GAME替换的构造/释放合同仍需直接修复，不能以空白教程局成功或单次继续成功代替验收。详情agent/dsh/qa/game-free-ownership-findings.md及handoff-codex-20261015.md，最新候选以实际复验为准。
-
-原116地图载入/绘制已全通过：agent/dsh/evidence/map-matrix/full116-20261015-130003，116独立gamemode、CSV/JSONL各116行、232 PNG、0失败，与包内集合完全一致。固定产品exe FA11B986...，源码仍61ad5b43检查点；原map/waves引用从各gamemode读，Arena引用Sparta.waves等别名不是错误。mode=map为空操作不计。DSH独立审核与Codex代表图目视均完成；这不证明116关战斗/通关。后续集中完整战役、原GUI、倍速、12武器、存档与独立包。
-
-2026-10-15的一小时阶段已结束，未标完整目标完成。保护脚本在agent/dsh/qa，v2记录见phase-stop-20261015-142122-v2.process.json；PS的ConvertFrom-Json会把ISO转DateTime，转换DateTimeOffset须保留Kind，不能重新Parse文化格式字符串丢UTC。当前以末尾实际停止状态和交接文档为准，不按历史“已恢复”记录自动启动。
-
-独立包脚本agent/dsh/package/package.ps1已实跑，staging-20261015-043811输入逐项校验；23原库、原资产与420PNG完整复制。包内exe从独立cwd跑scene成功，依赖仅Windows系统DLL；但exe老于WIP，完整GUI/保存/终局未验，非最终交付。后继staging-20261015-145216含已撤销的堆损坏候选，也禁止作为新交付。现有测试入口agent/codex/user-test/launch-current-x86.cmd仍指向产品FA11B986…，15:12开局场景重新运行native0。旧src/release和用户存档仍保留。用persistent status核对live工作，方向用steer，不因观察超时重启原生作业。
-
-本轮最终开发副本冻结于snap-mv97geg7-eeb49ce9：source c3bee896…，exe c4c24a8e…，明确unbuiltChanges=true；不能声称匹配。最后已编译的129（source cf24d2ba…）关闭分配器诊断仍0xC0000374；开启诊断的两次成功仅改变堆布局/复现条件，不能验收。修正帧内旧GAME指针及排队恢复后堆损坏仍未解决；ENEMIES反序列化与对象池仅是待查方向。先读agent/dsh/handoff-codex-20261015.md、qa/d2-second-free-findings.md核对证据。源码未提升，完整目标未完成。
-
-15:21阶段停止已核验：Codex目标paused；DSH目标blocked/revision13、activation=disarmed、running=false，截止session/cancel成功，无原生测试进程。goals/pause拒绝blocked→paused，不能误报该RPC成功；未为改标签重启任务。恢复副本agent/dsh/recovery-20261015-152127完整，后续经用户继续指令再恢复，先核对live状态。
-
-GUI验收注意：Profile::userDirectory使用SHGetKnownFolderPath，覆盖LOCALAPPDATA环境变量不会隔离真实存档；手工测试需先备份profile或使用显式测试目录。现有自动验证入口使用输出目录的测试profile，不会触及真实存档。
-
-## 验收范围与未解决风险
-
-本机RX9070XT通过25项规则/保存、116模式原资金自然开局、116地图实际GL绘制、420PNG/321模型完整加载、36Ogg离线解码。1280×900和1000×700拾取通过；--smoke-test实际480×800原相机四角与独立静态投影最大差.006逻辑像素，并覆盖合法50金币建/升/售模型阶段、appearance保存/旧坏字段降级、真实wall-clock暂停Rail两秒到期/核心RNG冻结及自然羊群收尾序列。仅一台Windows，非真正干净OS；GL/投影检查不等于原作逐像素动态等价。当前打包和独立目录验证以2026-10-14收束报告为准。
-
-P8首轮原资金50金币、生产SDL输入自然26波10羊（523250ms、235击杀、1422分）与自然失败成立。三窗口布局、菜单/预览不弃局/改相机、胜利解锁/下一战役/重复胜利、退出保存失败保留当前局通过。--visual-test原10000金币沙盒合法API建塔/发波覆盖12基础类别及6高级形态，导弹/炮弹检查真实命中及trail，不改资金/HP/波/RNG；高级直建不等于UI升级路径。只证明本机当前实现可运行，不构成原作等价或人类可用性最终验收。
-
-没有手机；API17 default ARM＋SDK25.2.5 classic＋原Google签名完整Phonesky4.3.11已真实运行未改ARM APK，菜单、PlainPlane、50金币10羊、10金币迫击炮建造/选中及首波有PNG。原UI显示V1.21、manifest1.22，摘要不变；单迫击炮参考局第4波丢完10羊，未原作通关。原作羊群稀疏抓羊/失败PNG在agent/codex/p8-original-sheep-runtime，runtime-0016有4生命和抓羊束、runtime-0024为失败菜单；不是逐帧/同种子/计时对齐验收。新x86 APK在官方API24 Google APIs仍libcxx.so/系统linker unwind SIGSEGV，旧Play5586历史未授权；不改WHPX/系统功能或重启Windows。原ARM动态证据支持镜头/场景方向，完整动态等价未验。GAME_togglePlaySpeed静态1/2/4已知，原UI倍率未实测。完整活动链/多诱饵堵路/同刻排序与Menu world仍未恢复；116关未全部自然通关，密集长时无限、跨机器、高DPI跨显示器、实际声音播放未验。购买验证/广告排除。
-
-性能检查为完整自然局及其轻负载峰值场景的12000帧、关闭VSync且glFinish同步；不能据此保证所有大地图/多小时局的60FPS。无限已发波历史仍保留在状态数组，超长局内存覆盖不足。旧Android存档兼容、联网/排行/多人不在本次交付范围。
-
-可复用参考AVD TM_Original_API17_ARM_clean/5592，旧ARM5580已正常停止并保留数据，旧Play5586保留。Phonesky4.3.11普通安装依赖SHA256 04897ec9492ab119c137b18a021ec931f547c91faeb1d73d4a36b78592e2f03a，含dex、1089 payload签名摘要及Google证书已验证，来源/复现见docs/ANDROID_REFERENCE.md。勿再普通安装无dex的预优化Phonesky、拼接ODEX/改签名/模拟响应/注入guest keys。续接须核验实际进程/adb，历史PID不是存活证据。原羊RNG消费影响战斗，不能用独立视觉随机冒充原会话。原作旧截图的25升级来自被误标的迫击炮，不作为激光依据；原价Laser10→20、Mortar10→25静态链见docs/UPGRADE_PRICE.md；普通UI另实测Mortar50→40→15、混合塔局Laser40→30→10，身份依据见ORIGINAL_TOWER_IDENTITY。资源价格不改。
+Windows PowerShell；不使用gh；默认main，不新建分支/worktree。代理通常127.0.0.1:7897；Git私有仓库LostPatrol/TowerMadness-Reborn。勿关其他服务、动系统ACL/硬件、改根TODO。过程在agent/codex，报告在agent/report。当前用户AGENTS修改和既有20261013报告迁移不是本任务产生，提交时隔离。

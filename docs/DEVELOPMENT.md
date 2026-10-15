@@ -1,6 +1,8 @@
 <!-- Native game architecture, editing entry points, and focused verification. -->
 # 开发说明
 
+本文描述保留的 x64/SDL3 重建参考。当前原 x86 主线入口为 [X86_CORE_REUSE.md](X86_CORE_REUSE.md)，两条路线的功能与验收不可混用。
+
 工程采用单窗口、40Hz 固定步长玩法及独立渲染。`Game`读取原配置，`Renderer`只读取场景视图；关卡切换释放旧地图 GPU 缓存。音频是独立可选模块，默认两项音量为零，不初始化音频设备。
 
 `Desktop`在现有main.cpp中维护浏览、建造、详情、暂停/重开确认与结算状态。按钮和快捷键共用`desktopInput`，镜头事件统一经`desktopEvent`经过UI后处理。`Game::*BlockReason`返回空字符串表示可执行，实际命令与预览使用同一规则；试放只复制导航格，不能修改资金、状态或随机数。`sellRefund`提供真正的排期退款，不能用投资额替代。

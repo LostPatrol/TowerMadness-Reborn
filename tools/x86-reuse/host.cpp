@@ -362,6 +362,8 @@ void resolveObjectiveCClasses() {
     }
 }
 
+#include "tower-restore.hpp"
+
 /** Preserve the cdecl argument stack while calling the driver's stdcall entry. */
 void* driverBridge(void* target, unsigned words) {
     auto* code = static_cast<unsigned char*>(VirtualAlloc(nullptr, PageSize, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE));
@@ -663,15 +665,16 @@ std::deque<HostContainer> hostContainers;
 std::map<std::string, int> hostAccountInts;
 std::map<std::string, std::string> hostAccountStrings;
 std::map<std::string, double> hostAccountFloats;
-// Restored GAME subsystems may keep pointers into the IBS bytes, so the buffer must outlive the load.
+// Temporary serialized input; the original IBS readers copy into owned runtime objects.
 std::vector<std::uint8_t> loadedIbsBytes;
 // NSUserDefaults surface and the on-disk platform store (real content keys, persisted across processes).
 int hostUserDefaultsToken = 0;
 std::filesystem::path persistedStorePath;
 std::filesystem::path dataDirectory;
-// A game replaced mid-frame is freed at the next frame boundary: original render/update code can still
-// hold the old pointer during the frame in which the swap happens.
-void* pendingGameFree = nullptr;
+// Window callbacks queue restoration before the next frame caches its GAME pointer.
+bool pendingRestore = false;
+std::filesystem::path pendingRestorePath;
+std::string pendingRestoreTag;
 bool persistedStoreLoaded = false;
 void loadPersistedStore();
 void savePersistedStore();
@@ -1782,7 +1785,7 @@ void savePersistedStore() {
 
 /**
  * Install a restored GAME exactly the way the original start callback FUN_002c6403 finishes:
- * replace any existing game, set the resolution from the menu's logical size, go back to the
+ * set the resolution from the menu's logical size, go back to the
  * in-progress main menu (MENU_backToMainMenu), MENU_hide, then clear the fade state and set
  * showing=0 directly so the game runs on the next frame instead of through the menu fade.
  */
@@ -1790,13 +1793,7 @@ void installRestoredGame(void* userMenu, void* loaded) {
     if (!userMenu || !loaded) return;
     auto* bytes = static_cast<unsigned char*>(userMenu);
     auto* gameSlot = reinterpret_cast<void**>(bytes + 0x15c);
-    // Never free a running game here: the render/update path can still hold it (observed as an access
-    // violation in the in-process hotkey load). Replace the slot and let the old game leak in the probe.
-    if (*gameSlot && *gameSlot != loaded) {
-        pendingGameFree = *gameSlot;
-        log("ORIGINAL_GAME_REPLACED old=" + std::to_string(reinterpret_cast<std::uintptr_t>(*gameSlot))
-            + " (free deferred to the next frame boundary)");
-    }
+    // The restore entry has already detached and freed the old GAME before building this one.
     *gameSlot = loaded;
     const int width = static_cast<int>(std::lround(*reinterpret_cast<const float*>(bytes + 0x110)));
     const int height = static_cast<int>(std::lround(*reinterpret_cast<const float*>(bytes + 0x114)));
@@ -1822,19 +1819,40 @@ void hotkeySaveState(void* userMenu) {
     const auto path = dataDirectory.empty() ? saveStatePath({}) : dataDirectory / "menu-save-hotkey.bin";
     writeSaveState(path, reinterpret_cast<void*>(header[0]), header[1]);
     log("ORIGINAL_SAVE_HOTKEY file=" + path.string() + " bytes=" + std::to_string(header[1]) + " " + playerState(game).dump());
+    reinterpret_cast<void(__cdecl*)(void*)>(requireExport("OBS_free"))(obs);
 }
 
-/** F9 in the interactive menu: restore the saved GAME through the original GAME_fromIBS path. */
+/** Queue F9 without replacing objects while the current frame still holds their pointers. */
 void hotkeyLoadState(void* userMenu) {
     if (!userMenu) return;
-    const auto path = dataDirectory.empty() ? saveStatePath({}) : dataDirectory / "menu-save-hotkey.bin";
+    pendingRestorePath = dataDirectory.empty() ? saveStatePath({}) : dataDirectory / "menu-save-hotkey.bin";
+    pendingRestoreTag = "ORIGINAL_LOAD_HOTKEY";
+    pendingRestore = true;
+    log("ORIGINAL_LOAD_HOTKEY_REQUESTED file=" + pendingRestorePath.string());
+}
+
+/** Replace a GAME at a frame boundary, retaining the original free-before-create ownership order. */
+void restoreSavedGame(void* userMenu, const std::filesystem::path& path, const std::string& tag) {
     if (!readSaveState(path, loadedIbsBytes)) { log("ORIGINAL_LOAD_HOTKEY_NOFILE " + path.string()); return; }
+    // Preserve individual lifecycle events even when the allocator reuses an address and log() deduplicates.
+    static unsigned restoreSequence = 0;
+    const unsigned sequence = ++restoreSequence;
+    void*& slot = *reinterpret_cast<void**>(static_cast<unsigned char*>(userMenu) + 0x15c);
+    if (slot) {
+        void* old = slot;
+        slot = nullptr;
+        reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_free"))(old);
+        log("ORIGINAL_GAME_FREED_BEFORE_RESTORE old=" + std::to_string(reinterpret_cast<std::uintptr_t>(old))
+            + " restore=" + std::to_string(sequence));
+    }
     void* ibs = reinterpret_cast<void*(__cdecl*)(void*, unsigned, unsigned)>(findExport("IBS_wrap"))(
         loadedIbsBytes.data(), static_cast<unsigned>(loadedIbsBytes.size()), 0);
     void* loaded = reinterpret_cast<void*(__cdecl*)(void*)>(findExport("GAME_fromIBS"))(ibs);
-    log("ORIGINAL_LOAD_HOTKEY bytes=" + std::to_string(loadedIbsBytes.size()) + " game=" + std::to_string(reinterpret_cast<std::uintptr_t>(loaded))
+    reinterpret_cast<void(__cdecl*)(void*)>(requireExport("IBS_free"))(ibs);
+    log(tag + " bytes=" + std::to_string(loadedIbsBytes.size()) + " restore=" + std::to_string(sequence)
+        + " game=" + std::to_string(reinterpret_cast<std::uintptr_t>(loaded))
         + (loaded ? " " + playerState(loaded).dump() : std::string(" (failed)")));
-    if (!loaded) return;
+    if (!loaded) throw std::runtime_error("Original GAME_fromIBS rejected the saved game");
     installRestoredGame(userMenu, loaded);
 }
 
@@ -1949,7 +1967,7 @@ void originalScene(const std::filesystem::path& output, const Scenario& scenario
         }
         if (operation == "autoplay" && elapsed >= 700 && !spedUp) {
             toggleSpeed(game); toggleSpeed(game);
-            log("ORIGINAL_COMMAND togglePlaySpeed x2 -> 4x playback");
+            log("ORIGINAL_COMMAND togglePlaySpeed x2 issued; actual speed requires measurement");
             spedUp = true;
         }
         if (operation == "upgrade" && elapsed >= 3500 && !upgraded) {
@@ -2064,16 +2082,22 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
     // "continue" runs the original GAME_fromIBS restore path over bytes written by an earlier run.
     const bool continueMode = scripted && (scenario.modeName == "continue" || scenario.modeName == "Continue");
     const bool longCampaign = scripted && (scenario.modeName == "campaign" || scenario.modeName == "Campaign");
+    const bool restoreStress = scripted && scenario.modeName == "restorestress";
     if (continueMode) {
         // Only read the bytes now; the original transition runs once MAPMENU exists in the loop below.
         if (readSaveState(savePath, loadedIbsBytes))
             log("ORIGINAL_SAVE_CONTINUE_READY file=" + savePath.string() + " bytes=" + std::to_string(loadedIbsBytes.size()));
-        else log("ORIGINAL_SAVE_CONTINUE_NOFILE " + savePath.string());
+        else throw std::runtime_error("Continue requires an original save: " + savePath.string());
     }
     const ULONGLONG start = GetTickCount64();
     // Bounded so the fixed bridge runner can finish; interactive clicks are still accepted while it runs.
     // Interactive menu runs until the user closes the window; scripted probes stay bounded.
-    const ULONGLONG duration = scripted ? (longCampaign ? 900000 : 45000) : (std::numeric_limits<ULONGLONG>::max)();
+    ULONGLONG duration = scripted ? (longCampaign ? 900000 : 45000) : (std::numeric_limits<ULONGLONG>::max)();
+    // The final save is tutorialDoneAt+21s; leave 8s for the queued restore and observation.
+    constexpr ULONGLONG ScriptedSaveTailMs = 29000;
+    // Repeat the real F9 path on a started game, leaving several seconds after its last restore.
+    constexpr int RestoreStressCycles = 12;
+    int restoreCycles = 0;
     log("ORIGINAL_MENU_DURATION ms=" + std::to_string(duration) + " campaign=" + std::string(longCampaign ? "1" : "0")
         + " continue=" + std::string(continueMode ? "1" : "0"));
     bool capturedMain = false, capturedMap = false, capturedGame = false, capturedPause = false, windowClosed = false;
@@ -2114,16 +2138,14 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
             log("ORIGINAL_CAMPAIGN_HEARTBEAT frame=" + std::to_string(frameCount) + " "
                 + (heartbeatGame ? playerState(heartbeatGame).dump() : std::string("nogame")));
         }
-        // Frame boundary: nothing from the previous frame is in flight, so a replaced game can be freed.
-        if (pendingGameFree) {
-            void* dying = pendingGameFree;
-            pendingGameFree = nullptr;
-            reinterpret_cast<void(__cdecl*)(void*)>(findExport("GAME_free"))(dying);
-            log("ORIGINAL_GAME_FREED_AT_BOUNDARY old=" + std::to_string(reinterpret_cast<std::uintptr_t>(dying)));
+        // Serve queued input before reading any GAME pointer for this frame.
+        if (pendingRestore) {
+            pendingRestore = false;
+            restoreSavedGame(menu, pendingRestorePath, pendingRestoreTag);
         }
         void* game = *reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c);
         void* page = *reinterpret_cast<void**>(menu);
-        const bool showing = *reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(menu) + 4) != 0;
+        bool showing = *reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(menu) + 4) != 0;
         if (page != lastPage) { lastPage = page; log("ORIGINAL_MENU_PAGE_CHANGED " + std::to_string(reinterpret_cast<std::uintptr_t>(page))); }
         if (page == findExport("startGamePage") && mapSelectAt == 0) mapSelectAt = elapsed;
         if (game && game != lastGame) {
@@ -2163,6 +2185,13 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
             log("ORIGINAL_HUD " + playerState(game).dump());
             hudCaptured = true;
         }
+        if (scripted && !continueMode && !longCampaign && tutorialDone)
+            duration = (std::max)(duration, tutorialDoneAt + (restoreStress ? ScriptedSaveTailMs + 7000 : ScriptedSaveTailMs));
+        if (restoreStress && saveTested && restoreCycles < RestoreStressCycles && elapsed >= pauseAt + 10000 + restoreCycles * 750) {
+            ++restoreCycles;
+            log("ORIGINAL_RESTORE_STRESS request=" + std::to_string(restoreCycles));
+            SendMessageW(windowHandle, WM_KEYDOWN, VK_F9, 0);
+        }
         // Reuse the proven original input coordinates: build ring, category, tower, wave and speed.
         if (scripted && !continueMode && game && tutorialDone && buildStep < 5
             && elapsed >= tutorialDoneAt + 2500 + static_cast<ULONGLONG>(buildStep) * 1500) {
@@ -2182,7 +2211,7 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
             combatCaptured = true;
         }
         // Real Windows keyboard messages exercise the interactive save/continue hotkeys (short probes only:
-        // swapping a live game mid-campaign slows the long run and is already verified).
+        // restoration is served at the next frame boundary).
         if (scripted && !continueMode && !longCampaign && game && tutorialDone && !hotkeySaveTested && elapsed >= tutorialDoneAt + 9500) {
             hotkeySaveTested = true;
             log("ORIGINAL_HOTKEY_TEST save");
@@ -2192,7 +2221,7 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
             hotkeyLoadTested = true;
             log("ORIGINAL_HOTKEY_TEST load");
             SendMessageW(windowHandle, WM_KEYDOWN, VK_F9, 0);
-            log("ORIGINAL_HOTKEY_TEST result game=" + std::to_string(reinterpret_cast<std::uintptr_t>(*reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c))));
+            log("ORIGINAL_HOTKEY_TEST load queued");
         }
         if (scripted && longCampaign && game && gameStartAt && elapsed >= nextStatLog) {
             nextStatLog = elapsed + 10000;
@@ -2390,32 +2419,9 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
         // that callback expects a GAMEMODE and would create a fresh game).
         if (scripted && continueMode && !continueRestored && game == nullptr && page == findExport("startGamePage") && mapStep >= 1 && elapsed >= mapStepAt) {
             continueRestored = true;
-            if (loadedIbsBytes.empty()) {
-                log("ORIGINAL_SAVE_CONTINUE_NOBYTES " + savePath.string());
-            } else {
-            void* ibs = reinterpret_cast<void*(__cdecl*)(void*, unsigned, unsigned)>(findExport("IBS_wrap"))(
-                loadedIbsBytes.data(), static_cast<unsigned>(loadedIbsBytes.size()), 0);
-            void* loaded = reinterpret_cast<void*(__cdecl*)(void*)>(findExport("GAME_fromIBS"))(ibs);
-            log("ORIGINAL_SAVE_CONTINUE game=" + std::to_string(reinterpret_cast<std::uintptr_t>(loaded))
-                + (loaded ? " state=" + playerState(loaded).dump() : std::string(" (failed)")));
-            // Discriminating evidence for the QA save-audit: does the restored GAMEMODE carry a map pointer?
-            {
-                void* gamemode = loaded ? *reinterpret_cast<void**>(loaded) : nullptr;
-                std::ostringstream modeLog;
-                modeLog << "ORIGINAL_SAVE_CONTINUE_MODE game=0x" << std::hex << reinterpret_cast<std::uintptr_t>(loaded)
-                        << " mode=0x" << reinterpret_cast<std::uintptr_t>(gamemode);
-                if (gamemode) {
-                    const auto* fields = reinterpret_cast<const std::uint32_t*>(gamemode);
-                    modeLog << " field20=0x" << fields[0x20 / 4] << " field24=0x" << fields[0x24 / 4] << " field2c=0x" << fields[0x2c / 4];
-                }
-                log(modeLog.str());
-            }
-            if (loaded) {
-                installRestoredGame(menu, loaded);
-                log("ORIGINAL_SAVE_CONTINUE_STARTED game=" + std::to_string(reinterpret_cast<std::uintptr_t>(*reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c)))
-                    + " showing=" + std::to_string(*reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(menu) + 4)));
-            }
-            }
+            pendingRestore = true;
+            pendingRestorePath = savePath;
+            pendingRestoreTag = "ORIGINAL_SAVE_CONTINUE";
         }
         if (scripted && !continueMode && game == nullptr && mapStep >= 1 && mapStep <= 3 && elapsed >= mapStepAt) {
             if (mapStep == 1) capture(output / "menu-campaign.png", 480, 800);
@@ -2472,21 +2478,15 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
             std::ostringstream saveLog;
             saveLog << "ORIGINAL_SAVE file=" << savePath.string() << " bytes=" << length << " state=" << playerState(game).dump();
             log(saveLog.str());
-            // Real round-trip: wrap the same original bytes in an IBS and rebuild through GAME_fromIBS.
-            if (readSaveState(savePath, loadedIbsBytes)) {
-                void* ibs = reinterpret_cast<void*(__cdecl*)(void*, unsigned, unsigned)>(findExport("IBS_wrap"))(
-                    loadedIbsBytes.data(), static_cast<unsigned>(loadedIbsBytes.size()), 0);
-                void* loaded = reinterpret_cast<void*(__cdecl*)(void*)>(findExport("GAME_fromIBS"))(ibs);
-                log("ORIGINAL_LOAD_IBS bytes=" + std::to_string(loadedIbsBytes.size()) + " game=" + std::to_string(reinterpret_cast<std::uintptr_t>(loaded))
-                    + (loaded ? " state=" + playerState(loaded).dump() : std::string(" (failed)")));
-                if (loaded) {
-                    reinterpret_cast<void(__cdecl*)(void*)>(findExport("GAME_resume"))(loaded);
-                    *reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c) = loaded;
-                    reinterpret_cast<void(__cdecl*)(void*)>(findExport("MENU_hide"))(menu);
-                    log("ORIGINAL_LOAD_ACTIVE showing=" + std::to_string(*reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(menu) + 4)));
-                }
-            }
+            reinterpret_cast<void(__cdecl*)(void*)>(requireExport("OBS_free"))(obs);
+            pendingRestore = true;
+            pendingRestorePath = savePath;
+            pendingRestoreTag = "ORIGINAL_LOAD_IBS";
         }
+        // Synchronous menu clicks can start/restart a GAME; render only the current menu-owned object.
+        game = *reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c);
+        page = *reinterpret_cast<void**>(menu);
+        showing = *reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(menu) + 4) != 0;
         if (game == nullptr || showing) {
             if (continueMode && continueRestored && !continueFadeStart) {
                 continueFadeStart = true;
@@ -2534,12 +2534,10 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
                     }
                 }
                 gameSilence(game); menuEndGame(menu); log("ORIGINAL_MENU_GAME_ENDED");
+                // MENU_endGame may free replay games; the original outer dispatcher renders the menu next.
+                menuUpdate(menu); menuRender(menu);
             }
-            else gameUpdate(game);
-            gameRender(game);
-            // NOTE: HeapValidate can itself raise the heap-corruption exception, which aborts a run that
-            // would otherwise continue; it is deliberately not called per frame. Corruption is hunted by
-            // tracking the guest allocator below instead.
+            else { gameUpdate(game); gameRender(game); }
         }
         if (!capturedMap && page && page == findExport("startGamePage")) { capture(output / "menu-mapselect.png", 480, 800); capturedMap = true; }
         if (!capturedGame && game) { capture(output / "menu-in-game.png", 480, 800); capturedGame = true; }
@@ -2731,6 +2729,9 @@ void run(const std::filesystem::path& package, const std::string& operation, con
     dataDirectory = resolveDataDirectory(package, outputDirectory);
     persistedStorePath = dataDirectory / "platform-store.txt";
     const Scenario scenario = parseScenario(operation);
+    // "map" previously returned without loading anything and falsely looked like a passing probe.
+    const std::set<std::string> supported = {"play", "scene", "input", "combat", "upgrade", "flood", "autoplay", "menu", "menuauto", "levels"};
+    if (!supported.count(scenario.operation)) throw std::runtime_error("Unsupported probe operation: " + scenario.operation);
     registerC(); mapImage(directory / "libverde.so");
     for (const auto& entry : std::filesystem::directory_iterator(directory))
         if (entry.path().extension() == ".so" && entry.path().filename() != "libverde.so") mapImage(entry.path());
@@ -2745,7 +2746,7 @@ void run(const std::filesystem::path& package, const std::string& operation, con
         for (const auto& name : modes) log("ORIGINAL_MODE " + name);
         return;
     }
-    if (scenario.operation != "map") { createGraphics(); registerGraphics(package.parent_path() / "gl-signatures.json"); }
+    createGraphics(); registerGraphics(package.parent_path() / "gl-signatures.json");
     const auto nativeHooks = hooks;
     for (const auto& [name, replacement] : nativeHooks)
         {
@@ -2762,13 +2763,13 @@ void run(const std::filesystem::path& package, const std::string& operation, con
     logObjectiveCSlots();
     std::ofstream unresolved(outputDirectory / "unresolved-imports.txt");
     for (const auto& name : missingNames) unresolved << name << '\n';
-    if (scenario.operation == "map") return;
     redirectGs(package.parent_path() / "gs-instructions.json");
     for (const char* name : {"__wrap_malloc", "__wrap_calloc", "__wrap_realloc", "__wrap_free", "__wrap_memcpy",
                              "__wrap_memset", "__wrap_printf"}) {
         const std::string underlying = std::string(name).substr(7);
         if (const auto hook = hooks.find(underlying); hook != hooks.end()) installHook(name, hook->second);
     }
+    correctTowerRestoreAllocation();
     installHook("VFS_getFile", reinterpret_cast<void*>(&nativeFile));
     installHook("VFS_getFilesOfType", reinterpret_cast<void*>(&nativeFiles));
     installHook("APPORTABLE_loadPng", reinterpret_cast<void*>(&nativePng));
