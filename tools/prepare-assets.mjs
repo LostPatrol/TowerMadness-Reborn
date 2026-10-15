@@ -15,7 +15,12 @@ const TEXT_TYPES = new Set(['.gamemode', '.map', '.waves', '.tech', '.model', '.
 const GL = { float: 5126, byte: 5121, short: 5123, triangles: 4, strip: 5 };
 // Default world resources are selected by native code rather than map fields.
 const WORLD_ROOTS = ['basetiles.atlas', 'transitions.atlas', 'sheep.model', 'ufo.model', 'beam.model', 'skybox.model', 'turretbase.model', 'turretbase_1.model', 'turretbase_2.model', 'turretbase_3.model', 'turretbase_4.model', 'turretbase_5.model', 'turretbase_max.model'];
-const sourceRoot = path.resolve(process.argv[2] ?? 'agent/codex/apk/assets');
+// Share the canonical original assets with the x86 host instead of keeping a second APK extraction.
+const defaultSourceRoot = path.resolve('agent/codex/x86-reuse/package/assets');
+// An explicit caller path remains supported; only the canonical extraction has known APK provenance.
+const sourceRoot = path.resolve(process.argv[2] ?? defaultSourceRoot);
+// Hash the actual canonical APK rather than carrying the retired ARM package identity into new output.
+const sourceApk = sourceRoot === defaultSourceRoot ? path.resolve('Madness_Zero-1.22.apk') : null;
 const outputRoot = path.resolve(process.argv[3] ?? 'assets');
 
 /** Enumerate only the supplied asset directory in stable filename order. */
@@ -264,7 +269,7 @@ function main() {
   }
   const counts = records.reduce((total, record) => ({ ...total, [record.type]: (total[record.type] ?? 0) + 1 }), {});
   const unresolvedReferences = records.flatMap(record => (record.references ?? []).filter(reference => !reference.candidates.some(candidate => byName.has(candidate))).map(reference => ({ source: record.name, ...reference })));
-  const manifest = { formatVersion: 1, source: { directory: path.relative(process.cwd(), sourceRoot).replaceAll('\\', '/'), apkSha256: '0bc4ec90ebf0eab249cab4c39b9390c1f05dafffd83f92adcf09251890b3cb8b' }, meshFormat: { magic: 'TMMS', version: 1, endian: 'little', headerBytes: 16, vertex: 'float32 x,y,z,u,v', index: 'uint16 triangles' }, dependencyCoverage: 'Explicit JSON references and selected known default world models; arbitrary native-code dynamic references are not proven complete.', counts, anomalies, unresolvedReferences, records, levels };
+  const manifest = { formatVersion: 1, source: { directory: path.relative(process.cwd(), sourceRoot).replaceAll('\\', '/'), apkSha256: sourceApk && fs.existsSync(sourceApk) ? sha256(fs.readFileSync(sourceApk)) : null }, meshFormat: { magic: 'TMMS', version: 1, endian: 'little', headerBytes: 16, vertex: 'float32 x,y,z,u,v', index: 'uint16 triangles' }, dependencyCoverage: 'Explicit JSON references and selected known default world models; arbitrary native-code dynamic references are not proven complete.', counts, anomalies, unresolvedReferences, records, levels };
   write('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
   const sample = { gamemode: parsed.get('PlainPlane.gamemode'), map: parsed.get('PlainPlane.map'), waves: parsed.get('PlainPlane.waves'), tech: parsed.get('Easy.tech'), model: parsed.get('potatogun_i.model'), firstEnemyModel: parsed.get('grey.model'), level: levels.find(level => level.name === 'PlainPlane.gamemode') };
   write('samples/plain-plane.json', JSON.stringify(sample, null, 2) + '\n');

@@ -29,7 +29,7 @@
 - `classes.dex`、全部 Android `res/` 与 `resources.arsc` 内容一致。DEX SHA-256 为 `488fdb3171592199751d516d9c1f9bc98355e4acaea67b748d74d1b13bcbc7a0`。
 - 其他差异为 `AndroidManifest.xml`、三项 `META-INF/` 签名成员及按 ABI 替换的 23 个原生库。
 
-因此现有游戏资源/配置基线无需更换。继续用 ARM 包及既有 Ghidra 数据库追溯已恢复规则；当前成功的动态对照使用原ARM包与API17环境，新x86包在API24仍有原生崩溃，见[ANDROID_REFERENCE.md](ANDROID_REFERENCE.md)。跨 ABI 的原生代码行为尚未逐函数证明等价；资产相同也不证明运行表现完全相同。
+两包游戏资源/配置基线一致，当前统一使用x86解包资产。x86数据库和静态导出保留；旧ARM研究保留精简规格与静态导出，需要时可从原ARM包重建数据库。动态对照只保留成功的ARM/API17环境，见[ANDROID_REFERENCE.md](ANDROID_REFERENCE.md)。跨ABI的原生行为未逐函数证明等价。
 
 ## 签名与证据边界
 
@@ -41,4 +41,4 @@ JDK 21 `keytool -printcert -jarfile` 读取两包得到同一签名证书：
 
 现代 JDK 默认禁用两包的旧 SHA1 JAR 签名。在显式单次验证进程中仅放宽该历史算法限制，`jarsigner -verify` 对两包均返回 `jar verified.`、退出码 0。仍报告自签名证书链不受信、无签名时间戳、弱算法及 JarFile/JarInputStream 签名读取差异；不据此宣称现代 APK 签名方案、发布来源或 Android 安装兼容性已经验证。未修改原包或全局 Java 安全配置。
 
-REA 静态包证据：ARM `ev_fa740f1b56e1de223d38b3a4be5643a13226b2ca4469f48a607b48ad30625652`；x86 `ev_297109a3925c46f95537786c13946f3334ddf9e0a9f229ed6ba57c92035e9cf5`。成员清单及内容哈希保存在 `agent/codex/x86-package-compare/comparison.json`，复查脚本为同目录 `compare-apks.ps1`。本比较不包含启动或玩法观察。
+旧成员比较过程文件已清理；两份原APK仍保留，可重新逐成员校验。本比较不包含启动或玩法观察。

@@ -5,7 +5,7 @@
 
 当前路线为 **原 x86 核心复用**：Win32 C++ 宿主直接执行原 APK 的 x86 机器码，适配 Windows、OpenGL、输入和本地存储，保留原游戏逻辑、资源及菜单。运行时无需 Android 或 CPU 模拟器。默认静音。
 
-目前是可继续开发的原型，完整移植尚未完成。当前基线和验证边界见 [原核心开发说明](docs/X86_CORE_REUSE.md)，此前混乱与修正依据见 [基线审计](docs/BASELINE_AUDIT.md)。
+目前是可继续开发的原型，完整移植尚未完成。接续开发只需先读 [原核心开发说明](docs/X86_CORE_REUSE.md)；修复要点见 [基线修正摘要](docs/BASELINE_AUDIT.md)。
 
 ## 本地运行
 
@@ -20,6 +20,6 @@
 
 ## 旧重建版
 
-`src/` 与 `release/TowerMadness.exe` 是已停止常规推进的 x64/SDL3 重建路线；其功能和验收不能算作 x86 移植的完成度。保留标签 `reconstruction-reference-20261014` 及 [技术路线参考](docs/TECHNICAL_ROUTE_REVIEW.md)。
+`src/` 是已停止常规推进的 x64/SDL3 重建参考；其旧构建和发布包已清理，可按需重新构建。该路线的功能和验收不计入 x86 移植。保留标签 `reconstruction-reference-20261014` 及 [静态规格参考](docs/reference/README.md)。
 
 原游戏及资源属于 Limbic Software。本项目仅供个人学习与内部使用。

@@ -10,7 +10,7 @@ if (!(Test-Path -LiteralPath $cmakePath)) { throw 'CMake is missing. Install Vis
 if (!(Test-Path -LiteralPath (Join-Path $projectRoot 'third_party/json.hpp'))) { throw 'Project dependencies are missing. Run tools/setup-dependencies.ps1 after approving the download.' }
 if (!(Test-Path -LiteralPath (Join-Path $projectRoot 'third_party/stb_vorbis.c'))) { throw 'The pinned Vorbis decoder is missing. Run tools/setup-dependencies.ps1.' }
 if (!$SkipAssets) {
-    if (Test-Path -LiteralPath (Join-Path $projectRoot 'agent/codex/apk/assets')) {
+    if (Test-Path -LiteralPath (Join-Path $projectRoot 'agent/codex/x86-reuse/package/assets')) {
         & node (Join-Path $PSScriptRoot 'prepare-assets.mjs')
         if ($LASTEXITCODE -ne 0) { throw 'Asset preparation failed.' }
     } elseif (Test-Path -LiteralPath (Join-Path $projectRoot 'assets/manifest.json')) {

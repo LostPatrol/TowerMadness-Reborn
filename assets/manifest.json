@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
   "source": {
-    "directory": "agent/codex/apk/assets",
-    "apkSha256": "0bc4ec90ebf0eab249cab4c39b9390c1f05dafffd83f92adcf09251890b3cb8b"
+    "directory": "agent/codex/x86-reuse/package/assets",
+    "apkSha256": "7e8d09079c963e36f4ba633712b112f65d410740405e828405404fd729afd3dd"
   },
   "meshFormat": {
     "magic": "TMMS",
@@ -423801,7 +423801,7 @@
     {
       "name": "Info.plist",
       "bytes": 2148,
-      "sha256": "6219b76104b9957f40801c4085b5c76d7a4f913afe3d4ec636bc1f05d67d83ef",
+      "sha256": "246fecbecf07affb095f63d550d9b2853cc81c6e60bf1afa9762edeb62720e75",
       "type": "plist",
       "status": "inventory-only"
     },
