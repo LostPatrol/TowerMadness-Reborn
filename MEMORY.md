@@ -61,7 +61,7 @@ REA6.4.0、Ghidra12.1.4、jadx-headless-mcp0.7.1、JADX1.5.6位于agent/codex/to
 
 代理通常127.0.0.1:7897；Windows curl TLS失败可用D:/Git/mingw64/bin/curl.exe。不使用gh，不关闭本机其他服务，尤其MC服务器。任务指令由用户提供；新报告位于agent/report，TODO未经允许不改。
 
-02-x86由本机dsh承担主要研究实现与验收；ChatGPT预算有限，不降低需求或验证质量。当前DSH已实际返回HTTP402 QUOTA/Insufficient Balance，主会话不运行、目标activation=disarmed；按任务文件余额不足及时终止的要求停止开发，完整移植未完成。不要自动重试、切换付费提供商或改由GPT继续开发；额度恢复并获用户续接后再开始。工作区agent/dsh不进Git，停止现场保存在recovery-20261015-061738（manifest有哈希；WIP未提升）。原shell沙盒Win32 5不通过修ACL解决；固定project_native提供build/run/只读ghidra/status/snapshot。Web的standard preset也必须通过bridge/restricted-web.patch.yml禁用嵌套pwsh，仅保留workspace-write且拒绝权限升级，避免再次停在ACL审批。未修改系统ACL或用户其他服务。
+02-x86由本机dsh承担主要研究实现与验收；ChatGPT预算有限，不降低需求或验证质量。此前DSH真实HTTP402额度耗尽后按任务要求停止，现场保存在recovery-20261015-061738（manifest有哈希；WIP未提升）。2026-10-15用户明确确认“已补充，可以继续”，已恢复同一会话/目标，真实模型工具调用和新build108重新推进；完整移植未完成。再次遇到实际余额不足仍应及时停止，不自动切换付费渠道或由GPT接手实现。工作区agent/dsh不进Git。原shell沙盒Win32 5不通过修ACL解决；固定project_native提供build/run/只读ghidra/status/snapshot。Web的standard preset也必须通过bridge/restricted-web.patch.yml禁用嵌套pwsh，仅保留workspace-write且拒绝权限升级，避免再次停在ACL审批。未修改系统ACL或用户其他服务。
 
 主session-e2ef9fe5-098b-452f-a3a2-f9764733371d与goal-aadc801a-9b70-41f9-9621-86e9d3d47260由独立常驻loopback web持续执行完整目标。控制入口agent/dsh/bridge/persistent/dsh-session.ps1；动态PID/端口看state.json并实际核验，不按历史PID停服务，不同时headless打开同session。Cookie/stdout含本机鉴权信息不得输出。RPC使用payload.args与原cwd反斜杠拼写。status已包含live running、pendingApproval和recentEvents，不能只凭goal active/armed判断工作在推进。stop尚不核验PID复用且只停父cmd，清理时必须定向核验本任务进程树，不能影响其他服务。
 
