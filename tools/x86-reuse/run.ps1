@@ -39,14 +39,14 @@ if (Test-Path -LiteralPath $manifestPath) {
     if ($buildManifest.executableSha256 -ne $executableHash) { throw 'Executable does not match its build manifest.' }
     Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $runDirectory 'build-manifest.json')
     New-Item -ItemType Directory -Force (Join-Path $runDirectory 'inputs') | Out-Null
-    foreach ($inputName in @('host.cpp', 'tower-restore.hpp', 'native-audio.hpp', 'original-audio.hpp', 'point-sprite-correction.hpp', 'weapon-combat.hpp', 'late-battle-probe.hpp')) {
+    foreach ($inputName in @('host.cpp', 'host-display.hpp', 'frame-pacing.hpp', 'tower-restore.hpp', 'native-audio.hpp', 'original-audio.hpp', 'point-sprite-correction.hpp', 'weapon-combat.hpp', 'late-battle-probe.hpp')) {
         if (!(Test-Path -LiteralPath (Join-Path $buildDirectory "inputs/$inputName"))) { continue }
         Copy-Item -LiteralPath (Join-Path $buildDirectory "inputs/$inputName") -Destination (Join-Path $runDirectory 'inputs')
     }
 }
 if ($Mode -eq 'play') {
     Write-Output 'Original PlainPlane: click the field and original pie menu to build; Space sends a wave; the bottom-left original Menu hot zone toggles a host pause; close the window to exit.'
-    Write-Output 'This direct-play mode uses the host pause and does not persist progress. Use -Mode menu for the original menu. The portrait window is fixed at 480x800; -Silent disables native audio.'
+    Write-Output 'This direct-play mode uses the host pause and does not persist progress. Use -Mode menu for the original menu. Resize/maximize the window; F6 selects 60/120/unlimited FPS. -Silent disables native audio.'
 }
 if ($Mode -eq 'menu') {
     Write-Output 'Original MENU object: real main menu / level select / in-game pause. Escape returns from a running game or level select. Close the window to exit.'

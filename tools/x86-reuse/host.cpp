@@ -110,6 +110,26 @@ void log(const std::string& message) {
     std::fflush(stream);
 }
 
+#include "host-display.hpp"
+#include "frame-pacing.hpp"
+// Only the active presentation loop owns timing; simulation retains the original realtime source.
+std::unique_ptr<HostFramePacer> framePacer;
+
+/** Finish a timed frame and expose measured throughput in the normal window title. */
+void finishHostFrame() {
+    if (!framePacer) return;
+    framePacer->finishFrame();
+    static ULONGLONG nextTitle = 0;
+    const ULONGLONG now = GetTickCount64();
+    if (now < nextTitle) return;
+    nextTitle = now + 1000;
+    wchar_t title[128]{};
+    const auto target = framePacer->targetFPS();
+    if (target) std::swprintf(title, std::size(title), L"TowerMadness | %.1f FPS | cap %d | F6: 60/120/unlimited", framePacer->recentFPS(), target);
+    else std::swprintf(title, std::size(title), L"TowerMadness | %.1f FPS | unlimited | F6: 60/120/unlimited", framePacer->recentFPS());
+    SetWindowTextW(windowHandle, title);
+}
+
 /** Decode an original NUL-terminated ELF string at a validated file offset. */
 const char* stringAt(const Image& image, std::uint32_t offset) {
     if (offset >= image.file.size()) throw std::runtime_error("ELF string outside file");
@@ -397,6 +417,25 @@ void* driverBridge(void* target, unsigned words) {
 LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM first, LPARAM second) {
     if (message == WM_CLOSE) { DestroyWindow(window); return 0; }
     if (message == WM_DESTROY) { PostQuitMessage(0); return 0; }
+    if (message == WM_KEYDOWN && first == VK_F6 && framePacer && !(second & (1LL << 30))) {
+        const int current = framePacer->targetFPS();
+        framePacer->configure(current == 60 ? 120 : current == 120 ? 0 : 60);
+        return 0;
+    }
+    if (message == WM_GETMINMAXINFO) {
+        RECT bounds{0, 0, MinimumClientWidth, MinimumClientHeight};
+        AdjustWindowRect(&bounds, static_cast<DWORD>(GetWindowLongPtrW(window, GWL_STYLE)), FALSE);
+        auto* limits = reinterpret_cast<MINMAXINFO*>(second);
+        limits->ptMinTrackSize = POINT{bounds.right - bounds.left, bounds.bottom - bounds.top};
+        return 0;
+    }
+    if (message == WM_SIZE && first != SIZE_MINIMIZED) {
+        hostDisplay.resize(LOWORD(second), HIWORD(second));
+        if (windowGl) hostViewport(0, 0, LogicalWidth, LogicalHeight);
+        log("WINDOW_RESIZE client=" + std::to_string(hostDisplay.width) + "x" + std::to_string(hostDisplay.height)
+            + " viewport=" + std::to_string(hostDisplay.viewportWidth) + "x" + std::to_string(hostDisplay.viewportHeight));
+        return 0;
+    }
     if (activeGame && message == WM_MOUSEWHEEL) {
         const bool menuShowing = originalMenu && *reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(originalMenu) + 4) != 0;
         void* game = originalMenu ? *reinterpret_cast<void**>(static_cast<unsigned char*>(originalMenu) + 0x15c) : activeGame;
@@ -405,13 +444,15 @@ LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM first, LPARAM
         constexpr float PinchHalfSpan = 80.0f, WheelSpanStep = 8.0f;
         POINT center{static_cast<short>(LOWORD(second)), static_cast<short>(HIWORD(second))};
         ScreenToClient(window, &center);
+        float centerX = static_cast<float>(center.x), centerY = static_cast<float>(center.y);
+        if (!hostDisplay.pointer(centerX, centerY)) return 0;
         const float steps = static_cast<short>(HIWORD(first)) / 120.0f;
         const float delta = std::clamp(steps * WheelSpanStep, -PinchHalfSpan / 2, PinchHalfSpan / 2);
         hostTouchCount = 2;
         hostTouch = HostTouch{}; hostPinchTouch = HostTouch{};
-        hostTouch.x = hostTouch.previousX = center.x - PinchHalfSpan;
-        hostPinchTouch.x = hostPinchTouch.previousX = center.x + PinchHalfSpan;
-        hostTouch.y = hostTouch.previousY = hostPinchTouch.y = hostPinchTouch.previousY = static_cast<float>(center.y);
+        hostTouch.x = hostTouch.previousX = centerX - PinchHalfSpan;
+        hostPinchTouch.x = hostPinchTouch.previousX = centerX + PinchHalfSpan;
+        hostTouch.y = hostTouch.previousY = hostPinchTouch.y = hostPinchTouch.previousY = centerY;
         hostTouch.tapCount = hostPinchTouch.tapCount = 0;
         reinterpret_cast<void(__cdecl*)(void*, void*)>(findExport("GAME_touchesBegan"))(game, &hostTouchSet);
         hostTouch.x -= delta; hostPinchTouch.x += delta;
@@ -422,9 +463,13 @@ LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM first, LPARAM
         return 0;
     }
     if (activeGame && (message == WM_LBUTTONDOWN || message == WM_LBUTTONUP || (message == WM_MOUSEMOVE && (first & MK_LBUTTON)))) {
+        float pointerX = static_cast<float>(static_cast<short>(LOWORD(second)));
+        float pointerY = static_cast<float>(static_cast<short>(HIWORD(second)));
+        const bool inside = hostDisplay.pointer(pointerX, pointerY);
+        if (!inside && GetCapture() != window) return 0;
         hostTouch.previousX = hostTouch.x; hostTouch.previousY = hostTouch.y;
-        hostTouch.x = static_cast<float>(static_cast<short>(LOWORD(second)));
-        hostTouch.y = static_cast<float>(static_cast<short>(HIWORD(second)));
+        hostTouch.x = pointerX;
+        hostTouch.y = pointerY;
         if (message == WM_LBUTTONDOWN) {
             hostTouch.startX = hostTouch.x; hostTouch.startY = hostTouch.y; hostTouch.tapCount = 1;
             hostTouch.previousX = hostTouch.x; hostTouch.previousY = hostTouch.y;
@@ -487,11 +532,23 @@ void createGraphics() {
     WNDCLASSW definition{}; definition.lpfnWndProc = windowProcedure; definition.hInstance = GetModuleHandleW(nullptr);
     definition.lpszClassName = L"TowerMadnessOriginalX86Probe"; definition.style = CS_OWNDC;
     RegisterClassW(&definition);
-    // This first native prototype keeps the recovered portrait geometry fixed.
-    constexpr DWORD WindowStyle = WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX;
-    RECT bounds{0, 0, 480, 800}; AdjustWindowRect(&bounds, WindowStyle, FALSE);
+    // Resize the framebuffer while preserving the original portrait layout and input space.
+    constexpr DWORD WindowStyle = WS_OVERLAPPEDWINDOW;
+    int initialWidth = LogicalWidth, initialHeight = LogicalHeight;
+    if (const char* dimensions = std::getenv("TOWERMADNESS_WINDOW")) {
+        int width = 0, height = 0;
+        if (std::sscanf(dimensions, "%dx%d", &width, &height) == 2 && width >= MinimumClientWidth && height >= MinimumClientHeight) {
+            initialWidth = width; initialHeight = height;
+        }
+    }
+    RECT bounds{0, 0, initialWidth, initialHeight}; AdjustWindowRect(&bounds, WindowStyle, FALSE);
     windowHandle = CreateWindowW(definition.lpszClassName, L"TowerMadness", WindowStyle,
         CW_USEDEFAULT, CW_USEDEFAULT, bounds.right - bounds.left, bounds.bottom - bounds.top, nullptr, nullptr, definition.hInstance, nullptr);
+    RECT client{};
+    if (!windowHandle || !GetClientRect(windowHandle, &client)) throw std::runtime_error("Native window creation failed");
+    // Hidden verification windows do not necessarily receive WM_SIZE until they are shown.
+    hostDisplay.resize(client.right, client.bottom);
+    log("WINDOW_INITIAL client=" + std::to_string(hostDisplay.width) + "x" + std::to_string(hostDisplay.height));
     windowDc = GetDC(windowHandle);
     PIXELFORMATDESCRIPTOR format{}; format.nSize = sizeof(format); format.nVersion = 1;
     format.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
@@ -500,6 +557,10 @@ void createGraphics() {
     if (!chosen || !SetPixelFormat(windowDc, chosen, &format)) throw std::runtime_error("OpenGL pixel format failed");
     windowGl = wglCreateContext(windowDc);
     if (!windowGl || !wglMakeCurrent(windowDc, windowGl)) throw std::runtime_error("Original renderer context failed");
+    // Frame deadlines own pacing; a second driver wait would otherwise halve some refresh rates.
+    const auto swapInterval = wglGetProcAddress("wglSwapIntervalEXT");
+    if (reinterpret_cast<std::uintptr_t>(swapInterval) > 3 && reinterpret_cast<std::uintptr_t>(swapInterval) != static_cast<std::uintptr_t>(-1))
+        reinterpret_cast<BOOL(WINAPI*)(int)>(swapInterval)(0);
     log(std::string("NATIVE_OPENGL ") + reinterpret_cast<const char*>(glGetString(GL_VERSION)));
 }
 
@@ -534,6 +595,9 @@ void registerGraphics(const std::filesystem::path& path) {
     hooks["glOrthof"] = reinterpret_cast<void*>(&nativeOrthof); hooks["glFrustumf"] = reinterpret_cast<void*>(&nativeFrustumf);
     installHook("__wrap_glOrthof", reinterpret_cast<void*>(&nativeOrthof));
     installHook("__wrap_glFrustumf", reinterpret_cast<void*>(&nativeFrustumf));
+    hooks["glViewport"] = reinterpret_cast<void*>(&hostViewport); hooks["glScissor"] = reinterpret_cast<void*>(&hostScissor);
+    installHook("__wrap_glViewport", reinterpret_cast<void*>(&hostViewport));
+    installHook("__wrap_glScissor", reinterpret_cast<void*>(&hostScissor));
 }
 
 /** Lock a native Windows mutex keyed by the original opaque Bionic address. */
@@ -1844,6 +1908,7 @@ int __cdecl nativeGettimeofday(std::int32_t* value, void*) {
 
 /** Save pixels produced by the original renderer without substituting a scene. */
 void capture(const std::filesystem::path& path, unsigned width, unsigned height) {
+    width = static_cast<unsigned>(hostDisplay.width); height = static_cast<unsigned>(hostDisplay.height);
     std::vector<unsigned char> pixels(static_cast<std::size_t>(width) * height * 4), flipped(pixels.size());
     glPixelStorei(GL_PACK_ALIGNMENT, 1); glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
     for (unsigned row = 0; row < height; ++row)
@@ -2100,7 +2165,7 @@ void originalWeaponsProbe(void* game, void* mode, const std::filesystem::path& o
         {"scope", "Original API construction, upgrade, sale, and rendering; no waves or combat effects"}};
     // Keep native clock progression, message handling, and drawing identical to scene mode.
     auto tick = [&]() {
-        update(game); render(game); SwapBuffers(windowDc);
+        update(game); render(game); presentDisplay();
         MSG message{};
         while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
         Sleep(16);
@@ -2181,12 +2246,13 @@ void originalGuiWeaponsProbe(void* game, const std::filesystem::path& output) {
     for (const auto& step : script) {
         if (step.contains("click")) {
             const int x = step["click"][0], y = step["click"][1];
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+            const POINT physical = hostDisplay.clientPoint(x, y);
+            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(physical.x, physical.y));
+            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(physical.x, physical.y));
         }
         const ULONGLONG until = GetTickCount64() + step.value("waitMs", 900);
         while (GetTickCount64() < until) {
-            update(game); render(game); SwapBuffers(windowDc);
+            update(game); render(game); presentDisplay();
             MSG message{};
             while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
             Sleep(16);
@@ -2386,7 +2452,7 @@ void originalScene(const std::filesystem::path& output, const Scenario& scenario
     reinterpret_cast<void(__cdecl*)(void*, int, int)>(findExport("GAME_setResolution"))(game, 480, 800);
     auto resume = reinterpret_cast<void(__cdecl*)(void*)>(findExport("GAME_resume"));
     resume(game);
-    glViewport(0, 0, 480, 800);
+    hostViewport(0, 0, LogicalWidth, LogicalHeight);
     auto update = reinterpret_cast<void(__cdecl*)(void*)>(findExport("GAME_update"));
     auto render = reinterpret_cast<void(__cdecl*)(void*)>(findExport("GAME_render"));
     auto build = reinterpret_cast<void(__cdecl*)(void*, int, int, int)>(findExport("GAME_buildTower"));
@@ -2429,6 +2495,7 @@ void originalScene(const std::filesystem::path& output, const Scenario& scenario
     if (operation == "guiweapons") { originalGuiWeaponsProbe(game, output); return; }
     if (operation == "weaponcombat") { originalWeaponCombat(game, mode, output); return; }
     if (operation == "play") ShowWindow(windowHandle, SW_SHOW);
+    framePacer = std::make_unique<HostFramePacer>();
     while (GetTickCount64() - start < duration) {
         const ULONGLONG elapsed = GetTickCount64() - start;
         if (operation == "speed" && speedEvent < std::size(SpeedEvents) && elapsed >= SpeedEvents[speedEvent]) {
@@ -2531,11 +2598,11 @@ void originalScene(const std::filesystem::path& output, const Scenario& scenario
             trace["samples"].push_back(state); traceOutput << state.dump() << '\n'; traceOutput.flush(); lastSample = elapsed + 500;
         }
         original_audio::update();
-        SwapBuffers(windowDc);
+        presentDisplay();
         MSG message{}; bool closed = false;
         while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) { if (message.message == WM_QUIT) closed = true; TranslateMessage(&message); DispatchMessageW(&message); }
         if (closed) { windowClosed = true; break; }
-        Sleep(16);
+        finishHostFrame();
     }
     if (!windowClosed) {
         render(game); glFinish();
@@ -2629,7 +2696,7 @@ void originalDlcSelection(void* menu, const std::filesystem::path& output, const
             reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_update"))(menu);
             reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_render"))(menu);
         }
-        original_audio::update(); SwapBuffers(windowDc);
+        original_audio::update(); presentDisplay();
         MSG message{};
         while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
         Sleep(16);
@@ -2695,7 +2762,7 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
     const bool helpMode = scripted && scenario.modeName == "help";
     const bool newGameMode = scripted && scenario.modeName == "newgame";
     reinterpret_cast<void(__cdecl*)()>(findExport("PGL_init"))(); log("PGL_READY");
-    glViewport(0, 0, 480, 800);
+    hostViewport(0, 0, LogicalWidth, LogicalHeight);
     auto menuAlloc = reinterpret_cast<void*(__cdecl*)()>(requireExport("MENU_alloc"));
     auto menuSetResolution = reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("MENU_setResolution"));
     auto menuChangePage = reinterpret_cast<void(__cdecl*)(void*, void*)>(requireExport("MENU_changePage"));
@@ -2841,6 +2908,7 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
     const float mapHitMinX = rodataFloat(0x362e1c), mapHitMinY = rodataFloat(0x362b58), mapHitMaxY = rodataFloat(0x362e54);
     log("ORIGINAL_MAP_HIT minX=" + std::to_string(mapHitMinX) + " minY=" + std::to_string(mapHitMinY) + " maxY=" + std::to_string(mapHitMaxY));
     if (!scripted) ShowWindow(windowHandle, SW_SHOW);
+    framePacer = std::make_unique<HostFramePacer>();
     while (GetTickCount64() - start < duration) {
         const ULONGLONG elapsed = GetTickCount64() - start;
         ++frameCount;
@@ -2907,7 +2975,7 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
             lastGame = game; gameStartAt = elapsed;
             nextStatLog = elapsed + 10000;
             nextTutorialTap = elapsed + 1500;
-            gameSetResolution(game, 480, 800); glViewport(0, 0, 480, 800);
+            gameSetResolution(game, LogicalWidth, LogicalHeight); hostViewport(0, 0, LogicalWidth, LogicalHeight);
             log("ORIGINAL_MENU_GAME_STARTED " + std::to_string(reinterpret_cast<std::uintptr_t>(game)));
             log("ORIGINAL_GAME_INITIAL " + playerState(game).dump());
         }
@@ -3359,11 +3427,11 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
         if (!capturedMap && page && page == findExport("startGamePage")) { capture(output / "menu-mapselect.png", 480, 800); capturedMap = true; }
         if (!capturedGame && game) { capture(output / "menu-in-game.png", 480, 800); capturedGame = true; }
         original_audio::update();
-        SwapBuffers(windowDc);
+        presentDisplay();
         MSG message{}; bool closed = false;
         while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) { if (message.message == WM_QUIT) closed = true; TranslateMessage(&message); DispatchMessageW(&message); }
         if (closed) { windowClosed = true; break; }
-        Sleep(16);
+        finishHostFrame();
     }
     // Render exactly what the loop was rendering so the final frame is never a stale/undefined buffer.
     if (!windowClosed) {
@@ -3672,7 +3740,10 @@ int main(int argc, char** argv) {
     if (outputDirectory.empty()) outputDirectory = ".";
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     SetUnhandledExceptionFilter(nativeFault);
+    // Avoid Windows bitmap stretching; the GL framebuffer and pointer coordinates use real pixels.
+    if (const auto dpiMode = GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetProcessDpiAwarenessContext"))
+        reinterpret_cast<BOOL(WINAPI*)(HANDLE)>(dpiMode)(reinterpret_cast<HANDLE>(-4));
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    try { run(argv[1], argv[2], outputDirectory); return 0; }
+    try { run(argv[1], argv[2], outputDirectory); framePacer.reset(); return 0; }
     catch (const std::exception& error) { log("HOST_ERROR " + std::string(error.what())); return 3; }
 }

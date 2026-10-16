@@ -1,7 +1,7 @@
 <!-- Active original-x86 architecture, commands, current evidence, and immediate continuation work. -->
 # 原 x86 开发基线
 
-主线源码在 `tools/x86-reuse/`。Win32宿主映射原ELF32，CPU直接执行GAME/MENU/PGL；适配Windows C ABI、兼容OpenGL、输入、单线程GS和最小平台对象。原APK/ELF文件不改。固定480×800，不依赖Android或CPU模拟器。完整移植尚未完成。
+主线源码在 `tools/x86-reuse/`。Win32宿主映射原ELF32，CPU直接执行GAME/MENU/PGL；适配Windows C ABI、兼容OpenGL、输入、单线程GS和最小平台对象。原APK/ELF文件不改。原UI使用480×800逻辑坐标，Windows窗口可缩放，不依赖Android或CPU模拟器。完整移植尚未完成。
 
 ## 构建与验证
 
@@ -35,6 +35,8 @@
 ```
 
 便携目录包含原库/资产、标准化纹理、GS/GL元数据、EXE和`Play.cmd`。生成到新目录，不复制开发或用户存档；其`data`保存本地状态，`logs`保存诊断。`Play.cmd silent`静音。包使用静态MSVC runtime和Windows系统XAudio2，无Android依赖。
+
+默认60 FPS，F6依次切换60/120/不限帧；标题显示实际循环帧率。`TOWERMADNESS_FPS`可指定非负整数，0为不限帧；`TOWERMADNESS_WINDOW=648x1080`指定初始客户区。便携启动器可组合`silent 1080 120`或`unlimited`参数。任意窗口比例采用居中黑边，3D按实际视口重绘，原贴图不会增加细节。
 
 ## 必需目录
 
@@ -70,6 +72,8 @@ installHook改私有映射导出入口，之后findExport可能已指向宿主�
 
 `point-sprite-correction.hpp`修复原Flak出生帧提交size=0而触发桌面OpenGL错误的问题。仅排除不可见精灵；正尺寸参数经验证的入口trampoline回到原PGL batch/cache，未夹断尺寸或吞glGetError。
 
+`host-display.hpp`统一原glViewport/glScissor与鼠标、拖动、滚轮的物理/逻辑坐标映射，原MENU/GAME分辨率合同保持不变。`frame-pacing.hpp`用进程内QPC截止时间和waitable timer等待剩余帧时间，代替每帧固定Sleep；不改原游戏时钟或系统计时器设置。驱动交换间隔设为0，宿主负责帧率上限；实际显示仍受显示器与驱动限制。`TOWERMADNESS_FRAME_TRACE`可选输出逐帧CSV，常规日志每5秒记录FRAME_STATS。
+
 ## 音频与平台界面
 
 `native-audio.hpp`用已有stb_vorbis解码原CAF中的Ogg/Vorbis，XAudio2负责设备/voice；`original-audio.hpp`适配OpenAL边界，保留原SOUND registry和3/3/10/5池及分配器。PCM归host所有，原decode hook返回null防止原shutdown误释放。单音乐文件或设备失败仅使对应音频失效，游戏继续。
@@ -80,7 +84,13 @@ Guide/Credits展示原离线HTML，使用Windows默认浏览器，未恢复UIKit
 
 ## 当前证据与下一步
 
-当前`current`和干净便携包使用同一冻结EXE，SHA256为`677A091E1D35BA3124521BB43C6482A1971090AAE9730EEBD95E1BCBC951AC1A`，host源码SHA256为`4C52456CECFDCDC66DC4D4F4B2201605119938FF1C1F79194A0F9F925B4EA870`。`current/build-manifest.json`记录冻结输入；`agent/codex/x86-continue-20261016/final26/current-promotion.json`确认原样提升且未重链。以下证据根目录为`agent/codex/x86-continue-20261016/`。
+当前`current`和新版便携包`release/TowerMadness-x86-20261016-181000`使用EXE `618E8CD65A49580F06224027A2FE12580E040F8F7A21AE88C149E7171A04FB48`，host源码`6E05E21E47D83906A606A0954A21A1F938A9EFA3B1888546D42C83545E6C4184`。冻结清单见`current/build-manifest.json`；`agent/codex/fps-resize-20261016/current-promotion.json`确认由candidate3原样提升。该证据根的`nuke1080-candidate3`与`upgrade1080-candidate3`分别记录真实648×1080下19/157步GUI、native0、GL0；`validation`记录动态菜单与横竖镜头/F5/F9，`regression/core-summary-20261016-180515.json`记录两档倍速及跨进程恢复4/4通过。
+
+`frame-analysis/candidate3-result-20261016-175521.json`记录隐藏菜单/首局循环60/120/0档累计59.65/118.71/9615.29FPS，稳定尾段60.01/120.01/9800.77，原模拟时间五秒均推进五秒。不限帧不等于显示器呈现帧率，也不是晚局性能保证。`portable-smoke/summary.json`记录2390项及EXE清单、干净release未运行无data/空logs、含空格副本真实648×1080/120启动/F6切换与正常退出；物理尺寸使用PerMonitorV2线程核验。短启动样本曾有58.4ms帧，不声称全部场景无长帧。用户首关资金不足升级卡顿尚需根因复现，不能把帧率改善等同已修复。
+
+`regression/final-summary-20261016-180515.json`汇总新版上述4次核心验证加完整campaignall共5/5通过、native0/GL0。四战役自然胜利10/10/10/8羊，最终4933分、四unlock1；默认60档整个四战役59949帧累计59.9031FPS，尾窗60.0044。新版交付与未完成项见`agent/report/report-codex-20261016-182300-帧率与窗口缩放.md`。
+
+以下为上一稳定版本证据：EXE `677A091E1D35BA3124521BB43C6482A1971090AAE9730EEBD95E1BCBC951AC1A`，host源码`4C52456CECFDCDC66DC4D4F4B2201605119938FF1C1F79194A0F9F925B4EA870`，证据根`agent/codex/x86-continue-20261016/`。旧148次通过不算新版重新执行148次。
 
 `final26/summary.json`汇总148次native运行：全部验收通过、同EXE、GL错误0。范围包括116张地图载入/绘制，原MENU四战役自然胜利和结算继续/解锁，五DLC原菜单，New game、Options、Guide/Credits，12基础塔97步GUI和12组API建升售，14类真实武器触发，真实1×/2×/4×/1×，原成绩日期/replay三轮持久化，13次F9/14次旧GAME释放及新进程继续，真实音频与音乐隔离/pending取消。四战役依次10/10/10/8羊，四个解锁值均1；Madness模拟1246925ms、战斗分4582、最终4941分。116个scene不是116关通关，14类武器触发测试以输局结束。
 
@@ -90,4 +100,4 @@ Guide/Credits展示原离线HTML，使用Windows默认浏览器，未恢复UIKit
 
 干净交付目录为`release/TowerMadness-x86-20261016-135600`；`final26/clean-release.json`确认2390项清单哈希一致、从未启动、无data且logs为空。`final26/portable-smoke.json`验证独立实验副本从`C:/Windows/Temp`和含空格路径运行，F5/F9、冷启动Resume及本地data隔离通过。`portable-campaign-final26/acceptance.json`另验证便携副本完整四战役10/10/10/9羊，Madness战斗4580/最终4975分；终局F5存档重启被原入口忽略，普通New game可用，全部earned进度和scores全文保持一致，没有重复结算。实验副本含测试存档，不作为干净交付物。
 
-保留限制：普通89波不使用的RoboSteal特殊派遣资源在两包均缺失；在线News/Game Center未接服务；音频淡变与空间效果存在上述近似；GUI尚缺上述四种高价type实际构造；14类战斗观测不能代表全部升级组合或地图通关。原APK/ELF和1967个原资产文件保持不变。接续先核对上述最终清单，再按未覆盖需求扩展。
+保留限制：普通89波不使用的RoboSteal特殊派遣资源在两包均缺失；在线News/Game Center未接服务；音频淡变与空间效果存在上述近似；GUI尚缺上述四种高价type实际构造；14类战斗观测不能代表全部升级组合或地图通关。原APK/ELF不修改；原包1944个资产及23个库（合计1967文件）保持不变。接续先核对上述最终清单，再按未覆盖需求扩展。

@@ -46,7 +46,13 @@ $launcher = @'
 setlocal
 cd /d "%~dp0"
 set "TOWERMADNESS_X86_AUDIO=1"
-if /i "%~1"=="silent" set "TOWERMADNESS_X86_AUDIO=0"
+for %%A in (%*) do (
+  if /i "%%~A"=="silent" set "TOWERMADNESS_X86_AUDIO=0"
+  if /i "%%~A"=="1080" set "TOWERMADNESS_WINDOW=648x1080"
+  if /i "%%~A"=="60" set "TOWERMADNESS_FPS=60"
+  if /i "%%~A"=="120" set "TOWERMADNESS_FPS=120"
+  if /i "%%~A"=="unlimited" set "TOWERMADNESS_FPS=0"
+)
 if not exist logs mkdir logs
 "%~dp0TowerMadness.exe" "%~dp0runtime\package" menu "%~dp0logs\game.log"
 if errorlevel 1 pause
@@ -56,10 +62,10 @@ $launcher | Set-Content -LiteralPath (Join-Path $OutputDirectory 'Play.cmd') -En
 @'
 # TowerMadness Windows x86 port
 
-Personal learning and nostalgia build using the original game code and assets. Run Play.cmd on Windows 10/11; no emulator or development tools are needed. Run Play.cmd silent to disable audio.
+Personal learning and nostalgia build using the original game code and assets. Run Play.cmd on Windows 10/11; no emulator or development tools are needed. Optional arguments can be combined: Play.cmd silent 1080 120. Use silent to disable audio, 1080 for a 648x1080 client, and 60/120/unlimited for a frame cap.
 
-Mouse: original menus and tower wheel. Drag: pan the camera. Wheel: zoom using original camera limits. Space: send wave. Esc: original pause/menu. F5: save the current game. F9: restore that save. Closing the window does not save automatically; press F5 before quitting. Restarting loads the last F5 checkpoint into the original paused Resume menu. Saves and settings stay in data; logs stay in logs.
+Mouse: original menus and tower wheel. Drag: pan the camera. Wheel: zoom using original camera limits. Space: send wave. Esc: original pause/menu. F6: cycle 60/120/unlimited FPS; the title shows measured FPS. F5: save the current game. F9: restore that save. Closing the window does not save automatically; press F5 before quitting. Restarting loads the last F5 checkpoint into the original paused Resume menu. Saves and settings stay in data; logs stay in logs.
 
-The portrait canvas is fixed at 480x800. Guide and Credits open the unchanged original offline HTML in your Windows browser. Windows music fading and distance attenuation approximate the original audio platform. Online services remain unavailable. This is a private development build, not a complete released port; do not redistribute it.
+Resize or maximize the window freely. The original portrait layout is preserved with black borders; 3D renders at the actual viewport resolution while original texture detail stays unchanged. Default frame cap is 60; unlimited may increase GPU/CPU load and is still limited by the display/driver. Guide and Credits open the unchanged original offline HTML in your Windows browser. Windows music fading and distance attenuation approximate the original audio platform. Online services remain unavailable. This is a private development build, not a complete released port; do not redistribute it.
 '@ | Set-Content -LiteralPath (Join-Path $OutputDirectory 'README.md') -Encoding utf8
 Write-Output $OutputDirectory

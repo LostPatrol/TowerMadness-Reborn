@@ -1,0 +1,16 @@
+<!-- Isolated unaffordable-upgrade timing investigation; no shared source changes. -->
+# Unaffordable upgrade timing investigation
+
+The pre-wave original GUI case did not reproduce a long stall. This is a limited negative result, not a claim that the user's active-game stall is fixed. No gameplay or shared source was changed.
+
+An isolated candidate copied the previously frozen candidate26 inputs into `agent/codex/insufficient-perf-20261016/`. Instrumentation measured synchronous Windows click dispatch and, in the second build, separately measured original GAME_update, GAME_render and SwapBuffers. Screenshot capture/JSON output was outside these measured regions. The final profiling executable SHA256 is `F0B0418BB3B702B27D28A3E2E1648AD35087E61899F8E935AEF9921E01E7C5BB`.
+
+The click config follows the previously accepted original Plasmatron→Gauss chain, then clicks the unaffordable2500 Fusion Cannon option with2145 remaining money, followed by20 repeated option clicks. All36 steps retained original type21, money2145 and completed construction where asserted. Both audio modes exited0. Audio0 initial failure dispatch was400µs; repeats269–448µs. Audio1 initial failure dispatch was254µs; repeats258–507µs.
+
+Per-frame audio1 measurements included the queued-command processing after the click: first unaffordable step GAME_update9–42µs, render128–505µs, swap48–1483µs. Repeated-option frames: update6–35µs, render122–296µs, swap43–1975µs. No >2ms original update/render/swap interval appeared in these measured failure/repeat frames. The profiling driver still retains its ordinary16ms sleep, so these figures exclude intentional frame delay.
+
+Evidence: `silent/run/native.log`, `audio/run/native.log`, and `frames-audio/run/native.log` under the isolated directory; all retain actual per-step captures/config/type/money snapshots. The original tower wheel remains pieKind0 throughout the failure/repeat captures; pieKind6 indicates a closed wheel. No AUDIO_SOURCE_PLAY/AUDIO_EFFECT call was observed for this rejected pre-wave upgrade even with SOUND_READY enabled1. Audio mode1 does not by itself guarantee an audible effect if original user effects settings disable it; no system volume setting was changed.
+
+Source inspection confirms original_audio::loadSound decodes/cache-loads at registration, whereas original_audio::play uses cached PCM through NativeAudio::play. NativeAudio effect playback creates voices synchronously and stop/update destroys them synchronously; those are plausible active-audio timing boundaries, but this case provides no evidence that they caused the reported stall. The host's immediately flushed log has duplicate suppression; no click-specific synchronous sleep or modal alert was found. Original GUI command enqueue may defer work into GAME_update, which is why both dispatch and subsequent update frames were timed separately.
+
+No evidence-based gameplay fix is justified from this isolated negative result. The next useful measurement is the user's active-game failure context and enabled original effects, with timing around original queued-command dispatch, audio voice start/retire and rendering. Do not debounce/discard clicks or change affordability logic. Root owns any shared implementation changes.

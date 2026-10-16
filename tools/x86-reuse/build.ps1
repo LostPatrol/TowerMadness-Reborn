@@ -26,10 +26,10 @@ New-Item -ItemType Directory -Force $inputDirectory | Out-Null
 $compiledSource = Join-Path $inputDirectory 'host.cpp'
 Copy-Item -LiteralPath $hostSource -Destination $compiledSource
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'tower-restore.hpp') -Destination $inputDirectory
-foreach ($audioInput in @('native-audio.hpp', 'original-audio.hpp', 'point-sprite-correction.hpp', 'weapon-combat.hpp', 'late-battle-probe.hpp')) {
+foreach ($audioInput in @('native-audio.hpp', 'original-audio.hpp', 'point-sprite-correction.hpp', 'weapon-combat.hpp', 'late-battle-probe.hpp', 'host-display.hpp', 'frame-pacing.hpp')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $audioInput) -Destination $inputDirectory
 }
-$buildInputs = @($compiledSource, (Join-Path $inputDirectory 'tower-restore.hpp'), (Join-Path $inputDirectory 'native-audio.hpp'), (Join-Path $inputDirectory 'original-audio.hpp'), (Join-Path $inputDirectory 'point-sprite-correction.hpp'), (Join-Path $inputDirectory 'weapon-combat.hpp'), (Join-Path $inputDirectory 'late-battle-probe.hpp'), (Join-Path $projectDirectory 'third_party/stb_vorbis.c'), (Join-Path $projectDirectory 'third_party/json.hpp'), (Join-Path $PSScriptRoot 'CMakeLists.txt'))
+$buildInputs = @($compiledSource, (Join-Path $inputDirectory 'tower-restore.hpp'), (Join-Path $inputDirectory 'native-audio.hpp'), (Join-Path $inputDirectory 'original-audio.hpp'), (Join-Path $inputDirectory 'point-sprite-correction.hpp'), (Join-Path $inputDirectory 'weapon-combat.hpp'), (Join-Path $inputDirectory 'late-battle-probe.hpp'), (Join-Path $inputDirectory 'host-display.hpp'), (Join-Path $inputDirectory 'frame-pacing.hpp'), (Join-Path $projectDirectory 'third_party/stb_vorbis.c'), (Join-Path $projectDirectory 'third_party/json.hpp'), (Join-Path $PSScriptRoot 'CMakeLists.txt'))
 $inputHashes = @($buildInputs | ForEach-Object { [pscustomobject]@{ path=$_; sha256=(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash } })
 $manifestPath = Join-Path $buildDirectory 'build-manifest.json'
 if (Test-Path -LiteralPath $manifestPath) { Remove-Item -LiteralPath $manifestPath }
