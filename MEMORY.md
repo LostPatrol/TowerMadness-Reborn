@@ -21,7 +21,7 @@
 
 干净交付目录为release/TowerMadness-x86-20261016-135600，2390项清单哈希一致、未启动、不含用户data且logs为空。独立实验副本已从C:/Windows/Temp及含空格路径验证F5/F9、冷启动Resume、完整四战役（10/10/10/9羊，Madness4975分）；终局F5冷启动忽略已结束GAME，保留全部earned进度与成绩且不重复结算。实验副本含测试存档，不能替代干净交付目录。
 
-剩余边界：两包均缺RoboSteal特殊派遣模型，普通89个wave资源不引用，不伪造资源。在线News/Game Center未接服务；普通原菜单无News或Scores入口，本地四成绩组件覆盖不等于新增入口。音频淡变为1秒线性近似，空间音频仅距离衰减，无声像/Doppler/HRTF。最终证据入口见docs/X86_CORE_REUSE.md。
+剩余边界：两包均缺RoboSteal特殊派遣模型，普通89个wave资源不引用，不伪造资源。在线News/Game Center未接服务；普通原菜单无News或Scores入口，本地四成绩组件覆盖不等于新增入口。音频淡变为1秒线性近似，空间音频仅距离衰减，无声像/Doppler/HRTF。磁盘写满/拒写时保存stream最终状态提示不足，正常F5/恢复已验收；主要实测为本机，未完成另一台Win10验证。最终证据入口见docs/X86_CORE_REUSE.md。
 
 ## 运行和工具
 
