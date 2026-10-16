@@ -1,0 +1,16 @@
+{
+  "flame": { "key": "flame", "expect": "damage", "base": "Flamethrower I", "waves": 1, "durationMs": 35000 },
+  "mine": { "key": "mine", "expect": "mine", "base": "Proximity Mine I", "waves": 1, "durationMs": 35000 },
+  "bait": { "key": "bait", "expect": "bait", "base": "Flash Bait I", "waves": 1, "durationMs": 35000 },
+  "slow": { "key": "slow", "expect": "slow", "base": "ElectroSlow I", "waves": 1, "durationMs": 35000 },
+  "boost": { "key": "boost", "expect": "boost", "base": "ElectroBoost I", "companion": true, "waves": 1, "durationMs": 35000 },
+  "rail": { "key": "rail", "expect": "damage", "base": "Railgun I", "waves": 1, "durationMs": 35000 },
+  "missile": { "key": "missile", "expect": "damage", "base": "Guided Missile I", "waves": 1, "durationMs": 35000 },
+  "nuke": { "key": "nuke", "expect": "damage", "base": "Mortar I", "target": "Nuke", "waves": 1, "durationMs": 35000 },
+  "hbomb": { "key": "hbomb", "expect": "damage", "base": "Mortar I", "target": "H Bomb", "waves": 1, "durationMs": 35000 },
+  "laser": { "key": "laser", "expect": "damage", "base": "Kilowatt Laser", "waves": 1, "durationMs": 35000 },
+  "plasma": { "key": "plasma", "expect": "damage", "base": "Plasmatron I", "waves": 1, "durationMs": 35000 },
+  "mortar": { "key": "mortar", "expect": "damage", "base": "Mortar I", "waves": 1, "durationMs": 35000 },
+  "shock": { "key": "shock", "expect": "damage", "base": "ElectroShock I", "waves": 1, "durationMs": 35000 },
+  "flak": { "key": "flak", "expect": "damage", "base": "Flak I", "placements": [[8, 8], [28, 8], [8, 26], [28, 26]], "waves": 11, "durationMs": 45000 }
+}

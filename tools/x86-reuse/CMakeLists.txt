@@ -16,4 +16,4 @@ add_executable(TowerMadnessX86Probe "${X86_HOST_SOURCE}")
 # the original third_party/json.hpp when the compiled copy lives somewhere else.
 target_include_directories(TowerMadnessX86Probe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_options(TowerMadnessX86Probe PRIVATE /W4 /EHsc)
-target_link_libraries(TowerMadnessX86Probe PRIVATE opengl32 user32 gdi32 windowscodecs ole32)
+target_link_libraries(TowerMadnessX86Probe PRIVATE opengl32 user32 gdi32 windowscodecs ole32 xaudio2 shell32)

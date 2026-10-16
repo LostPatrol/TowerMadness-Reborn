@@ -1,0 +1,21 @@
+[
+  {"name":"opening","waitMs":1000,"expectMoney":2500,"expectType":-1},
+  {"name":"Mortar-I-categories","click":[374,244],"expectMoney":2500,"expectType":-1,"expectPie":1},
+  {"name":"Mortar-I-options","click":[307,308],"expectMoney":2500,"expectType":-1},
+  {"name":"Mortar-I-built","click":[340,350],"waitMs":1200,"expectType":52,"expectMoney":2490},
+  {"name":"Mortar-I-selected","click":[270,367],"expectType":52,"expectMoney":2490,"expectPie":0},
+  {"name":"Mortar-II-upgraded","click":[340,350],"waitMs":1200,"expectType":26,"expectMoney":2465},
+  {"name":"Mortar-II-selected","click":[270,367],"expectType":26,"expectMoney":2465,"expectPie":0},
+  {"name":"Mortar-III-upgraded","click":[340,350],"waitMs":1200,"expectType":37,"expectMoney":2412},
+  {"name":"Mortar-III-selected","click":[270,367],"expectType":37,"expectMoney":2412,"expectPie":0},
+  {"name":"Mortar-IV-upgraded","click":[340,350],"waitMs":1200,"expectType":43,"expectMoney":2281},
+  {"name":"Mortar-IV-selected","click":[270,367],"expectType":43,"expectMoney":2281,"expectPie":0},
+  {"name":"Mortar-V-upgraded","click":[340,350],"waitMs":1200,"expectType":24,"expectMoney":2062},
+  {"name":"Mortar-V-selected","click":[270,367],"expectType":24,"expectMoney":2062,"expectPie":0},
+  {"name":"Nuke-upgraded","click":[340,350],"waitMs":1200,"expectType":1,"expectMoney":1537},
+  {"name":"Nuke-selected","click":[270,367],"expectType":1,"expectMoney":1537,"expectPie":0},
+  {"name":"H-Bomb-upgraded","click":[340,350],"waitMs":1200,"expectType":27,"expectMoney":37},
+  {"name":"H-Bomb-sale-menu","click":[270,367],"expectType":27,"expectMoney":37,"expectPie":0},
+  {"name":"H-Bomb-sale-confirm","click":[198,350],"waitMs":250,"expectType":27,"expectMoney":37},
+  {"name":"H-Bomb-sold","click":[198,350],"waitMs":1200,"expectType":-1,"expectMoney":2500}
+]

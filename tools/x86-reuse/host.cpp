@@ -4,6 +4,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include <windows.h>
 #include <wincodec.h>
+#include <shellapi.h>
 #include <intrin.h>
 #include <GL/gl.h>
 #include "../../third_party/json.hpp"
@@ -16,6 +17,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cwchar>
 #include <deque>
 #include <filesystem>
 #include <fstream>
@@ -27,6 +29,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "original-audio.hpp"
 
 namespace {
 // ELF32 structures use the original four-byte ABI and never host-sized fields.
@@ -52,23 +55,31 @@ std::filesystem::path convertedTextures;
 void hotkeySaveState(void* userMenu);
 void hotkeyLoadState(void* userMenu);
 std::FILE* logFile = nullptr;
-// The experiment creates its own legacy OpenGL context and never plays audio.
+// The host creates a legacy OpenGL context; native audio is optional for scripted runs.
 HWND windowHandle = nullptr;
 HDC windowDc = nullptr;
 HGLRC windowGl = nullptr;
-// Only the host's single-pointer UIKit boundary is adapted; native input handles actions.
+// Windows pointer and wheel events reuse the original touch and camera handlers.
 void* activeGame = nullptr;
-struct HostTouch { float x = 0, y = 0; };
+struct HostTouch { float x = 0, y = 0, startX = 0, startY = 0, previousX = 0, previousY = 0; int tapCount = 1; };
+// Small pointer jitter remains a tap; carousel drags end without activating the selected map.
+constexpr float TouchTapSlop = 5.0f;
 HostTouch hostTouch;
+// Wheel gestures expose two stable UITouch identities to the original pinch logic.
+HostTouch hostPinchTouch;
+unsigned long hostTouchCount = 1, hostTouchMutation = 0;
+std::array<HostTouch*, 2> hostTouchObjects{&hostTouch, &hostPinchTouch};
 int hostTouchSet = 0;
 // Original EAGLView fields used by its unchanged outer button dispatcher.
 std::array<unsigned char, 128> hostView{};
 std::array<unsigned char, 512> hostMenu{};
-// The original Menu hot zone currently toggles a host pause until the original MENU object is connected.
+// Direct-play probes use a host pause; menu mode routes to the original MENU object.
 int hostPauseRequested = 0;
 // The real original MENU object (0x3b4 bytes), its current GAME, and dummy platform receivers.
 void* originalMenu = nullptr;
 int hostApplicationToken = 0, hostGameAccountToken = 0;
+// UIDevice exists only as a capability receiver for the original Options page.
+int hostDeviceToken = 0;
 // This private method address is verified against the immutable x86 1.22 ELF.
 constexpr std::uint32_t OriginalViewTouchEnd = 0x28dc19;
 // POSIX rand48 preserves the native visual-random sequence independently of combat MT.
@@ -343,11 +354,11 @@ void resolveObjectiveCClasses() {
     log("PLATFORM_OBJC_CLASS patched=" + std::to_string(patched) + " unresolved=" + std::to_string(missing));
 }
 
-/** Redirect only exported platform boundaries in the private loaded image. */void installHook(const std::string& name, void* replacement) {
+/** Redirect verified exports in the private loaded image without changing original files. */
+void installHook(const std::string& name, void* replacement) {
     hooks[name] = replacement;
     for (const auto& image : images) {
         const auto symbol = image->exports.find(name);
-        // Apportable's verified assembly dispatchers have STT_NOTYPE and size zero.
         // Apportable's verified assembly dispatchers have STT_NOTYPE and size zero, so the size/type gate
         // must not skip them. objc_msgSend_fpret belongs here too: without it the guest's
         // [NSDate timeIntervalSinceReferenceDate] reached the real (uninitialised) runtime and faulted
@@ -358,11 +369,13 @@ void resolveObjectiveCClasses() {
         entry[0] = 0xe9;
         const std::uint32_t offset = reinterpret_cast<std::uint32_t>(replacement) - reinterpret_cast<std::uint32_t>(entry + 5);
         std::memcpy(entry + 1, &offset, 4);
+        FlushInstructionCache(GetCurrentProcess(), entry, 5);
         log("PLATFORM_HOOK " + image->name + ":" + name);
     }
 }
 
 #include "tower-restore.hpp"
+#include "point-sprite-correction.hpp"
 
 /** Preserve the cdecl argument stack while calling the driver's stdcall entry. */
 void* driverBridge(void* target, unsigned words) {
@@ -380,13 +393,45 @@ void* driverBridge(void* target, unsigned words) {
     return code;
 }
 
-/** Handle only this native experiment's close events through Windows. */
+/** Route Windows input through the unchanged original touch handlers. */
 LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM first, LPARAM second) {
     if (message == WM_CLOSE) { DestroyWindow(window); return 0; }
     if (message == WM_DESTROY) { PostQuitMessage(0); return 0; }
+    if (activeGame && message == WM_MOUSEWHEEL) {
+        const bool menuShowing = originalMenu && *reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(originalMenu) + 4) != 0;
+        void* game = originalMenu ? *reinterpret_cast<void**>(static_cast<unsigned char*>(originalMenu) + 0x15c) : activeGame;
+        if (!game || menuShowing || GetCapture() == window) return 0;
+        // A symmetric nonzero span lets the original code own zoom rate and camera bounds.
+        constexpr float PinchHalfSpan = 80.0f, WheelSpanStep = 8.0f;
+        POINT center{static_cast<short>(LOWORD(second)), static_cast<short>(HIWORD(second))};
+        ScreenToClient(window, &center);
+        const float steps = static_cast<short>(HIWORD(first)) / 120.0f;
+        const float delta = std::clamp(steps * WheelSpanStep, -PinchHalfSpan / 2, PinchHalfSpan / 2);
+        hostTouchCount = 2;
+        hostTouch = HostTouch{}; hostPinchTouch = HostTouch{};
+        hostTouch.x = hostTouch.previousX = center.x - PinchHalfSpan;
+        hostPinchTouch.x = hostPinchTouch.previousX = center.x + PinchHalfSpan;
+        hostTouch.y = hostTouch.previousY = hostPinchTouch.y = hostPinchTouch.previousY = static_cast<float>(center.y);
+        hostTouch.tapCount = hostPinchTouch.tapCount = 0;
+        reinterpret_cast<void(__cdecl*)(void*, void*)>(findExport("GAME_touchesBegan"))(game, &hostTouchSet);
+        hostTouch.x -= delta; hostPinchTouch.x += delta;
+        reinterpret_cast<void(__cdecl*)(void*, void*)>(findExport("GAME_touchesMoved"))(game, &hostTouchSet);
+        reinterpret_cast<void(__cdecl*)(void*, void*)>(findExport("GAME_touchesEnded"))(game, &hostTouchSet);
+        hostTouchCount = 1;
+        log("WINDOWS_WHEEL pinchDelta=" + std::to_string(delta));
+        return 0;
+    }
     if (activeGame && (message == WM_LBUTTONDOWN || message == WM_LBUTTONUP || (message == WM_MOUSEMOVE && (first & MK_LBUTTON)))) {
+        hostTouch.previousX = hostTouch.x; hostTouch.previousY = hostTouch.y;
         hostTouch.x = static_cast<float>(static_cast<short>(LOWORD(second)));
         hostTouch.y = static_cast<float>(static_cast<short>(HIWORD(second)));
+        if (message == WM_LBUTTONDOWN) {
+            hostTouch.startX = hostTouch.x; hostTouch.startY = hostTouch.y; hostTouch.tapCount = 1;
+            hostTouch.previousX = hostTouch.x; hostTouch.previousY = hostTouch.y;
+        } else {
+            const float dx = hostTouch.x - hostTouch.startX, dy = hostTouch.y - hostTouch.startY;
+            if (dx * dx + dy * dy > TouchTapSlop * TouchTapSlop) hostTouch.tapCount = 0;
+        }
         const bool menuShowing = originalMenu && *reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(originalMenu) + 4) != 0;
         void* currentGame = originalMenu ? *reinterpret_cast<void**>(static_cast<unsigned char*>(originalMenu) + 0x15c) : activeGame;
         const char* phase = message == WM_LBUTTONDOWN ? "down" : message == WM_LBUTTONUP ? "up" : "move";
@@ -445,7 +490,7 @@ void createGraphics() {
     // This first native prototype keeps the recovered portrait geometry fixed.
     constexpr DWORD WindowStyle = WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX;
     RECT bounds{0, 0, 480, 800}; AdjustWindowRect(&bounds, WindowStyle, FALSE);
-    windowHandle = CreateWindowW(definition.lpszClassName, L"TowerMadness original x86 experiment", WindowStyle,
+    windowHandle = CreateWindowW(definition.lpszClassName, L"TowerMadness", WindowStyle,
         CW_USEDEFAULT, CW_USEDEFAULT, bounds.right - bounds.left, bounds.bottom - bounds.top, nullptr, nullptr, definition.hInstance, nullptr);
     windowDc = GetDC(windowHandle);
     PIXELFORMATDESCRIPTOR format{}; format.nSize = sizeof(format); format.nVersion = 1;
@@ -598,15 +643,20 @@ int __cdecl nativePng(const char* name) {
 /** Preserve the original localization key when platform localization is unavailable. */
 const char* __cdecl nativeTranslate(const char* name) { return name; }
 
-/** Keep sound handles stable while the authorized silent probe has no audio device. */
-int __cdecl silentSound(const char* name) {
-    static std::map<std::string, int> ids;
-    auto [entry, inserted] = ids.emplace(name ? name : "", static_cast<int>(ids.size()));
-    return entry->second;
+/** Suppress direct-scene menu rendering where no original MENU object exists. */
+void __cdecl silentPlayback() {}
+
+/** Render a shipped original HTML page with the user's Windows browser. */
+bool openOriginalPage(const char* filename) {
+    const auto path = assetsDirectory / filename;
+    if (!std::filesystem::exists(path)) { log("PLATFORM_HELP_MISSING " + path.string()); return false; }
+    const auto result = reinterpret_cast<std::intptr_t>(ShellExecuteW(windowHandle, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
+    log("PLATFORM_HELP page=" + std::string(filename) + " launched=" + std::to_string(result > 32));
+    return result > 32;
 }
 
-/** Honor the project-wide silent setting at the platform playback boundary. */
-void __cdecl silentPlayback() {}
+/** Replace the original UIKit-only Credits presentation with its unchanged HTML content. */
+void __cdecl nativeCredits(void*) { openOriginalPage("credits.html"); }
 
 /** Route the original Menu hot zone to a host pause until the original MENU object is connected. */
 void __cdecl hostMenuButton() {
@@ -740,11 +790,44 @@ HostString* copyHostText(const std::string& text) {
     return value;
 }
 
+/** Compare UTF-8 Foundation strings, including the numeric option used for version checks. */
+int compareHostText(const char* left, const char* right, unsigned options) {
+    const auto wide = [](const char* text) {
+        const int length = MultiByteToWideChar(CP_UTF8, 0, text, -1, nullptr, 0);
+        std::wstring value(static_cast<std::size_t>((std::max)(length, 1)), L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, text, -1, value.data(), length);
+        return value;
+    };
+    const auto first = wide(left), second = wide(right);
+    // NSCaseInsensitiveSearch=1; NSNumericSearch=64. Windows returns 1/2/3 for ascending/equal/descending.
+    const DWORD flags = (options & 1 ? NORM_IGNORECASE : 0) | (options & 64 ? SORT_DIGITSASNUMBERS : 0);
+    const int order = CompareStringEx(LOCALE_NAME_INVARIANT, flags, first.c_str(), -1, second.c_str(), -1, nullptr, nullptr, 0);
+    if (!order) throw std::runtime_error("Windows could not compare the platform strings");
+    return order - CSTR_EQUAL;
+}
+
 /**
  * Decode an original CFString/NSString to its C-string bytes. Constants use either {isa, cstr} or
  * {isa, flags, cstr, length}; heap NSStrings keep the same pointer slots. Both are probed safely.
  */
 const char* cfStringBytes(const void* value) {
+    // CFString isa bytes can accidentally look like a short C string after ASLR.
+    // Prefer its real cstr slot whenever both the object and its isa belong to guest images.
+    if (readableBytes(value, 12)) {
+        const auto address = reinterpret_cast<std::uintptr_t>(value);
+        const auto isa = *reinterpret_cast<const std::uint32_t*>(value);
+        bool mappedObject = false, mappedClass = false;
+        for (const auto& image : images) {
+            const auto base = reinterpret_cast<std::uintptr_t>(image->base);
+            mappedObject |= address >= base && address < base + image->file.size();
+            mappedClass |= isa >= base && isa < base + image->file.size();
+        }
+        if (mappedObject && mappedClass) {
+            const auto bytes = reinterpret_cast<const char* const*>(value)[2];
+            std::string text;
+            if (tryReadText(bytes, text)) return bytes;
+        }
+    }
     std::string direct;
     if (tryReadText(value, direct)) return reinterpret_cast<const char*>(value);
     for (const int offset : {8, 4}) {
@@ -1031,16 +1114,88 @@ std::uint32_t __cdecl nativeMessage(void* receiver, const char* selector, ...) {
         log("PLATFORM_MSG " + name + " receiver=" + std::to_string(reinterpret_cast<std::uintptr_t>(receiver)));
     }
     loadPersistedStore();
-    // Music-only messages: the probe is expressly silent.
-    if (name == "resetTimeForTune:" || name == "playMusic:loop:") return 0;
+    if (name == "currentDevice" && objcClassName(receiver) == "UIDevice")
+        return reinterpret_cast<std::uint32_t>(&hostDeviceToken);
+    if (receiver == &hostDeviceToken && name == "systemVersion") {
+        // This is a UIKit compatibility level, not a claim that Windows is running iOS.
+        // Level 5 enables the original MusicManager volume control supported by this adapter.
+        static void* version = copyHostText("5.0");
+        return reinterpret_cast<std::uint32_t>(version);
+    }
+    if ((name == "setBaseVolume:" || name == "setTemporaryVolumeOverride:" || name == "fadeToVolume:")
+        && objcClassName(receiver) == "MusicManager") {
+        va_list arguments; va_start(arguments, selector);
+        const unsigned raw = va_arg(arguments, unsigned); va_end(arguments);
+        float volume = 0.0f;
+        std::memcpy(&volume, &raw, sizeof(volume));
+        if (name == "setBaseVolume:") original_audio::baseVolume = volume;
+        if (name == "setTemporaryVolumeOverride:") original_audio::temporaryVolume = volume;
+        if (name == "fadeToVolume:") original_audio::fadeTarget = volume;
+        original_audio::refreshMusic();
+        log("PLATFORM_MUSIC volume=" + std::to_string(volume) + " selector=" + name);
+        return 0;
+    }
+    // The original i18n reader asks NSLocale for an NSArray of NSString language tags.
+    if (name == "preferredLanguages" && objcClassName(receiver) == "NSLocale") {
+        static HostContainer* languages = nullptr;
+        if (!languages) {
+            languages = newHostContainer();
+            languages->kind = 'A';
+            ULONG count = 0, length = 0;
+            GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, nullptr, &length);
+            std::vector<wchar_t> buffer(length);
+            if (length && GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, buffer.data(), &length)) {
+                for (const wchar_t* language = buffer.data(); *language; language += std::wcslen(language) + 1) {
+                    const int size = WideCharToMultiByte(CP_UTF8, 0, language, -1, nullptr, 0, nullptr, nullptr);
+                    if (size <= 1) continue;
+                    std::string tag(static_cast<std::size_t>(size), '\0');
+                    WideCharToMultiByte(CP_UTF8, 0, language, -1, tag.data(), size, nullptr, nullptr);
+                    tag.pop_back();
+                    languages->items.push_back(copyHostText(tag));
+                    log("PLATFORM_LANGUAGE " + tag);
+                }
+            }
+            if (languages->items.empty()) {
+                languages->items.push_back(copyHostText("en"));
+                log("PLATFORM_LANGUAGE en (Windows preference unavailable)");
+            }
+        }
+        return reinterpret_cast<std::uint32_t>(languages);
+    }
+    if ((name == "resetTimeForTune:" || name == "playMusic:loop:" || name == "rememberTimeForPlayingTune"
+        || name == "updateFading") && objcClassName(receiver) == "MusicManager") {
+        if (name == "resetTimeForTune:" || name == "playMusic:loop:") {
+            va_list arguments; va_start(arguments, selector);
+            const void* argument = va_arg(arguments, const void*);
+            const bool loop = name == "playMusic:loop:" ? va_arg(arguments, int) != 0 : false;
+            va_end(arguments);
+            const std::string tune = hostKeyText(argument);
+            if (name == "resetTimeForTune:") original_audio::positions[tune] = 0;
+            else original_audio::selectMusic(tune, loop);
+            return 0;
+        }
+        if (name == "rememberTimeForPlayingTune") { original_audio::rememberMusic(); return 0; }
+        if (name == "updateFading") { original_audio::update(); return 0; }
+    }
     // The host pointer objects retain the original NSSet/UITouch contract.
     if (receiver == &hostTouchSet) {
-        if (name == "count") return 1;
+        if (name == "count") return hostTouchCount;
         if (name == "anyObject") return reinterpret_cast<std::uint32_t>(&hostTouch);
+        if (name == "countByEnumeratingWithState:objects:count:") {
+            va_list arguments; va_start(arguments, selector);
+            auto* state = va_arg(arguments, unsigned long*);
+            va_arg(arguments, void**); const auto capacity = va_arg(arguments, unsigned long);
+            va_end(arguments);
+            if (state[0]) return 0;
+            state[0] = 1;
+            state[1] = reinterpret_cast<unsigned long>(hostTouchObjects.data());
+            state[2] = reinterpret_cast<unsigned long>(&hostTouchMutation);
+            return std::min(hostTouchCount, capacity);
+        }
     }
-    if (receiver == &hostTouch) {
+    if (receiver == &hostTouch || receiver == &hostPinchTouch) {
         if (name == "view") return reinterpret_cast<std::uint32_t>(hostView.data());
-        if (name == "tapCount") return 1;
+        if (name == "tapCount") return static_cast<std::uint32_t>(static_cast<HostTouch*>(receiver)->tapCount);
     }
     // Class-specific real allocation: only the alert class the original endgame path uses.
     if (name == "alloc" || name == "allocWithZone:") {
@@ -1203,10 +1358,17 @@ std::uint32_t __cdecl nativeMessage(void* receiver, const char* selector, ...) {
             const char* bytes = cfStringBytes(other);
             return (bytes && !std::strcmp(candidate.text, bytes)) ? 1u : 0u;
         }
+        if (name == "compare:options:") {
+            va_list arguments; va_start(arguments, selector);
+            const void* other = va_arg(arguments, const void*);
+            const unsigned options = va_arg(arguments, unsigned); va_end(arguments);
+            const char* bytes = cfStringBytes(other);
+            return static_cast<std::uint32_t>(compareHostText(candidate.text, bytes ? bytes : "", options));
+        }
         log("PLATFORM_STRING_UNHANDLED " + name);
         ExitProcess(31);
     }
-    // NSUserDefaults: real content-key storage, persisted under agent/dsh/state across processes.
+    // NSUserDefaults content keys persist in the selected development or portable data directory.
     if (receiver == &hostUserDefaultsToken) {
         if (name == "synchronize") { savePersistedStore(); log("PLATFORM_DEFAULTS synchronize"); return 1; }
         if (name == "registerDefaults:" || name == "dictionaryRepresentation") return 0;
@@ -1362,6 +1524,15 @@ std::uint32_t __cdecl nativeMessage(void* receiver, const char* selector, ...) {
     if (name == "stopAnimation") { log("PLATFORM_UI stopAnimation -> 0"); return 0; }
     // Campaign/DLC progress accessors share the unified key store; absent keys are the real unset default.
     if (name.rfind("unlocked", 0) == 0) {
+        // These eight StoreManager selectors gate purchased maps/weapons, not campaign achievements.
+        static const std::set<std::string> ShippedPacks = {
+            "unlockedMarshMadness", "unlockedMoon", "unlockedLava", "unlockedSpooky", "unlockedCoast",
+            "unlockedFlamethrower", "unlockedFlashbait", "unlockedProximityMine"
+        };
+        if (ShippedPacks.count(name) && objcClassName(receiver) == "StoreManager") {
+            log("PLATFORM_CONTENT " + name + " -> 1 (shipped content; purchase gate excluded)");
+            return 1;
+        }
         const auto found = hostAccountInts.find(name);
         const int result = found == hostAccountInts.end() ? 0 : found->second;
         log("PLATFORM_PROGRESS " + name + " -> " + std::to_string(result) + (found == hostAccountInts.end() ? " (unset default)" : " (stored)"));
@@ -1524,7 +1695,20 @@ std::uint32_t __cdecl nativeMessage(void* receiver, const char* selector, ...) {
     }
     // Ranking and DLC purchase endpoints are out of scope by project rules; log the exact selector.
     if (name == "reportScore:modename:") { log("PLATFORM_RANKING_EXCLUDED " + name); return 0; }
-    if (name == "openURL:" || name == "URLWithString:") { log("PLATFORM_PURCHASE_EXCLUDED " + name); return 0; }
+    if (name == "URLWithString:") {
+        va_list arguments; va_start(arguments, selector);
+        const void* value = va_arg(arguments, const void*); va_end(arguments);
+        return reinterpret_cast<std::uint32_t>(copyHostText(hostKeyText(value)));
+    }
+    if (name == "openURL:") {
+        va_list arguments; va_start(arguments, selector);
+        const void* value = va_arg(arguments, const void*); va_end(arguments);
+        const auto url = hostKeyText(value);
+        // The original remote Guide has an equivalent complete local page in the APK.
+        if (url == "http://www.limbic.com/tm/guide.html") return openOriginalPage("guide.html") ? 1 : 0;
+        log("PLATFORM_EXTERNAL_URL_UNAVAILABLE " + url);
+        return 0;
+    }
     log("UNIMPLEMENTED_OBJC_SELECTOR " + name + " receiver=" + std::to_string(reinterpret_cast<std::uintptr_t>(receiver))
         + " class=" + objcClassName(receiver) + " caller=" + nativeCaller(_ReturnAddress()));
     ExitProcess(31);
@@ -1533,16 +1717,22 @@ std::uint32_t __cdecl nativeMessage(void* receiver, const char* selector, ...) {
 /** Convert Windows cursor coordinates through the original CGPoint return ABI. */
 void __cdecl nativeMessageStruct(float* point, void* receiver, const char* selector, void*) {
     const std::string name = selectorName(selector);
-    if (receiver == &hostTouch && name == "locationInView:") { point[0] = hostTouch.x; point[1] = hostTouch.y; return; }
+    if (receiver == &hostTouch || receiver == &hostPinchTouch) {
+        const auto& touch = *static_cast<HostTouch*>(receiver);
+        if (name == "locationInView:") { point[0] = touch.x; point[1] = touch.y; return; }
+        if (name == "previousLocationInView:") { point[0] = touch.previousX; point[1] = touch.previousY; return; }
+    }
     if (receiver == hostView.data() && name == "bounds") { point[0] = point[1] = 0; point[2] = 480; point[3] = 800; return; }
     log("UNIMPLEMENTED_OBJC_STRUCT_SELECTOR " + name); ExitProcess(32);
 }
 
-/** Implement the one floating-point platform selector with real NSDate semantics. */
+/** Implement floating-point platform selectors with Foundation value semantics. */
 double __cdecl nativeMessageFpret(void* receiver, const char* selector, ...) {
     if (!receiver) return 0.0;
     const std::string name = selectorName(selector);
     if (name == "timeIntervalSinceReferenceDate") {
+        for (const auto& container : hostContainers)
+            if (receiver == &container && container.kind == 'T') return std::atof(container.text.c_str());
         // Seconds since 2001-01-01, matching NSDate's reference date.
         FILETIME time{}; GetSystemTimeAsFileTime(&time);
         const std::uint64_t ticks = (static_cast<std::uint64_t>(time.dwHighDateTime) << 32) | time.dwLowDateTime;
@@ -1576,13 +1766,7 @@ double __cdecl nativeMessageFpret(void* receiver, const char* selector, ...) {
    }
     for (auto& container : hostContainers) {
         if (receiver != &container) continue;
-        // Faithful NSDate semantics: the container was built by dateWithTimeIntervalSinceReferenceDate:, so
-        // timeIntervalSince1970 must add the 1970<->2001 delta. The original itself mixes the two units:
-        // SCORES_load reads timeIntervalSince1970 and hands the double to SCORES_add (pseudocode.c:8306/8309,
-        // stored raw at :8442), while SCORES_save feeds that same double back into
-        // dateWithTimeIntervalSinceReferenceDate: (:8372). Reproducing the platform faithfully therefore keeps
-        // the original's own unit drift; that drift is a property of the shipped game, not something the host
-        // should silently hide. (Earlier pass-through made load/save value-stable but changed NSDate semantics.)
+        // NSDate stores reference-date seconds; Unix conversion remains correct for every caller.
         if (name == "timeIntervalSince1970") return std::atof(container.text.c_str()) + 978307200.0;
         if (name == "doubleValue" || name == "floatValue") return std::atof(container.text.c_str());
         // Any other fp message on a host container is unimplemented: fail loudly instead of returning an
@@ -1598,6 +1782,21 @@ double __cdecl nativeMessageFpret(void* receiver, const char* selector, ...) {
     }
     log("UNIMPLEMENTED_OBJC_FPRET " + name);
     ExitProcess(33);
+}
+
+/** Fix SCORES_load's original epoch mismatch at its selector load, leaving NSDate semantics intact. */
+void correctScoreDateReader() {
+    // Zero 1.22 loads the 1970 selector at SCORES_load+0x1ae, but SCORES_save stores 2001 seconds.
+    constexpr std::size_t SelectorLoadOffset = 0x1ae;
+    const unsigned char original[] = {0x8b, 0x83, 0x3c, 0x6b, 0x01, 0x00, 0x89, 0x85, 0x5c, 0xff, 0xff, 0xff};
+    auto* instruction = static_cast<unsigned char*>(requireExport("SCORES_load")) + SelectorLoadOffset;
+    if (std::memcmp(instruction, original, sizeof(original)) != 0)
+        throw std::runtime_error("Unsupported original SCORES_load date selector");
+    // EBX anchors ELF 0x3c5608; 0x16cbc addresses the existing reference-date selector at 0x3dc2c4.
+    constexpr std::uint32_t ReferenceDateDisplacement = 0x16cbc;
+    std::memcpy(instruction + 2, &ReferenceDateDisplacement, sizeof(ReferenceDateDisplacement));
+    FlushInstructionCache(GetCurrentProcess(), instruction, 6);
+    log("ORIGINAL_SCORE_DATE_READER epoch=2001 original-files=unchanged");
 }
 
 /** Match i386 Objective-C's callee cleanup of the hidden structure-result pointer. */
@@ -1689,7 +1888,8 @@ nlohmann::json playerState(void* game) {
     void* player = reinterpret_cast<void**>(game)[1];
     const auto getter = [&](const char* name) { return reinterpret_cast<int(__cdecl*)(void*)>(findExport(name))(player); };
     const auto gameGetter = [&](const char* name) { return reinterpret_cast<int(__cdecl*)(void*)>(findExport(name))(game); };
-    return {{"money", getter("PLAYER_getMoney")}, {"score", getter("PLAYER_getScore")}, {"lives", getter("PLAYER_getLife")},
+    return {{"map", reinterpret_cast<const char*>(*reinterpret_cast<void**>(*reinterpret_cast<void**>(game)))},
+        {"money", getter("PLAYER_getMoney")}, {"score", getter("PLAYER_getScore")}, {"lives", getter("PLAYER_getLife")},
         {"simulationMs", reinterpret_cast<int*>(game)[10]}, {"gameStarted", reinterpret_cast<int*>(game)[6] != 0},
         // Ended/won/final values come from the original terminal evaluators, never from host guesses.
         {"ended", gameGetter("GAME_hasEnded") != 0}, {"won", gameGetter("GAME_isWon") != 0},
@@ -1715,6 +1915,13 @@ std::filesystem::path saveStatePath(const std::filesystem::path& output) {
 /** Choose the packaged data directory only for a staged layout, else the dev workspace state dir. */
 std::filesystem::path resolveDataDirectory(const std::filesystem::path& package, const std::filesystem::path& outputDirectory) {
     std::error_code error;
+    if (std::filesystem::exists(package.parent_path() / "portable-runtime.json")) {
+        const auto portable = package.parent_path().parent_path() / "data";
+        std::filesystem::create_directories(portable, error);
+        if (!error) return portable;
+        log("STATE_WARNING Portable data directory is unavailable; using the selected log directory.");
+        error.clear();
+    }
     const auto root = package.parent_path().parent_path().parent_path().parent_path();
     const bool staged = std::filesystem::exists(root / "runtime") && std::filesystem::exists(root / "assets");
     if (staged) {
@@ -1867,9 +2074,289 @@ int nativeTowerId(void* mode, const char* name) {
     throw std::runtime_error("Original technology does not contain requested tower");
 }
 
+/** Exercise original build/upgrade/sell without changing resources or player state. */
+void originalWeaponsProbe(void* game, void* mode, const std::filesystem::path& output) {
+    // Each pair represents a distinct original weapon family and its first legal upgrade.
+    static constexpr const char* Cases[][2] = {
+        {"Plasmatron I", "Plasmatron II"}, {"Kilowatt Laser", "Megawatt Laser"},
+        {"Mortar I", "Mortar II"}, {"Flak I", "Flak II"},
+        {"Guided Missile I", "Guided Missile II"}, {"ElectroSlow I", "ElectroSlow II"},
+        {"ElectroBoost I", "ElectroBoost II"}, {"ElectroShock I", "ElectroShock II"},
+        {"Railgun I", "Railgun II"}, {"Proximity Mine I", "Proximity Mine II"},
+        {"Flamethrower I", "Flamethrower II"}, {"Nuke", "H Bomb"}
+    };
+    auto update = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_update"));
+    auto render = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_render"));
+    auto build = reinterpret_cast<void(__cdecl*)(void*, int, int, int)>(requireExport("GAME_buildTower"));
+    auto upgrade = reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("GAME_upgradeTower"));
+    auto sell = reinterpret_cast<void(__cdecl*)(void*, int)>(requireExport("GAME_sellTower"));
+    auto idForCell = reinterpret_cast<int(__cdecl*)(void*, int, int)>(requireExport("TOWERS_getIdForCell"));
+    auto towerForId = reinterpret_cast<int*(__cdecl*)(void*, int)>(requireExport("TOWERS_getTowerForId"));
+    auto canBuild = reinterpret_cast<int(__cdecl*)(void*, int, int, int, int)>(requireExport("TOWERS_canBuildHere"));
+    auto* towers = reinterpret_cast<void**>(game)[4];
+    const auto* technology = reinterpret_cast<std::uint32_t*>(reinterpret_cast<std::uint32_t*>(mode)[7]);
+    const auto* types = reinterpret_cast<const std::uint32_t* const*>(technology[15]);
+    nlohmann::json result{{"initial", playerState(game)}, {"cases", nlohmann::json::array()},
+        {"scope", "Original API construction, upgrade, sale, and rendering; no waves or combat effects"}};
+    // Keep native clock progression, message handling, and drawing identical to scene mode.
+    auto tick = [&]() {
+        update(game); render(game); SwapBuffers(windowDc);
+        MSG message{};
+        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
+        Sleep(16);
+    };
+    for (const auto& item : Cases) {
+        // Nuke is reached through the original mortar prerequisites, never built directly.
+        const int base = nativeTowerId(mode, !std::strcmp(item[0], "Nuke") ? "Mortar I" : item[0]);
+        const int target = nativeTowerId(mode, item[1]);
+        int x = -1, y = -1;
+        // Peach's shipped 20x19 terrain is expanded by the original loader to 40x38 cells.
+        for (int row = 10; row < 30 && x < 0; ++row) for (int col = 10; col < 30; ++col) {
+            if (idForCell(towers, col, row) == -1 && canBuild(towers, col, row, 0, types[base][34]) == 0) {
+                x = col; y = row; break;
+            }
+        }
+        if (x < 0) throw std::runtime_error("No original legal cell for weapon probe");
+        nlohmann::json entry{{"name", item[0]}, {"target", item[1]}, {"baseTypeId", base},
+            {"targetTypeId", target}, {"cell", {x, y}}, {"before", playerState(game)}};
+        log("WEAPON_REQUEST " + entry.dump());
+        build(game, base, x, y);
+        // Original pre-wave construction uses its own 500ms completion path.
+        ULONGLONG until = GetTickCount64() + 70000;
+        int id = -1;
+        while (GetTickCount64() < until) {
+            tick(); id = idForCell(towers, x, y);
+            int* tower = id == -1 ? nullptr : towerForId(towers, id);
+            if (tower && tower[1] == base && !tower[16]) break;
+        }
+        int* tower = id == -1 ? nullptr : towerForId(towers, id);
+        if (!tower || tower[1] != base || tower[16]) throw std::runtime_error("Original weapon build failed or timed out");
+        entry["instanceId"] = id; entry["built"] = playerState(game);
+        capture(output / (std::string("weapon-") + std::to_string(base) + "-built.png"), 480, 800);
+        entry["upgradeChain"] = nlohmann::json::array();
+        while (tower[1] != target) {
+            const auto* current = types[tower[1]];
+            if (current[25] != 1) throw std::runtime_error("Probe requires a unique original catalog upgrade edge");
+            const int next = *reinterpret_cast<const int*>(current[27]);
+            upgrade(game, id, next);
+            until = GetTickCount64() + 70000;
+            while (GetTickCount64() < until) {
+                tick(); tower = towerForId(towers, id);
+                if (tower && tower[1] == next && !tower[16]) break;
+            }
+            if (!tower || tower[1] != next || tower[16]) throw std::runtime_error("Original weapon upgrade failed or timed out");
+            nlohmann::json stage{{"typeId", next}, {"name", reinterpret_cast<const char*>(types[next][1])},
+                {"cost", types[next][15]}, {"state", playerState(game)}};
+            entry["upgradeChain"].push_back(stage);
+            log("WEAPON_CHAIN_STAGE " + stage.dump());
+        }
+        if (!tower || tower[1] != target || tower[16]) throw std::runtime_error("Original weapon upgrade failed or timed out");
+        entry["upgraded"] = playerState(game);
+        capture(output / (std::string("weapon-") + std::to_string(target) + "-upgraded.png"), 480, 800);
+        sell(game, id);
+        until = GetTickCount64() + 10000;
+        while (GetTickCount64() < until && idForCell(towers, x, y) != -1) tick();
+        if (idForCell(towers, x, y) != -1) throw std::runtime_error("Original weapon sale failed or timed out");
+        entry["sold"] = playerState(game);
+        result["cases"].push_back(entry);
+        std::ofstream(output / "weapons-result.json") << result.dump(2);
+        log("WEAPON_VERIFIED " + entry.dump());
+    }
+    result["final"] = playerState(game);
+    std::ofstream(output / "weapons-result.json") << result.dump(2);
+    log("WEAPONS_DONE count=" + std::to_string(result["cases"].size()));
+}
+/** Replay only Windows mouse clicks; native readers record the resulting original GUI state. */
+void originalGuiWeaponsProbe(void* game, const std::filesystem::path& output) {
+    const char* scriptPath = std::getenv("TOWERMADNESS_GUI_SCRIPT");
+    if (!scriptPath) throw std::runtime_error("GUI probe needs TOWERMADNESS_GUI_SCRIPT");
+    std::ifstream input(scriptPath);
+    nlohmann::json script; input >> script;
+    std::ofstream(output / "gui-script.json") << script.dump(2);
+    auto update = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_update"));
+    auto render = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_render"));
+    auto idForCell = reinterpret_cast<int(__cdecl*)(void*, int, int)>(requireExport("TOWERS_getIdForCell"));
+    auto towerForId = reinterpret_cast<int*(__cdecl*)(void*, int)>(requireExport("TOWERS_getTowerForId"));
+    nlohmann::json result{{"initial", playerState(game)}, {"steps", nlohmann::json::array()}};
+    for (const auto& step : script) {
+        if (step.contains("click")) {
+            const int x = step["click"][0], y = step["click"][1];
+            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+        }
+        const ULONGLONG until = GetTickCount64() + step.value("waitMs", 900);
+        while (GetTickCount64() < until) {
+            update(game); render(game); SwapBuffers(windowDc);
+            MSG message{};
+            while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
+            Sleep(16);
+        }
+        nlohmann::json record = step;
+        record["state"] = playerState(game);
+        const auto* raw = static_cast<int*>(game);
+        const auto* pie = reinterpret_cast<const int*>(raw[0xa48 / 4]);
+        record["pieKind"] = pie[5];
+        record["selectedCell"] = {raw[0xaa4 / 4], raw[0xaa8 / 4]};
+        record["towers"] = nlohmann::json::array();
+        auto* towers = reinterpret_cast<void**>(game)[4];
+        // Read every possible Peach cell without altering selection or construction state.
+        for (int y = 0; y < 38; ++y) for (int x = 0; x < 40; ++x) {
+            const int id = idForCell(towers, x, y);
+            if (id == -1) continue;
+            const int* tower = towerForId(towers, id);
+            if (tower && tower[4] == x && tower[5] == y)
+                record["towers"].push_back({{"instanceId", id}, {"typeId", tower[1]}, {"cell", {x, y}}, {"building", tower[16]}});
+        }
+        const std::string name = step.at("name");
+        capture(output / ("gui-" + name + ".png"), 480, 800);
+        result["steps"].push_back(record);
+        std::ofstream(output / "gui-result.json") << result.dump(2);
+        log("GUI_WEAPONS_STEP " + record.dump());
+        if (step.contains("expectMoney") && record["state"]["money"] != step["expectMoney"])
+            throw std::runtime_error("GUI probe money mismatch at " + name);
+        if (step.contains("expectType")) {
+            const int wanted = step["expectType"];
+            if (wanted == -1 ? !record["towers"].empty()
+                : record["towers"].size() != 1 || record["towers"][0]["typeId"] != wanted || record["towers"][0]["building"] != 0)
+                throw std::runtime_error("GUI probe original tower mismatch at " + name);
+        }
+        if (step.contains("expectPie") && record["pieKind"] != step["expectPie"])
+            throw std::runtime_error("GUI probe menu category mismatch at " + name);
+    }
+    log("GUI_WEAPONS_DONE steps=" + std::to_string(script.size()));
+}
+#include "weapon-combat.hpp"
+
 /** Resolve an optional upgrade target without aborting a scenario when a tech omits it. */
 int nativeTowerIdOrNone(void* mode, const char* name) {
     try { return nativeTowerId(mode, name); } catch (const std::exception&) { return -1; }
+}
+
+/** Drive a legal Madness strategy with original Plasma, Slow and Boost technology. */
+void campaignMadnessDefense(void* game) {
+    // Keep the original nine legal firing positions; the first five form the opening.
+    static constexpr int Cells[][2] = {{8, 24}, {12, 24}, {8, 20}, {12, 20}, {10, 18}, {16, 24}, {16, 20}, {6, 16}, {14, 16}};
+    auto* towers = reinterpret_cast<void**>(game)[4];
+    auto idForCell = reinterpret_cast<int(__cdecl*)(void*, int, int)>(requireExport("TOWERS_getIdForCell"));
+    auto towerForId = reinterpret_cast<int*(__cdecl*)(void*, int)>(requireExport("TOWERS_getTowerForId"));
+    void* mode = *reinterpret_cast<void**>(game);
+    const int plasma = nativeTowerId(mode, "Plasmatron I");
+    const auto* technology = reinterpret_cast<std::uint32_t*>(reinterpret_cast<std::uint32_t*>(mode)[7]);
+    const auto* types = reinterpret_cast<const std::uint32_t* const*>(technology[15]);
+    const int money = reinterpret_cast<int(__cdecl*)(void*)>(requireExport("PLAYER_getMoney"))(reinterpret_cast<void**>(game)[1]);
+    // Derive readiness from this GAME so restores and restarts cannot inherit stale strategy state.
+    bool supportReady = false;
+    if (!supportReady) {
+        supportReady = true;
+        const int gauss = nativeTowerId(mode, "Gauss Cannon");
+        for (int index = 0; index < 5; ++index) {
+            const auto& cell = Cells[index];
+            const int id = idForCell(towers, cell[0], cell[1]);
+            const int* tower = id == -1 ? nullptr : towerForId(towers, id);
+            if (!tower || tower[1] != gauss || tower[16]) supportReady = false;
+        }
+    }
+    /** Build or advance one original support tower when affordable, stopping at the named level. */
+    const auto support = [&](int x, int y, const char* baseName, const char* capName) {
+        const int id = idForCell(towers, x, y);
+        const int base = nativeTowerId(mode, baseName);
+        if (id == -1) {
+            if (money < static_cast<int>(types[base][15])) return true;
+            reinterpret_cast<void(__cdecl*)(void*, int, int, int)>(requireExport("GAME_buildTower"))(game, base, x, y);
+            log("ORIGINAL_SUPPORT_BUILD " + std::string(baseName) + " cell=" + std::to_string(x) + "," + std::to_string(y));
+            return true;
+        }
+        const int* tower = towerForId(towers, id);
+        if (!tower || tower[16] || tower[17] || tower[25] != -1 || tower[1] == nativeTowerId(mode, capName)) return false;
+        int chain = base;
+        bool belowCap = false;
+        while (chain != nativeTowerId(mode, capName)) {
+            if (chain == tower[1]) belowCap = true;
+            if (!types[chain][25]) break;
+            chain = *reinterpret_cast<const int*>(types[chain][27]);
+        }
+        if (!belowCap) return false;
+        const auto* type = types[tower[1]];
+        if (!type[25]) return false;
+        const int target = *reinterpret_cast<const int*>(type[27]);
+        if (money < static_cast<int>(types[target][15])) return true;
+        reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("GAME_upgradeTower"))(game, id, target);
+        log("ORIGINAL_SUPPORT_UPGRADE instance=" + std::to_string(id) + " target=" + std::to_string(target));
+        return true;
+    };
+    if (supportReady && support(10, 24, "ElectroSlow I", "Muscle Melter")) return;
+    if (supportReady && support(10, 22, "ElectroBoost I", "ElectroBoost VI")) return;
+    // Queue missing towers together before the first wave; the original processes affordability in order.
+    bool missing = false;
+    const int cellCount = supportReady ? 9 : 5;
+    for (int index = 0; index < cellCount; ++index) {
+        const auto& cell = Cells[index];
+        if (idForCell(towers, cell[0], cell[1]) != -1) continue;
+        missing = true;
+        reinterpret_cast<void(__cdecl*)(void*, int, int, int)>(requireExport("GAME_buildTower"))(
+            game, plasma, cell[0], cell[1]);
+        log("ORIGINAL_CAMPAIGN_BUILD cell=" + std::to_string(cell[0]) + "," + std::to_string(cell[1]));
+    }
+    if (missing && money >= static_cast<int>(types[plasma][15])) return;
+    for (int index = 0; index < cellCount; ++index) {
+        const auto& cell = Cells[index];
+        const int id = idForCell(towers, cell[0], cell[1]);
+        const int* tower = id == -1 ? nullptr : towerForId(towers, id);
+        // Original tower fields: +0x40 building, +0x44 selling, +0x64 missile in flight.
+        if (!tower || tower[16] || tower[17] || tower[25] != -1) continue;
+        if (tower[1] == nativeTowerId(mode, "Gauss Cannon")) continue;
+        const auto* type = types[tower[1]];
+        if (type[25] == 0) continue;
+        const int target = *reinterpret_cast<const int*>(type[27]);
+        if (money < static_cast<int>(types[target][15])) continue;
+        reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("GAME_upgradeTower"))(game, id, target);
+        log("ORIGINAL_CAMPAIGN_UPGRADE instance=" + std::to_string(id) + " target=" + std::to_string(target));
+        return;
+    }
+}
+
+/** Submit legal campaign build/upgrade requests; costs and combat stay in the original code. */
+void campaignDefense(void* game) {
+    if (playerState(game).at("map") == "Madness") { campaignMadnessDefense(game); return; }
+    // PlainPlane's navigation grid is 22x32; the JSON terrain tiles cover 2x2 navigation cells.
+    static constexpr int Cells[][2] = {{8, 12}, {12, 12}, {8, 16}, {12, 16}, {10, 20}};
+    // DividedAttention's shared approach is farther down the original navigation grid.
+    static constexpr int MediumCells[][2] = {{8, 24}, {12, 24}, {8, 20}, {12, 20}, {10, 16}};
+    // Madness has water at (10,16); use the legal cell immediately below it.
+    static constexpr int InsaneCells[][2] = {{8, 24}, {12, 24}, {8, 20}, {12, 20}, {10, 18}};
+    const auto map = playerState(game).at("map").get<std::string>();
+    const auto& cells = map == "PlainPlane" ? Cells : map == "Madness" ? InsaneCells : MediumCells;
+    auto* towers = reinterpret_cast<void**>(game)[4];
+    auto idForCell = reinterpret_cast<int(__cdecl*)(void*, int, int)>(requireExport("TOWERS_getIdForCell"));
+    auto towerForId = reinterpret_cast<int*(__cdecl*)(void*, int)>(requireExport("TOWERS_getTowerForId"));
+    void* mode = *reinterpret_cast<void**>(game);
+    const int laser = nativeTowerId(mode, "Kilowatt Laser");
+    const auto* technology = reinterpret_cast<std::uint32_t*>(reinterpret_cast<std::uint32_t*>(mode)[7]);
+    const auto* types = reinterpret_cast<const std::uint32_t* const*>(technology[15]);
+    const int money = reinterpret_cast<int(__cdecl*)(void*)>(requireExport("PLAYER_getMoney"))(reinterpret_cast<void**>(game)[1]);
+    // Queue missing towers together before the first wave; the original processes affordability in order.
+    bool missing = false;
+    for (const auto& cell : cells) {
+        if (idForCell(towers, cell[0], cell[1]) != -1) continue;
+        missing = true;
+        reinterpret_cast<void(__cdecl*)(void*, int, int, int)>(requireExport("GAME_buildTower"))(
+            game, laser, cell[0], cell[1]);
+        log("ORIGINAL_CAMPAIGN_BUILD cell=" + std::to_string(cell[0]) + "," + std::to_string(cell[1]));
+    }
+    if (missing && money >= static_cast<int>(types[laser][15])) return;
+    for (const auto& cell : cells) {
+        const int id = idForCell(towers, cell[0], cell[1]);
+        const int* tower = id == -1 ? nullptr : towerForId(towers, id);
+        // Original tower fields: +0x40 building, +0x44 selling, +0x64 missile in flight.
+        if (!tower || tower[16] || tower[17] || tower[25] != -1) continue;
+        const auto* type = types[tower[1]];
+        if (type[25] == 0) continue;
+        const int target = *reinterpret_cast<const int*>(type[27]);
+        if (money < static_cast<int>(types[target][15])) continue;
+        reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("GAME_upgradeTower"))(game, id, target);
+        log("ORIGINAL_CAMPAIGN_UPGRADE instance=" + std::to_string(id) + " target=" + std::to_string(target));
+        return;
+    }
 }
 
 // A scenario keeps the existing operation names and adds an optional original gamemode name.
@@ -1888,7 +2375,8 @@ Scenario parseScenario(const std::string& value) {
 void originalScene(const std::filesystem::path& output, const Scenario& scenario) {
     const std::string& operation = scenario.operation;
     reinterpret_cast<void(__cdecl*)()>(findExport("PGL_init"))(); log("PGL_READY");
-    reinterpret_cast<void(__cdecl*)()>(findExport("WAVES_init"))(); log("WAVES_READY");
+    // Original EAGLView initialization passes zero; an omitted argument randomly preloads unused custom bosses.
+    reinterpret_cast<void(__cdecl*)(int)>(requireExport("WAVES_init"))(0); log("WAVES_READY customBosses=0");
     auto* mode = reinterpret_cast<void*(__cdecl*)(const char*, int)>(findExport("GAMEMODE_load"))(scenario.modeName.c_str(), 0);
     if (!mode) throw std::runtime_error("Original GAMEMODE_load rejected " + scenario.modeName);
     log("GAMEMODE_READY " + scenario.modeName);
@@ -1923,16 +2411,46 @@ void originalScene(const std::filesystem::path& output, const Scenario& scenario
     const ULONGLONG duration = operation == "play" ? std::numeric_limits<ULONGLONG>::max()
         : operation == "combat" || operation == "input" ? 35000
         : operation == "upgrade" ? 12000
+        : operation == "speed" ? 18000
         : operation == "flood" ? 240000
         : operation == "autoplay" ? 900000
         : 1000;
     bool windowClosed = false;
+    // Each speed interval excludes one second of input/renderer settling.
+    constexpr ULONGLONG SpeedEvents[] = {2000, 5000, 6000, 9000, 10000, 13000, 14000, 17000};
+    constexpr double ExpectedSpeeds[] = {1.0, 2.0, 4.0, 1.0};
+    unsigned speedEvent = 0;
+    int speedClock = 0;
+    ULONGLONG speedHostAt = 0;
     activeGame = game;
     *reinterpret_cast<void**>(hostView.data() + 0x40) = hostMenu.data();
     *reinterpret_cast<void**>(hostMenu.data() + 0x15c) = game;
+    if (operation == "weapons") { originalWeaponsProbe(game, mode, output); return; }
+    if (operation == "guiweapons") { originalGuiWeaponsProbe(game, output); return; }
+    if (operation == "weaponcombat") { originalWeaponCombat(game, mode, output); return; }
     if (operation == "play") ShowWindow(windowHandle, SW_SHOW);
     while (GetTickCount64() - start < duration) {
         const ULONGLONG elapsed = GetTickCount64() - start;
+        if (operation == "speed" && speedEvent < std::size(SpeedEvents) && elapsed >= SpeedEvents[speedEvent]) {
+            const int clock = reinterpret_cast<int*>(game)[10];
+            if (speedEvent % 2 == 0) { speedClock = clock; speedHostAt = elapsed; }
+            else {
+                const double expected = ExpectedSpeeds[speedEvent / 2];
+                const double measured = static_cast<double>(clock - speedClock) / static_cast<double>(elapsed - speedHostAt);
+                nlohmann::json sample{{"expected", expected}, {"measured", measured},
+                    {"simulationDeltaMs", clock - speedClock}, {"hostDeltaMs", elapsed - speedHostAt}};
+                trace["speeds"].push_back(sample);
+                log("ORIGINAL_SPEED_SAMPLE " + sample.dump());
+                capture(output / ("speed-" + std::to_string(speedEvent / 2) + ".png"), 480, 800);
+                if (measured < expected * 0.8 || measured > expected * 1.2)
+                    throw std::runtime_error("Original speed control did not change the simulation clock as expected");
+                if (speedEvent < 7) {
+                    SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(460, 56));
+                    SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(460, 56));
+                }
+            }
+            ++speedEvent;
+        }
         if (operation == "input" && elapsed >= 800 && !clicked) {
             SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(340, 340));
             SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(340, 340)); clicked = true;
@@ -2012,6 +2530,7 @@ void originalScene(const std::filesystem::path& output, const Scenario& scenario
             auto state = playerState(game); state["hostElapsedMs"] = elapsed;
             trace["samples"].push_back(state); traceOutput << state.dump() << '\n'; traceOutput.flush(); lastSample = elapsed + 500;
         }
+        original_audio::update();
         SwapBuffers(windowDc);
         MSG message{}; bool closed = false;
         while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) { if (message.message == WM_QUIT) closed = true; TranslateMessage(&message); DispatchMessageW(&message); }
@@ -2028,9 +2547,153 @@ void originalScene(const std::filesystem::path& output, const Scenario& scenario
     log("ORIGINAL_FINAL " + trace.at("final").dump());
 }
 
+/** Exercise the original score serializer across reloads, retaining date and replay bytes. */
+void originalScoreRoundtrip() {
+    auto allocate = reinterpret_cast<void*(__cdecl*)()>(requireExport("SCORES_alloc"));
+    auto load = reinterpret_cast<void(__cdecl*)(void*, const char*)>(requireExport("SCORES_load"));
+    auto save = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("SCORES_save"));
+    auto release = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("SCORES_free"));
+    auto add = reinterpret_cast<int(__cdecl*)(void*, const char*, int, double, const void*, unsigned)>(requireExport("SCORES_add"));
+    // A separate test key never overwrites actual map scores, even in a reused evidence directory.
+    constexpr const char* Key = "scores_host_epoch_check";
+    // Include a fractional second and nonempty replay payload to expose lossy platform serialization.
+    constexpr double ReferenceSeconds = 800000000.125;
+    const unsigned char replay[] = {0x01, 0x23, 0x45, 0x67, 0x89};
+    for (int cycle = 0; cycle < 3; ++cycle) {
+        void* scores = allocate();
+        load(scores, Key);
+        auto* table = static_cast<std::uint32_t*>(scores);
+        if (cycle == 0 && table[10] == 0) add(scores, "epoch-check", 1234, ReferenceSeconds, replay, sizeof(replay));
+        if (table[10] != 1) throw std::runtime_error("Original score roundtrip lost its record");
+        const auto* record = reinterpret_cast<const std::uint32_t*>(table[0]);
+        const double date = *reinterpret_cast<const double*>(record + 4);
+        if (date != ReferenceSeconds || record[0] != 1234 || record[3] != sizeof(replay)
+            || std::memcmp(reinterpret_cast<const void*>(record[2]), replay, sizeof(replay)) != 0)
+            throw std::runtime_error("Original score roundtrip changed date, score, or replay bytes");
+        log("ORIGINAL_SCORE_ROUNDTRIP cycle=" + std::to_string(cycle) + " date=" + std::to_string(date)
+            + " replayBytes=" + std::to_string(record[3]));
+        save(scores);
+        release(scores);
+    }
+    log("ORIGINAL_SCORE_ROUNDTRIP_DONE cycles=3");
+}
+
+/** Select one shipped DLC map using only original menu clicks and carousel drags. */
+void originalDlcSelection(void* menu, const std::filesystem::path& output, const std::string& wanted) {
+    const auto click = [&](int x, int y) {
+        SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+        SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+    };
+    const ULONGLONG start = GetTickCount64();
+    ULONGLONG nextAction = 1800, startedAt = 0;
+    int stage = 0;
+    while (GetTickCount64() - start < 180000) {
+        const auto elapsed = GetTickCount64() - start;
+        void* game = *reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c);
+        auto* selection = *reinterpret_cast<std::uint32_t**>(static_cast<unsigned char*>(menu) + 0x164);
+        if (game) {
+            if (playerState(game).at("map") != wanted) throw std::runtime_error("DLC GUI started wrong map");
+            if (!startedAt) startedAt = elapsed;
+            reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("GAME_setResolution"))(game, 480, 800);
+            reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_update"))(game);
+            reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_render"))(game);
+            if (elapsed >= startedAt + 1500) {
+                capture(output / (wanted + "-game.png"), 480, 800);
+                log("ORIGINAL_DLC_GUI_DONE " + playerState(game).dump());
+                return;
+            }
+        } else {
+            if (elapsed >= nextAction) {
+                nextAction = elapsed + 900;
+                if (stage == 0) { click(45, 210); ++stage; }
+                else if (selection && stage == 1) { click(450, 785); ++stage; }
+                else if (selection && stage == 2) { if (selection[25]) click(30, 50); ++stage; }
+                else if (selection) {
+                    // MAPMENU owns the list, selected index, and sorting; inspect without changing them.
+                    const unsigned index = selection[11];
+                    const char* selected = index < selection[9] ? *reinterpret_cast<const char**>(selection[5] + index * 40) : "";
+                    if (wanted == selected) click(240, 350);
+                    else {
+                        unsigned target = 0;
+                        while (target < selection[9] && wanted != *reinterpret_cast<const char**>(selection[5] + target * 40)) ++target;
+                        if (target == selection[9]) throw std::runtime_error("DLC map absent from original list");
+                        const int from = target > index ? 400 : 100, to = target > index ? 200 : 300;
+                        SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(from, 350));
+                        SendMessageW(windowHandle, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM((from + to) / 2, 350));
+                        SendMessageW(windowHandle, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(to, 350));
+                        // Release inside the tile: a real drag must not activate an intermediate map.
+                        SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(to, 350));
+                    }
+                }
+            }
+            reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_update"))(menu);
+            reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_render"))(menu);
+        }
+        original_audio::update(); SwapBuffers(windowDc);
+        MSG message{};
+        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
+        Sleep(16);
+    }
+    throw std::runtime_error("DLC GUI selection timed out");
+}
+
+/** Check original sound pool, stop, looping and effects-setting contracts on the real mixer. */
+void originalAudioProbe() {
+    if (!original_audio::enabled) throw std::runtime_error("Audio verification requires -Audio");
+    auto load = reinterpret_cast<int(__cdecl*)(const char*)>(requireExport("SOUND_load"));
+    auto play = reinterpret_cast<int(__cdecl*)(int, float, float, float, float, float, int)>(requireExport("SOUND_play"));
+    auto playing = reinterpret_cast<int(__cdecl*)(int)>(requireExport("SOUND_sourceIsPlaying"));
+    auto stop = reinterpret_cast<void(__cdecl*)(int)>(requireExport("SOUND_stop"));
+    const int ui = load("achievement"), looping = load("flamethrower");
+    std::array<int, 3> uiSources{};
+    // Low verification gain avoids changing the user's actual account volume setting.
+    for (auto& source : uiSources) source = play(ui, 0, 0, 0, 0.02f, 0, 1);
+    const int exhausted = play(ui, 0, 0, 0, 0.02f, 0, 1);
+    if (exhausted != -1) throw std::runtime_error("Original UI sound pool did not enforce its three sources");
+    const int loopSource = play(looping, 0, 0, 0, 0.02f, 0, 1);
+    Sleep(200);
+    for (int source : uiSources) if (source < 0 || !playing(source)) throw std::runtime_error("Native UI voice is not playing");
+    if (loopSource < 0 || !playing(loopSource)) throw std::runtime_error("Native effect loop is not playing");
+    reinterpret_cast<void(__cdecl*)()>(requireExport("SOUND_stopLoopingSounds"))();
+    if (playing(loopSource) || !playing(uiSources[0])) throw std::runtime_error("Original loop pool stop changed unrelated voices");
+    for (int source : uiSources) { stop(source); if (playing(source)) throw std::runtime_error("Source did not stop"); }
+    reinterpret_cast<void(__cdecl*)()>(requireExport("SOUND_disableEffects"))();
+    if (play(ui, 0, 0, 0, 0.02f, 0, 0) != -1) throw std::runtime_error("Disabled effects still allocated a source");
+    reinterpret_cast<void(__cdecl*)(float)>(requireExport("SOUND_enableEffects"))(1.0f);
+    original_audio::baseVolume = 0.02f;
+    original_audio::selectMusic("game", true);
+    // Returning to the active tune must cancel an unfinished transition, as in the original manager.
+    original_audio::selectMusic("build", true);
+    original_audio::selectMusic("game", true);
+    for (int tick = 0; tick < 25; ++tick) { Sleep(20); original_audio::update(); }
+    const double position = original_audio::backend.musicPosition();
+    if (!original_audio::musicPlaying || position <= 0.1 || original_audio::tune != "game" || !original_audio::pendingTune.empty())
+        throw std::runtime_error("Native music did not retain the active tune after cancelling its pending transition");
+    original_audio::baseVolume = 0; original_audio::refreshMusic();
+    const double remembered = original_audio::positions["game"];
+    original_audio::baseVolume = 0.02f; original_audio::refreshMusic();
+    Sleep(100);
+    if (!original_audio::musicPlaying || original_audio::backend.musicPosition() < remembered)
+        throw std::runtime_error("Native music unmute did not resume the remembered position");
+    // An unreadable music resource must leave healthy effect playback available.
+    original_audio::selectMusic("__verification_missing_tune__", true);
+    for (int tick = 0; tick < 35; ++tick) { Sleep(20); original_audio::update(); }
+    const int healthyEffect = play(ui, 0, 0, 0, 0.02f, 0, 1);
+    if (!original_audio::musicFailed || healthyEffect < 0 || !playing(healthyEffect))
+        throw std::runtime_error("A failed music resource disabled unrelated effect playback");
+    stop(healthyEffect);
+    log("ORIGINAL_AUDIO_DONE effects=" + std::to_string(original_audio::effectStarts)
+        + " music=" + std::to_string(original_audio::musicStarts) + " remembered=" + std::to_string(remembered) + " musicIsolation=1 pendingCancellation=1");
+}
+
+#include "late-battle-probe.hpp"
+
 /** Drive the real original MENU/MAPMENU object with the host's Windows pointer. */
 void originalMenuScene(const std::filesystem::path& output, const Scenario& scenario) {
     const bool scripted = scenario.operation == "menuauto";
+    const bool optionsMode = scripted && scenario.modeName == "options";
+    const bool helpMode = scripted && scenario.modeName == "help";
+    const bool newGameMode = scripted && scenario.modeName == "newgame";
     reinterpret_cast<void(__cdecl*)()>(findExport("PGL_init"))(); log("PGL_READY");
     glViewport(0, 0, 480, 800);
     auto menuAlloc = reinterpret_cast<void*(__cdecl*)()>(requireExport("MENU_alloc"));
@@ -2066,6 +2729,31 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
     menuShow(menu);
     if (void* mainPage = findExport("mainMenuPage")) { menuChangePage(menu, mainPage); log("ORIGINAL_MENU_PAGE mainMenuPage"); }
     else log("ORIGINAL_MENU_PAGE_MISSING mainMenuPage");
+    if (!scripted) {
+        // Restore the player's F5 checkpoint into the original paused Resume menu on cold startup.
+        // Scripted continue keeps its separate canonical save contract and isolated state.
+        const auto checkpoint = dataDirectory / "menu-save-hotkey.bin";
+        std::vector<std::uint8_t> saved;
+        if (readSaveState(checkpoint, saved)) {
+            restoreSavedGame(menu, checkpoint, "ORIGINAL_STARTUP_LOAD");
+            auto& loaded = *reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c);
+            if (loaded && gameHasEnded(loaded)) {
+                // A terminal checkpoint must not replay settlement or grant progression a second time.
+                void* ended = loaded; loaded = nullptr;
+                reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_free"))(ended);
+                log("ORIGINAL_STARTUP_TERMINAL_SAVE ignored");
+            }
+            reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_backToMainMenu"))(menu);
+            menuShow(menu);
+            if (loaded) log("ORIGINAL_STARTUP_RESUME_READY " + playerState(loaded).dump());
+        } else if (std::filesystem::exists(checkpoint)) {
+            log("STATE_WARNING The saved checkpoint could not be read; the original new-game menu remains available.");
+        }
+    }
+    if (scripted && scenario.modeName.rfind("dlc-", 0) == 0) {
+        originalDlcSelection(menu, output, scenario.modeName.substr(4));
+        return;
+    }
     // Original vertical tab hit layout lives in libverde rodata (Ghidra 0x372e80.. -> ELF VA 0x362e80..).
     const auto* imageBase = reinterpret_cast<const unsigned char*>(images.front()->base);
     const auto rodataFloat = [&](std::uint32_t elfAddress) { return *reinterpret_cast<const float*>(imageBase + elfAddress); };
@@ -2078,10 +2766,14 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
     log("ORIGINAL_MENU_TABS count=" + std::to_string(tabCount) + " firstY=" + std::to_string(tabFirstY)
         + " pitch=" + std::to_string(tabPitch) + " hit=" + std::to_string(tabHitTop) + ".." + std::to_string(tabHitBottom)
         + " xMax=" + std::to_string(tabXMax));
-    const auto savePath = saveStatePath(output);
+    const bool lateBattle = scripted && scenario.modeName == "latebattle";
+    late_battle_probe::Driver lateBattleDriver;
+    const auto savePath = scenario.modeName == "continuehotkey" || lateBattle ? dataDirectory / "menu-save-hotkey.bin" : saveStatePath(output);
     // "continue" runs the original GAME_fromIBS restore path over bytes written by an earlier run.
-    const bool continueMode = scripted && (scenario.modeName == "continue" || scenario.modeName == "Continue");
-    const bool longCampaign = scripted && (scenario.modeName == "campaign" || scenario.modeName == "Campaign");
+    const bool continueMode = scripted && (scenario.modeName == "continue" || scenario.modeName == "Continue" || scenario.modeName == "continuehotkey" || lateBattle);
+    const bool allCampaign = scripted && scenario.modeName == "campaignall";
+    const bool fullCampaign = allCampaign || (scripted && scenario.modeName == "campaignfull");
+    const bool longCampaign = scripted && (fullCampaign || scenario.modeName == "campaign" || scenario.modeName == "Campaign");
     const bool restoreStress = scripted && scenario.modeName == "restorestress";
     if (continueMode) {
         // Only read the bytes now; the original transition runs once MAPMENU exists in the loop below.
@@ -2092,9 +2784,13 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
     const ULONGLONG start = GetTickCount64();
     // Bounded so the fixed bridge runner can finish; interactive clicks are still accepted while it runs.
     // Interactive menu runs until the user closes the window; scripted probes stay bounded.
-    ULONGLONG duration = scripted ? (longCampaign ? 900000 : 45000) : (std::numeric_limits<ULONGLONG>::max)();
+    ULONGLONG duration = scripted ? (allCampaign ? 1800000 : longCampaign ? 900000 : optionsMode ? 12000 : helpMode ? 9000 : 45000) : (std::numeric_limits<ULONGLONG>::max)();
+    if (newGameMode) duration = 60000;
+    if (lateBattle) duration = 600000;
     // The final save is tutorialDoneAt+21s; leave 8s for the queued restore and observation.
     constexpr ULONGLONG ScriptedSaveTailMs = 29000;
+    // New Game begins at +26s, then needs menu/tile delays and a later frame to verify replacement.
+    constexpr ULONGLONG NewGameSelectionTailMs = 8000;
     // Repeat the real F9 path on a started game, leaving several seconds after its last restore.
     constexpr int RestoreStressCycles = 12;
     int restoreCycles = 0;
@@ -2106,6 +2802,21 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
     ULONGLONG endCapturedAt = 0, endClickAt = 0, endNextSample = 0;
     double lastEndNonWhite = 0.0;
     unsigned endClickStep = 0;
+    unsigned optionStep = 0;
+    unsigned helpStep = 0;
+    // Replace an active restored game using only the original New Game/tile buttons.
+    unsigned newGameStep = 0, newGameTaps = 0;
+    ULONGLONG newGameActionAt = 0;
+    int replacedGameClock = 0;
+    // Follow the original victory -> unlock slides -> next map -> active save/restore chain.
+    ULONGLONG nextMapAt = 0;
+    int nextMapClock = -1;
+    bool nextMapSaved = false, nextMapRestored = false;
+    bool nextMapRestoreVerified = false, mediumSpeedSet = false;
+    ULONGLONG mediumNextWave = 0, mediumEndAt = 0;
+    // Later stages: 0=medium, 1/3=original continuation, 2/4=hard/insane combat.
+    int laterStage = 0, laterClicks = 0;
+    ULONGLONG laterClickAt = 0, laterNextWave = 0, laterEndAt = 0;
     bool pauseFrozen = false, resumed = false, resumeVerified = false;
     int tutorialTap = 0, buildStep = 0;
     bool tutorialDone = false, continueRestored = false, loggedPreUpdate = false;
@@ -2115,7 +2826,9 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
     ULONGLONG nextHeartbeat = 0;
     int guiBuildIndex = 0, guiBuildPhase = 0;
     ULONGLONG guiBuildPhaseAt = 0;
-    int apiBuildStep = 0, autoWaveCount = 0;
+    int autoWaveCount = 0;
+    // One request batch per second is enough; the original owns command timing and build delays.
+    ULONGLONG nextDefenseAt = 0;
     ULONGLONG nextTutorialTap = 0, tutorialDoneAt = 0;
     ULONGLONG nextStatLog = 0;
     void* lastPage = nullptr; void* lastGame = nullptr;
@@ -2131,6 +2844,21 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
     while (GetTickCount64() - start < duration) {
         const ULONGLONG elapsed = GetTickCount64() - start;
         ++frameCount;
+        if (helpMode && helpStep < 2 && elapsed >= 2000 + helpStep * 3000) {
+            const int x = helpStep == 0 ? 45 : 450, y = helpStep == 0 ? 314 : 780;
+            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+            ++helpStep;
+        }
+        if (optionsMode && optionStep < 6 && elapsed >= 2000 + optionStep * 1500) {
+            // New-game main menu has Options at y=262; its five original setting rows are spaced by 50px.
+            const int x = optionStep == 0 ? 45 : 300;
+            const int y = optionStep == 0 ? 262 : 100 + static_cast<int>(optionStep) * 50;
+            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+            log("ORIGINAL_OPTIONS_CLICK step=" + std::to_string(optionStep));
+            ++optionStep;
+        }
         // Heartbeat: distinguishes a stalled guest call from a merely slow run.
         if (scripted && longCampaign && elapsed >= nextHeartbeat) {
             nextHeartbeat = elapsed + 5000;
@@ -2144,8 +2872,35 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
             restoreSavedGame(menu, pendingRestorePath, pendingRestoreTag);
         }
         void* game = *reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c);
+        if (lateBattle) lateBattleDriver.verifyRestored(game, elapsed);
         void* page = *reinterpret_cast<void**>(menu);
         bool showing = *reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(menu) + 4) != 0;
+        if (newGameMode && saveTested && tutorialDone && newGameStep == 0 && elapsed >= tutorialDoneAt + 26000) {
+            replacedGameClock = currentGameClock(menu);
+            SendMessageW(windowHandle, WM_KEYDOWN, VK_ESCAPE, 0);
+            newGameStep = 1; newGameActionAt = elapsed + 1500;
+        } else if (newGameMode && newGameStep && elapsed >= newGameActionAt) {
+            if (newGameStep == 1) {
+                SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(45, 210));
+                SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(45, 210));
+                newGameStep = 2; newGameActionAt = elapsed + 1500;
+            } else if (newGameStep == 2) {
+                if (page != findExport("startGamePage")) throw std::runtime_error("Original New Game button did not open map selection");
+                capture(output / "newgame-selection.png", 480, 800);
+                newGameStep = 3;
+            } else if (game && !showing && !playerState(game).at("gameStarted").get<bool>() && currentGameClock(menu) < replacedGameClock) {
+                capture(output / "newgame-replaced.png", 480, 800);
+                log("ORIGINAL_NEWGAME_GUI_DONE previousClock=" + std::to_string(replacedGameClock) + " " + playerState(game).dump());
+                break;
+            } else {
+                if (++newGameTaps > 4) throw std::runtime_error("Original New Game tile did not replace the active game");
+                SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(240, 350));
+                SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(240, 350));
+                newGameActionAt = elapsed + 2000;
+            }
+            // Input may have replaced GAME; acquire all frame-local pointers again.
+            continue;
+        }
         if (page != lastPage) { lastPage = page; log("ORIGINAL_MENU_PAGE_CHANGED " + std::to_string(reinterpret_cast<std::uintptr_t>(page))); }
         if (page == findExport("startGamePage") && mapSelectAt == 0) mapSelectAt = elapsed;
         if (game && game != lastGame) {
@@ -2186,7 +2941,8 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
             hudCaptured = true;
         }
         if (scripted && !continueMode && !longCampaign && tutorialDone)
-            duration = (std::max)(duration, tutorialDoneAt + (restoreStress ? ScriptedSaveTailMs + 7000 : ScriptedSaveTailMs));
+            duration = (std::max)(duration, tutorialDoneAt + (restoreStress ? ScriptedSaveTailMs + 7000
+                : newGameMode ? ScriptedSaveTailMs + NewGameSelectionTailMs : ScriptedSaveTailMs));
         if (restoreStress && saveTested && restoreCycles < RestoreStressCycles && elapsed >= pauseAt + 10000 + restoreCycles * 750) {
             ++restoreCycles;
             log("ORIGINAL_RESTORE_STRESS request=" + std::to_string(restoreCycles));
@@ -2231,6 +2987,7 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
         // stop: a stray wave click there was routed into the menu and started a whole new game
         // (campaign-20261015-054301:1540-1551), which replaced the settlement page under the capture gate.
         const bool gameIsOver = game && reinterpret_cast<int(__cdecl*)(void*)>(findExport("GAME_hasEnded"))(game) != 0;
+        if (lateBattle && continueRestored && lateBattleDriver.tick(menu, game, page, gameIsOver, elapsed, output)) break;
         // The verified three-tap first tower stays (BUILD_CLICK steps 0-2); the extra ring taps are off because
         // only 2 of 7 candidate cells ever charged money, while the original build entry point now demonstrably
         // does (see the API block below), so the campaign uses that path for the remaining towers.
@@ -2258,42 +3015,10 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
                 ++guiBuildIndex; guiBuildPhase = 0;
             }
         }
-        // Campaign verification: drive the ORIGINAL build entry point so the natural layout can hold 26 waves.
-        // The cost/affordability check stays inside the original function; the host only supplies the request.
-        // Re-enabled on evidence: the earlier libverde.so+0x267f08 fault came from the removed
-        // TOWERS_getIdForCell probe (wrong first argument), not from GAME_buildTower itself.
-        const bool apiBuildEnabled = true;
-        if (scripted && longCampaign && apiBuildEnabled && game && tutorialDone && !gameIsOver && !endCaptured
-            && apiBuildStep < 40 && elapsed >= tutorialDoneAt + 15000 + static_cast<ULONGLONG>(apiBuildStep) * 4000) {
-            void* mode = *reinterpret_cast<void**>(game);
-            // PlainPlane.map: width 11, height 16; terrain 1 (buildable field) spans cols 1..9, rows 4..11.
-            // Measured: (5,8)/(8,8)/(6,8) charge the original 10 money cost while (2,5)/(5,5)/(8,5)/(2,8) do
-            // not build, so the scan walks the field and only cells the original accepts take effect.
-            // The first 12 steps build; the rest upgrade the cells that were built, because level-1 towers
-            // alone could not hold the later waves (defeat at sim 97.85s, wave ~3 of 26).
-            static const int cells[12][2] = {{5, 8}, {8, 8}, {6, 8}, {7, 8}, {4, 8}, {5, 9},
-                                             {8, 9}, {4, 9}, {7, 9}, {6, 9}, {3, 8}, {9, 8}};
-            const bool upgrade = apiBuildStep >= 12;
-            const int cellIndex = upgrade ? (apiBuildStep - 12) % 6 : apiBuildStep % 12;
-            const int towerId = nativeTowerIdOrNone(mode, "Kilowatt Laser");
-            log(std::string("ORIGINAL_CAMPAIGN_API_TRY step=") + std::to_string(apiBuildStep)
-                + " upgrade=" + std::to_string(upgrade) + " id=" + std::to_string(towerId)
-                + " cell=" + std::to_string(cells[cellIndex][0]) + "," + std::to_string(cells[cellIndex][1])
-                + " " + playerState(game).dump());
-            if (upgrade) {
-                // GAME_upgradeTower(game, x, y) enqueues command type 2 (pseudocode.c:4693-4710); the original
-                // validates cost/level and charges the money itself.
-                reinterpret_cast<void(__cdecl*)(void*, int, int)>(findExport("GAME_upgradeTower"))(
-                    game, cells[cellIndex][0], cells[cellIndex][1]);
-            } else if (towerId >= 0) {
-                reinterpret_cast<void(__cdecl*)(void*, int, int, int)>(findExport("GAME_buildTower"))(
-                    game, towerId, cells[cellIndex][0], cells[cellIndex][1]);
-            }
-            log(std::string("ORIGINAL_CAMPAIGN_API_DONE step=") + std::to_string(apiBuildStep)
-                + " upgrade=" + std::to_string(upgrade)
-                + " cell=" + std::to_string(cells[cellIndex][0]) + "," + std::to_string(cells[cellIndex][1])
-                + " " + playerState(game).dump());
-            ++apiBuildStep;
+        if (scripted && longCampaign && game && tutorialDone && !gameIsOver && !endCaptured
+            && elapsed >= tutorialDoneAt + 6000 && elapsed >= nextDefenseAt) {
+            nextDefenseAt = elapsed + 1000;
+            campaignDefense(game);
         }
         // Evidence for where the API-assisted towers actually landed on the map.
         if (scripted && longCampaign && game && tutorialDone && !capturedTowers && elapsed >= tutorialDoneAt + 22000) {
@@ -2341,10 +3066,8 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
             if (!samePage || !ended) {
                 log("ORIGINAL_CAMPAIGN_ENDGAME_PAGE_LOST samePage=" + std::to_string(samePage)
                     + " ended=" + std::to_string(ended) + " (no stable capture, no click probe)");
-                endCapturedLate = true;
-                endClickStep = 3;
-            } else if ((elapsed >= endCapturedAt + 2000 && fade <= 0.02f && steady && nonWhite >= 0.05)
-                || elapsed >= endCapturedAt + 12000) {
+                throw std::runtime_error("Original settlement page disappeared before capture");
+            } else if (elapsed >= endCapturedAt + 2000 && fade >= 0.98f && steady && nonWhite >= 0.05) {
                 capture(output / "menu-endgame-stable.png", 480, 800);
                 log("ORIGINAL_CAMPAIGN_ENDGAME_STABLE samePage=" + std::to_string(samePage)
                     + " ended=" + std::to_string(ended)
@@ -2356,41 +3079,133 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
                     + (game ? " " + playerState(game).dump() : std::string("nogame")));
                 endCapturedLate = true;
                 endClickAt = elapsed + 400;
+            } else if (elapsed >= endCapturedAt + 12000) {
+                throw std::runtime_error("Original settlement did not finish fading in");
             }
         }
-        // Clickability check on the visible endgame page: real Windows input through the original touch router;
-        // a changed page pointer after a click is the evidence (no page change is reported as unverified).
-        // Clickability check on the visible endgame page: real Windows input through the original touch router.
-        // Targets come from the verified frame (menu-endgame-stable.png: "MAIN MENU | PLAY AGAIN" row, y~770;
-        // PLAY AGAIN on the right, MAIN MENU on the left). A changed page pointer or a fresh game pointer after
-        // the click is the evidence; anything unchanged is reported as unverified.
-        if (longCampaign && endCapturedLate && endClickStep < 2 && elapsed >= endClickAt) {
-            static const int candidates[2][2] = {{200, 770}, {95, 770}};
-            static const char* const labels[2] = {"PLAY_AGAIN", "MAIN_MENU"};
-            const void* before = *reinterpret_cast<void**>(menu);
-            const void* gameBefore = *reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c);
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON,
-                MAKELPARAM(candidates[endClickStep][0], candidates[endClickStep][1]));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0,
-                MAKELPARAM(candidates[endClickStep][0], candidates[endClickStep][1]));
-            const void* after = *reinterpret_cast<void**>(menu);
-            const void* gameAfter = *reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c);
-            log(std::string("ORIGINAL_CAMPAIGN_ENDGAME_CLICK step=") + std::to_string(endClickStep)
-                + " button=" + labels[endClickStep]
-                + " at=" + std::to_string(candidates[endClickStep][0]) + "," + std::to_string(candidates[endClickStep][1])
-                + " pageBefore=" + std::to_string(reinterpret_cast<std::uintptr_t>(before))
-                + " pageAfter=" + std::to_string(reinterpret_cast<std::uintptr_t>(after))
-                + " gameBefore=" + std::to_string(reinterpret_cast<std::uintptr_t>(gameBefore))
-                + " gameAfter=" + std::to_string(reinterpret_cast<std::uintptr_t>(gameAfter))
-                + (before != after ? " CHANGED" : " unchanged")
-                + (gameBefore != gameAfter ? " GAME_REPLACED" : ""));
-            ++endClickStep;
-            endClickAt = elapsed + 600;
+        if (longCampaign && endCapturedLate && !nextMapAt && elapsed >= endClickAt) {
+            if (game && !gameIsOver && playerState(game).at("map") == "DividedAttention") {
+                nextMapAt = elapsed;
+                nextMapClock = currentGameClock(menu);
+                log("ORIGINAL_CAMPAIGN_NEXT_MAP " + playerState(game).dump());
+                SendMessageW(windowHandle, WM_KEYDOWN, VK_SPACE, 0);
+            } else {
+                if (page == findExport("endOfGamePage") && !playerState(game).at("won").get<bool>())
+                    throw std::runtime_error("Campaign defense lost the original first map");
+                if (++endClickStep > 14) throw std::runtime_error("Original victory continuation did not start the second map");
+                // The unlock callbacks advance their own slide counters; no host progress flags are written.
+                capture(output / ("menu-continue-" + std::to_string(endClickStep) + ".png"), 480, 800);
+                const int clickY = page == findExport("endOfGamePage") ? 770
+                    : page == findExport("startGamePage") ? 350 : 650;
+                SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(240, clickY));
+                SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(240, clickY));
+                log("ORIGINAL_CAMPAIGN_CONTINUE_CLICK step=" + std::to_string(endClickStep)
+                    + " y=" + std::to_string(clickY) + " pageChanged="
+                    + std::to_string(page != *reinterpret_cast<void**>(menu)));
+                endClickAt = elapsed + 2000;
+            }
         }
-        if (longCampaign && endCapturedLate && endClickStep >= 2) { log("ORIGINAL_CAMPAIGN_DONE elapsed=" + std::to_string(elapsed)); break; }
+        if (longCampaign && nextMapAt && game && !nextMapSaved && elapsed >= nextMapAt + 2500) {
+            if (currentGameClock(menu) <= nextMapClock || !playerState(game).at("gameStarted").get<bool>())
+                throw std::runtime_error("Second map did not start advancing");
+            nextMapSaved = true;
+            capture(output / "menu-second-map.png", 480, 800);
+            SendMessageW(windowHandle, WM_KEYDOWN, VK_F5, 0);
+            nextMapClock = currentGameClock(menu);
+        }
+        if (longCampaign && nextMapSaved && !nextMapRestored && elapsed >= nextMapAt + 3000) {
+            nextMapRestored = true;
+            SendMessageW(windowHandle, WM_KEYDOWN, VK_F9, 0);
+        }
+        // GAME_resume deliberately waits three seconds for a started game; observe beyond that countdown.
+        if (longCampaign && nextMapRestored && !laterStage && elapsed >= nextMapAt + 9000) {
+            if (!nextMapRestoreVerified) {
+                if (currentGameClock(menu) <= nextMapClock || playerState(game).at("map") != "DividedAttention")
+                    throw std::runtime_error("Second map restore did not preserve map and advance");
+                nextMapRestoreVerified = true;
+                capture(output / "menu-second-restored.png", 480, 800);
+                log("ORIGINAL_CAMPAIGN_DONE " + playerState(game).dump());
+            }
+            if (!fullCampaign) break;
+            if (!gameIsOver) {
+                if (!mediumSpeedSet) {
+                    // Use the original button twice, giving the real 1x -> 2x -> 4x transitions.
+                    for (int click = 0; click < 2; ++click) {
+                        SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(460, 56));
+                        SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(460, 56));
+                    }
+                    mediumSpeedSet = true;
+                    mediumNextWave = elapsed + 15000;
+                }
+                campaignDefense(game);
+                if (elapsed >= mediumNextWave) {
+                    mediumNextWave = elapsed + 15000;
+                    SendMessageW(windowHandle, WM_KEYDOWN, VK_SPACE, 0);
+                    log("ORIGINAL_MEDIUM_WAVE " + playerState(game).dump());
+                }
+            } else if (page == findExport("endOfGamePage")) {
+                if (!playerState(game).at("won").get<bool>())
+                    throw std::runtime_error("Original second-map campaign defense lost");
+                if (!mediumEndAt) mediumEndAt = elapsed;
+                const float fade = *reinterpret_cast<float*>(static_cast<unsigned char*>(menu) + 0xec);
+                if (elapsed >= mediumEndAt + 2500 && fade >= 0.98f) {
+                    capture(output / "menu-medium-victory.png", 480, 800);
+                    log("ORIGINAL_MEDIUM_CAMPAIGN_DONE " + playerState(game).dump());
+                    if (!allCampaign) break;
+                    laterStage = 1; laterClickAt = elapsed + 500;
+                }
+            }
+        }
+        if (allCampaign && laterStage && game) {
+            const std::string wanted = laterStage <= 2 ? "MuttonsFolly" : "Madness";
+            if (laterStage % 2) {
+                if (!gameIsOver && playerState(game).at("map") == wanted) {
+                    ++laterStage;
+                    laterNextWave = elapsed + (wanted == "Madness" ? 25000 : 15000);
+                    laterEndAt = 0;
+                    // Keep an authentic fresh-map checkpoint for independent continuation checks.
+                    SendMessageW(windowHandle, WM_KEYDOWN, VK_F5, 0);
+                    if (wanted != "Madness") SendMessageW(windowHandle, WM_KEYDOWN, VK_SPACE, 0);
+                    for (int click = 0; click < 2; ++click) {
+                        SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(460, 56));
+                        SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(460, 56));
+                    }
+                    capture(output / (wanted + "-started.png"), 480, 800);
+                    log("ORIGINAL_LATER_CAMPAIGN_STARTED " + playerState(game).dump());
+                } else if (elapsed >= laterClickAt) {
+                    if (++laterClicks > 14) throw std::runtime_error("Original later campaign continuation did not advance");
+                    const int y = page == findExport("endOfGamePage") ? 770
+                        : page == findExport("startGamePage") ? 350 : 650;
+                    SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(240, y));
+                    SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(240, y));
+                    laterClickAt = elapsed + 2000;
+                }
+            } else if (!gameIsOver) {
+                campaignDefense(game);
+                if (elapsed >= laterNextWave) {
+                    laterNextWave = elapsed + (wanted == "Madness" ? 25000 : 15000);
+                    SendMessageW(windowHandle, WM_KEYDOWN, VK_SPACE, 0);
+                    log("ORIGINAL_LATER_CAMPAIGN_WAVE " + playerState(game).dump());
+                }
+            } else if (page == findExport("endOfGamePage")) {
+                if (!playerState(game).at("won").get<bool>())
+                    throw std::runtime_error("Original later campaign defense lost on " + wanted);
+                if (!laterEndAt) laterEndAt = elapsed;
+                const float fade = *reinterpret_cast<float*>(static_cast<unsigned char*>(menu) + 0xec);
+                if (elapsed >= laterEndAt + 2500 && fade >= 0.98f) {
+                    capture(output / (wanted + "-victory.png"), 480, 800);
+                    log("ORIGINAL_LATER_CAMPAIGN_WON " + playerState(game).dump());
+                    if (laterStage == 4) {
+                        log("ORIGINAL_ALL_CAMPAIGN_DONE settings=" + nlohmann::json(hostAccountInts).dump());
+                        break;
+                    }
+                    ++laterStage; laterClicks = 0; laterClickAt = elapsed + 500;
+                }
+            }
+        }
         if (!capturedMain && elapsed >= 1500) { capture(output / "menu-main.png", 480, 800); capturedMain = true; }
         // Scripted mode clicks each original tab centre (from the rodata hit layout) and records the page result.
-        if (scripted && game == nullptr && capturedMain && tabIndex < tabCount && elapsed >= nextTabClick && page == findExport("mainMenuPage")) {
+        if (scripted && !optionsMode && !helpMode && game == nullptr && capturedMain && tabIndex < tabCount && elapsed >= nextTabClick && page == findExport("mainMenuPage")) {
             nextTabClick = elapsed + 1200;
             const float clickY = tabFirstY + static_cast<float>(tabIndex) * tabPitch + (tabHitTop + tabHitBottom) * 0.5f;
             const int clickX = static_cast<int>(tabXMax * 0.5f), pixelY = static_cast<int>(clickY);
@@ -2457,7 +3272,9 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
             pauseFrozen = true;
         }
         if (scripted && pauseFrozen && !resumed && elapsed >= pauseAt + 4500) {
-            reinterpret_cast<void(__cdecl*)(void*)>(findExport("MENU_hide"))(menu);
+            // Exercise the original Resume tab rather than bypassing its hit test.
+            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(45, 262));
+            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(45, 262));
             log("ORIGINAL_MENU_RESUME_REQUESTED showing=" + std::to_string(*reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(menu) + 4)));
             resumed = true; resumeAt = elapsed;
         }
@@ -2541,6 +3358,7 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
         }
         if (!capturedMap && page && page == findExport("startGamePage")) { capture(output / "menu-mapselect.png", 480, 800); capturedMap = true; }
         if (!capturedGame && game) { capture(output / "menu-in-game.png", 480, 800); capturedGame = true; }
+        original_audio::update();
         SwapBuffers(windowDc);
         MSG message{}; bool closed = false;
         while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) { if (message.message == WM_QUIT) closed = true; TranslateMessage(&message); DispatchMessageW(&message); }
@@ -2560,6 +3378,9 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
     log(std::string("ORIGINAL_MENU_FINAL page=") + std::to_string(reinterpret_cast<std::uintptr_t>(*reinterpret_cast<void**>(menu)))
         + " game=" + std::to_string(reinterpret_cast<std::uintptr_t>(finalGame))
         + (finalGame ? " state=" + playerState(finalGame).dump() : std::string()));
+    if (optionsMode && optionStep == 6 && *reinterpret_cast<void**>(menu) == findExport("optionsMenuPage"))
+        log("ORIGINAL_OPTIONS_DONE settings=" + nlohmann::json(hostAccountInts).dump()
+            + " floats=" + nlohmann::json(hostAccountFloats).dump());
 }
 
 /** Report a native Windows fault with its corresponding original ELF address. */
@@ -2725,12 +3546,13 @@ void registerC() {
 void run(const std::filesystem::path& package, const std::string& operation, const std::filesystem::path& outputDirectory) {
     const auto directory = package / "lib/x86"; assetsDirectory = package / "assets";
     convertedTextures = package.parent_path().parent_path().parent_path().parent_path() / "assets/textures";
-    // Stable data directory: packaged `<runtime>/../../../../data` when writable, else agent/dsh/state.
+    if (std::filesystem::exists(package.parent_path() / "textures")) convertedTextures = package.parent_path() / "textures";
+    // Portable saves stay beside Play.cmd; development runs use their selected evidence state directory.
     dataDirectory = resolveDataDirectory(package, outputDirectory);
     persistedStorePath = dataDirectory / "platform-store.txt";
     const Scenario scenario = parseScenario(operation);
     // "map" previously returned without loading anything and falsely looked like a passing probe.
-    const std::set<std::string> supported = {"play", "scene", "input", "combat", "upgrade", "flood", "autoplay", "menu", "menuauto", "levels"};
+    const std::set<std::string> supported = {"play", "scene", "input", "combat", "upgrade", "flood", "autoplay", "menu", "menuauto", "levels", "scores", "speed", "audio", "weapons", "guiweapons", "weaponcombat"};
     if (!supported.count(scenario.operation)) throw std::runtime_error("Unsupported probe operation: " + scenario.operation);
     registerC(); mapImage(directory / "libverde.so");
     for (const auto& entry : std::filesystem::directory_iterator(directory))
@@ -2770,6 +3592,8 @@ void run(const std::filesystem::path& package, const std::string& operation, con
         if (const auto hook = hooks.find(underlying); hook != hooks.end()) installHook(name, hook->second);
     }
     correctTowerRestoreAllocation();
+    correctPointSpriteSubmission();
+    correctScoreDateReader();
     installHook("VFS_getFile", reinterpret_cast<void*>(&nativeFile));
     installHook("VFS_getFilesOfType", reinterpret_cast<void*>(&nativeFiles));
     installHook("APPORTABLE_loadPng", reinterpret_cast<void*>(&nativePng));
@@ -2778,18 +3602,59 @@ void run(const std::filesystem::path& package, const std::string& operation, con
     installHook("objc_msgSend", reinterpret_cast<void*>(&nativeMessage));
     installHook("objc_msgSend_stret", reinterpret_cast<void*>(&nativeMessageStructBridge));
     installHook("objc_msgSend_fpret", reinterpret_cast<void*>(&nativeMessageFpret));
-    installHook("SOUND_load", reinterpret_cast<void*>(&silentSound));
-    for (const char* name : {"SOUND_play", "SOUND_stop", "SOUND_stopLoopingSounds", "SOUND_setListener"})
-        installHook(name, reinterpret_cast<void*>(&silentPlayback));
+    original_audio::assets = assetsDirectory;
+    original_audio::trace = &log;
+    char audioSetting[8]{};
+    original_audio::enabled = GetEnvironmentVariableA("TOWERMADNESS_X86_AUDIO", audioSetting, sizeof(audioSetting))
+        && audioSetting[0] == '1';
+    const std::pair<const char*, void*> audioHooks[] = {
+        {"SOUND_loadSoundFile", reinterpret_cast<void*>(&original_audio::loadSound)},
+        {"alGenBuffers", reinterpret_cast<void*>(&original_audio::genBuffers)},
+        {"alDeleteBuffers", reinterpret_cast<void*>(&original_audio::deleteBuffers)},
+        {"alGenSources", reinterpret_cast<void*>(&original_audio::genSources)},
+        {"alDeleteSources", reinterpret_cast<void*>(&original_audio::deleteSources)},
+        {"alSourcei", reinterpret_cast<void*>(&original_audio::sourceInt)},
+        {"alSourcef", reinterpret_cast<void*>(&original_audio::sourceFloat)},
+        {"alSource3f", reinterpret_cast<void*>(&original_audio::sourcePosition)},
+        {"alSourcePlay", reinterpret_cast<void*>(&original_audio::play)},
+        {"alSourceStop", reinterpret_cast<void*>(&original_audio::stop)},
+        {"alGetSourcei", reinterpret_cast<void*>(&original_audio::getSource)},
+        {"alListenerf", reinterpret_cast<void*>(&original_audio::listenerFloat)},
+        {"alListener3f", reinterpret_cast<void*>(&original_audio::listenerPosition)},
+        {"alDistanceModel", reinterpret_cast<void*>(&original_audio::distanceModel)},
+        {"alcOpenDevice", reinterpret_cast<void*>(&original_audio::openDevice)},
+        {"alcCreateContext", reinterpret_cast<void*>(&original_audio::createContext)},
+        {"alcMakeContextCurrent", reinterpret_cast<void*>(&original_audio::makeCurrent)},
+        {"alcCloseDevice", reinterpret_cast<void*>(&original_audio::closeDevice)},
+        {"alcDestroyContext", reinterpret_cast<void*>(&original_audio::contextOperation)},
+        {"alcSuspendContext", reinterpret_cast<void*>(&original_audio::contextOperation)},
+        {"alcProcessContext", reinterpret_cast<void*>(&original_audio::contextOperation)},
+        {"alcMacOSXMixerOutputRateProc", reinterpret_cast<void*>(&original_audio::mixerRate)},
+        {"AudioSessionInitialize", reinterpret_cast<void*>(&original_audio::sessionInit)},
+        {"AudioSessionSetProperty", reinterpret_cast<void*>(&original_audio::sessionProperty)},
+        {"AudioSessionSetActive", reinterpret_cast<void*>(&original_audio::sessionActive)}
+    };
+    for (const auto& [name, function] : audioHooks) installHook(name, function);
+    installHook("MENU_showCredits", reinterpret_cast<void*>(&nativeCredits));
+    reinterpret_cast<void(__cdecl*)()>(requireExport("SOUND_init"))();
+    loadPersistedStore();
+    const auto soundLevel = hostAccountInts.find("soundvolume");
+    if (soundLevel != hostAccountInts.end())
+        reinterpret_cast<void(__cdecl*)(float)>(requireExport("SOUND_enableEffects"))(static_cast<float>(soundLevel->second));
+    const auto musicLevel = hostAccountFloats.find("musicvolume");
+    if (musicLevel != hostAccountFloats.end()) original_audio::baseVolume = static_cast<float>(musicLevel->second);
+    log("SOUND_READY enabled=" + std::to_string(original_audio::enabled));
     // The original MENU object must run its own code; only the direct-to-level probe uses the stubs.
     if (scenario.operation != "menu" && scenario.operation != "menuauto") {
         installHook("MENU_backToMainMenu", reinterpret_cast<void*>(&hostMenuButton));
         installHook("MENU_show", reinterpret_cast<void*>(&silentPlayback));
     }
     log("ENTER_ORIGINAL " + scenario.operation);
+    if (scenario.operation == "audio") { originalAudioProbe(); return; }
+    if (scenario.operation == "scores") { originalScoreRoundtrip(); return; }
     if (scenario.operation == "menu" || scenario.operation == "menuauto") { originalMenuScene(outputDirectory, scenario); return; }
     if (scenario.operation == "scene" || scenario.operation == "combat" || scenario.operation == "play" || scenario.operation == "input"
-        || scenario.operation == "upgrade" || scenario.operation == "flood" || scenario.operation == "autoplay") {
+        || scenario.operation == "upgrade" || scenario.operation == "flood" || scenario.operation == "autoplay" || scenario.operation == "speed" || scenario.operation == "weapons" || scenario.operation == "guiweapons" || scenario.operation == "weaponcombat") {
         originalScene(outputDirectory, scenario); return;
     }
     auto function = reinterpret_cast<void(__cdecl*)()>(findExport(scenario.operation));
