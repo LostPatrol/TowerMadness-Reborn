@@ -7,7 +7,7 @@ std::filesystem::path settingsPath, diagnosticPath;
 // Persist only the restored client size, so maximized dimensions do not replace it.
 int clientWidth = 1280, clientHeight = 720, frameLimit = 60;
 // The portable desktop version is independent of the original mobile version.
-constexpr const wchar_t* Version = L"Windows 0.7";
+constexpr const wchar_t* Version = L"Windows 1.0.0";
 // Remember the normal window rectangle and mode without replacing it during fullscreen.
 int windowX = CW_USEDEFAULT, windowY = CW_USEDEFAULT;
 bool fullscreen = false, maximized = false, restoringWindow = false;
@@ -139,7 +139,7 @@ bool exportDiagnostics(bool reveal) {
         if (!settingsPath.empty() && std::filesystem::exists(settingsPath))
             std::filesystem::copy_file(settingsPath, directory / L"host-settings.json");
         std::ofstream summary(directory / L"desktop.txt");
-        summary << "TowerMadness Windows 0.7\nClient: " << hostDisplay.width << 'x' << hostDisplay.height
+        summary << "TowerMadness Windows 1.0.0\nClient: " << hostDisplay.width << 'x' << hostDisplay.height
             << "\nFPS cap: " << (framePacer ? framePacer->targetFPS() : frameLimit)
             << "\nFullscreen: " << fullscreen << "\nAutosave: " << desktop_save::autosaveEnabled
             << "\nOpenGL: " << (windowGl ? reinterpret_cast<const char*>(glGetString(GL_VERSION)) : "unavailable") << '\n';

@@ -2,8 +2,8 @@
 #include <windows.h>
 1 ICON "@X86_RESOURCE_DIRECTORY@/towermadness.ico"
 1 VERSIONINFO
-FILEVERSION 0,7,0,0
-PRODUCTVERSION 0,7,0,0
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
 FILETYPE VFT_APP
 BEGIN
     BLOCK "StringFileInfo"
@@ -11,9 +11,9 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "FileDescription", "TowerMadness Windows"
-            VALUE "FileVersion", "0.7.0"
+            VALUE "FileVersion", "1.0.0"
             VALUE "ProductName", "TowerMadness"
-            VALUE "ProductVersion", "Windows 0.7"
+            VALUE "ProductVersion", "Windows 1.0.0"
         END
     END
     BLOCK "VarFileInfo"

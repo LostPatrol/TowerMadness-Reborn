@@ -64,17 +64,10 @@ if errorlevel 1 pause
 endlocal
 '@
 $launcher | Set-Content -LiteralPath (Join-Path $OutputDirectory 'Play.cmd') -Encoding ascii
-@'
-# TowerMadness Windows x86 port
-
-Personal learning and nostalgia build using the original game code and assets. Extract the entire ZIP into a writable folder, then double-click TowerMadness.exe on Windows 10/11. Do not run it from the ZIP preview. No command line, emulator or development tools are needed. Keep runtime beside the EXE. data contains local saves/settings; logs contains diagnostics. If startup fails, a dialog explains the error and log location. See 使用说明.md for the Chinese quick start and feedback instructions.
-
-Mouse: menus and tower wheel. Drag: pan. Wheel: smooth zoom. Right click: close tower wheel. Space: pause/resume. N: next wave. W: upgrade selected tower. Q/E or middle drag: rotate camera; R: reset. Map arrows/A/D or wheel select maps (wheel up: previous; down: next); Map overview shows original thumbnails. F1: offline field guide. F10: PC settings and configurable keys. F11/Alt+Enter: borderless fullscreen. Window position/size/mode and F6 FPS cap are remembered. Original Options retains music/effects preferences.
-
-F5 saves an atomic manual checkpoint with five older backups and success/failure feedback. F9 restores it. Exiting an active game offers Save/Discard/Cancel. Optional separate autosave is off by default; enable it in PC settings (two minutes), and use Restore separate autosave when needed. Restarting loads the last manual checkpoint into the original Resume menu. PC settings also opens the save folder and exports diagnostics into logs without account/save files.
-
-To continue an earlier portable save: close both copies and copy the old data folder into this extracted folder. Preserve the old folder as a backup; never overwrite a newer save unintentionally. host-settings.json can be removed to reset window/FPS preferences without deleting game progress. Optional compatibility launcher arguments can be combined: Play.cmd silent 1080 120 (silent disables audio, 1080 requests 648x1080, 60/120/unlimited overrides the frame cap).
-
-Default frame cap is 60; unlimited may increase GPU/CPU load and is still limited by the display/driver. Guide and Credits render original offline content inside the game. The trophy shows 36 original campaign achievements using local progress; official online metadata and other awards remain unavailable. Windows audio supports smooth music fades and stereo positioning. First resource loads may still produce long frames. If a problem occurs, copy logs/game.log before restarting, since the next launch replaces it. PC settings can export diagnostics; save files must be retained separately. This is a private personal build; do not redistribute it.
-'@ | Set-Content -LiteralPath (Join-Path $OutputDirectory 'README.md') -Encoding utf8
+# Export the English player guide from the tracked README instead of duplicating it.
+$englishReadme = Get-Content -LiteralPath (Join-Path $projectDirectory 'README.md') -Raw
+$developerSection = $englishReadme.IndexOf('## For developers', [StringComparison]::Ordinal)
+if ($developerSection -lt 0) { throw 'The English README is missing its developer section.' }
+$englishPlayerGuide = $englishReadme.Substring(0, $developerSection) -replace '(?m)^\[English\]\(README.md\).*\r?\n', ''
+$englishPlayerGuide.TrimEnd() | Set-Content -LiteralPath (Join-Path $OutputDirectory 'README.md') -Encoding utf8
 Write-Output $OutputDirectory

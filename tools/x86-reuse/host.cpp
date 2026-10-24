@@ -148,8 +148,8 @@ void finishHostFrame() {
     nextTitle = now + 1000;
     wchar_t title[128]{};
     const auto target = framePacer->targetFPS();
-    if (target) std::swprintf(title, std::size(title), L"TowerMadness Windows 0.7 | %.1f FPS | cap %d | F6: 60/120/unlimited", framePacer->recentFPS(), target);
-    else std::swprintf(title, std::size(title), L"TowerMadness Windows 0.7 | %.1f FPS | unlimited | F6: 60/120/unlimited", framePacer->recentFPS());
+    if (target) std::swprintf(title, std::size(title), L"TowerMadness Windows 1.0.0 | %.1f FPS | cap %d | F6: 60/120/unlimited", framePacer->recentFPS(), target);
+    else std::swprintf(title, std::size(title), L"TowerMadness Windows 1.0.0 | %.1f FPS | unlimited | F6: 60/120/unlimited", framePacer->recentFPS());
     SetWindowTextW(windowHandle, title);
 }
 
