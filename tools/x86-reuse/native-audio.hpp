@@ -1,6 +1,6 @@
 // Native Windows audio for original Ogg/Vorbis assets, including .caf containers.
 // Include this implementation header in exactly one translation unit.
-// Spatial playback approximates distance attenuation only; it is not OpenAL 3D audio.
+// Spatial effects use inverse-distance gain and equal-power stereo panning.
 #pragma once
 
 #include <windows.h>
@@ -37,6 +37,10 @@ class NativeAudio {
     static constexpr float ReferenceDistance = 10.0f;
     // Stack decode scratch space, measured in interleaved samples.
     static constexpr int DecodeSamples = 16384;
+    // A stereo mastering bus gives positional effects consistent left/right routing.
+    static constexpr UINT32 OutputChannels = 2;
+    // Quarter-circle angle used by the equal-power stereo law.
+    static constexpr double QuarterPi = 0.7853981633974483;
 
     struct Clip {
         WAVEFORMATEX format{};
@@ -49,6 +53,7 @@ class NativeAudio {
         float gain = 1.0f;
         float x = 0.0f, y = 0.0f, z = 0.0f;
         float rolloff = 0.0f;
+        WORD channels = 1;
     };
 
     IXAudio2* engine_ = nullptr;
@@ -58,7 +63,8 @@ class NativeAudio {
     std::vector<std::unique_ptr<Clip>> clips_;
     std::map<std::filesystem::path, int> clipIds_;
     std::vector<Voice> voices_;
-    std::unique_ptr<Clip> musicClip_;
+    // Music shares the decoded clip cache, avoiding synchronous decode on every switch.
+    const Clip* musicClip_ = nullptr;
     IXAudio2SourceVoice* music_ = nullptr;
     bool musicLoop_ = true;
     // Frames skipped at the current music start, for host-owned resume bookkeeping.
@@ -90,7 +96,7 @@ class NativeAudio {
         comOwned_ = SUCCEEDED(com);
         if (FAILED(com) && com != RPC_E_CHANGED_MODE) return !failed("Audio COM initialization", com);
         if (failed("XAudio2 creation", XAudio2Create(&engine_, 0, XAUDIO2_DEFAULT_PROCESSOR))) return false;
-        if (failed("Audio device creation", engine_->CreateMasteringVoice(&master_))) {
+        if (failed("Audio device creation", engine_->CreateMasteringVoice(&master_, OutputChannels))) {
             engine_->Release();
             engine_ = nullptr;
             return false;
@@ -131,6 +137,10 @@ class NativeAudio {
         clip->format.wBitsPerSample = 32;
         clip->format.nBlockAlign = static_cast<WORD>(info.channels * sizeof(float));
         clip->format.nAvgBytesPerSec = info.sample_rate * clip->format.nBlockAlign;
+        // Original music is several minutes long; reserve once instead of repeatedly copying PCM.
+        const auto expectedSamples = static_cast<UINT64>(stb_vorbis_stream_length_in_samples(decoder)) * info.channels;
+        if (expectedSamples <= XAUDIO2_MAX_BUFFER_BYTES / sizeof(float))
+            clip->pcm.reserve(static_cast<std::size_t>(expectedSamples));
         std::array<float, DecodeSamples> scratch{};
         int frames = 0;
         while ((frames = stb_vorbis_get_samples_float_interleaved(decoder, info.channels, scratch.data(), DecodeSamples)) > 0) {
@@ -152,7 +162,7 @@ class NativeAudio {
     }
 
     // Submit persistent PCM storage; callers keep its clip alive until voice destruction.
-    IXAudio2SourceVoice* start(const Clip& clip, float volume, bool loop, UINT32 offsetFrames = 0) {
+    IXAudio2SourceVoice* start(const Clip& clip, float volume, bool loop, UINT32 offsetFrames = 0, const float* matrix = nullptr) {
         if (!initialize()) return nullptr;
         IXAudio2SourceVoice* source = nullptr;
         if (failed("Audio voice creation", engine_->CreateSourceVoice(&source, &clip.format))) return nullptr;
@@ -167,6 +177,7 @@ class NativeAudio {
         const bool loopTail = loop && offsetFrames != 0;
         if (loopTail) { buffer.LoopCount = 0; buffer.Flags = 0; }
         if (failed("Audio gain", source->SetVolume(volume)) ||
+            (matrix && failed("Audio stereo routing", source->SetOutputMatrix(master_, clip.format.nChannels, OutputChannels, matrix))) ||
             failed("Audio submission", source->SubmitSourceBuffer(&buffer))) {
             source->DestroyVoice();
             return nullptr;
@@ -184,7 +195,7 @@ class NativeAudio {
         return source;
     }
 
-    // Approximate inverse distance attenuation, with no panning, Doppler, or HRTF.
+    // Preserve the original inverse-distance gain independently of stereo routing.
     float voiceGain(const Voice& voice) const {
         const double dx = static_cast<double>(voice.x) - listenerX_;
         const double dy = static_cast<double>(voice.y) - listenerY_;
@@ -195,20 +206,43 @@ class NativeAudio {
         return gain(static_cast<float>(static_cast<double>(voice.gain) * effectsGain_ * attenuation));
     }
 
-    // Reapply positions or the global effects slider to already active voices.
-    void refreshEffects() {
-        for (const auto& voice : voices_) failed("Effects gain", voice.source->SetVolume(voiceGain(voice)));
+    // Keep stereo assets' channel separation; positional mono effects use equal power.
+    std::array<float, 4> voiceMatrix(const Voice& voice) const {
+        const auto stereo = spatialGains(static_cast<double>(voice.x) - listenerX_,
+            static_cast<double>(voice.y) - listenerY_, static_cast<double>(voice.z) - listenerZ_, voice.rolloff > 0);
+        if (voice.channels == 1) return {stereo[0], stereo[1], 0.0f, 0.0f};
+        // Stereo clips retain their center volume and never receive a channel boost.
+        return {(std::min)(1.0f, stereo[0] * std::sqrt(2.0f)), 0.0f,
+            0.0f, (std::min)(1.0f, stereo[1] * std::sqrt(2.0f))};
     }
 
-    // Destroy the music voice before discarding its PCM allocation.
+    // Reapply positions, routing or the effects slider to already active voices.
+    void refreshEffects() {
+        for (const auto& voice : voices_) {
+            failed("Effects gain", voice.source->SetVolume(voiceGain(voice)));
+            const auto matrix = voiceMatrix(voice);
+            failed("Effects stereo routing", voice.source->SetOutputMatrix(master_, voice.channels, OutputChannels, matrix.data()));
+        }
+    }
+
+    // Destroy the music voice while leaving decoded PCM in the shared cache.
     void releaseMusic() {
         if (music_) music_->DestroyVoice();
         music_ = nullptr;
-        musicClip_.reset();
+        musicClip_ = nullptr;
         musicOffsetFrames_ = 0;
     }
 
 public:
+    // Compute routing without opening a device; OpenAL's default listener right is +X.
+    static std::array<float, 2> spatialGains(double dx, double dy, double dz, bool spatial = true) {
+        const double distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+        const double pan = spatial && std::isfinite(distance) && distance > 0
+            ? (std::clamp)(dx / distance, -1.0, 1.0) : 0.0;
+        const double angle = (pan + 1.0) * QuarterPi;
+        return {static_cast<float>(std::cos(angle)), static_cast<float>(std::sin(angle))};
+    }
+
     // Construction is silent and does not open an audio device.
     NativeAudio() = default;
     NativeAudio(const NativeAudio&) = delete;
@@ -250,7 +284,10 @@ public:
         voice.y = std::isfinite(y) ? y : 0.0f;
         voice.z = std::isfinite(z) ? z : 0.0f;
         voice.rolloff = std::isfinite(rolloff) ? (std::max)(0.0f, rolloff) : 0.0f;
-        voice.source = start(*clips_[static_cast<std::size_t>(clipId)], voiceGain(voice), loop);
+        const auto& clip = *clips_[static_cast<std::size_t>(clipId)];
+        voice.channels = clip.format.nChannels;
+        const auto matrix = voiceMatrix(voice);
+        voice.source = start(clip, voiceGain(voice), loop, 0, matrix.data());
         if (!voice.source) return -1;
         // Wrap without signed overflow and avoid reusing an active voice identifier.
         do {
@@ -301,6 +338,8 @@ public:
             voice.z = std::isfinite(z) ? z : 0.0f;
             voice.rolloff = std::isfinite(rolloff) ? (std::max)(0.0f, rolloff) : 0.0f;
             failed("Source position gain", voice.source->SetVolume(voiceGain(voice)));
+            const auto matrix = voiceMatrix(voice);
+            failed("Source stereo routing", voice.source->SetOutputMatrix(master_, voice.channels, OutputChannels, matrix.data()));
             return;
         }
     }
@@ -311,6 +350,8 @@ public:
             if (voice.id != voiceId) continue;
             voice.rolloff = std::isfinite(rolloff) ? (std::max)(0.0f, rolloff) : 0.0f;
             failed("Source rolloff gain", voice.source->SetVolume(voiceGain(voice)));
+            const auto matrix = voiceMatrix(voice);
+            failed("Source stereo routing", voice.source->SetOutputMatrix(master_, voice.channels, OutputChannels, matrix.data()));
             return;
         }
     }
@@ -324,7 +365,7 @@ public:
         }
     }
 
-    // Move the listener used for approximate distance attenuation.
+    // Move the listener used for original attenuation and stereo source direction.
     void setListener(float x, float y, float z) {
         listenerX_ = std::isfinite(x) ? x : 0.0f;
         listenerY_ = std::isfinite(y) ? y : 0.0f;
@@ -338,11 +379,11 @@ public:
     // Replace music at its beginning; an unreadable replacement preserves current music.
     bool playMusic(const std::filesystem::path& path, bool loop, double offsetSeconds = 0.0) {
         try {
-            auto clip = decode(path);
-            if (!clip) return false;
+            const int clipId = load(path);
+            if (clipId < 0) return false;
             releaseMusic();
             musicLoop_ = loop;
-            musicClip_ = std::move(clip);
+            musicClip_ = clips_[static_cast<std::size_t>(clipId)].get();
             return seekMusic(offsetSeconds);
         } catch (const std::exception& error) { warning_ = std::string("Music load failed: ") + error.what(); return false; }
     }

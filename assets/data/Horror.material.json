@@ -1,8 +1,0 @@
-{
-  "Horror": {
-    "tex": "Horror",
-    "cull": "none",
-    "depthmask": 0,
-    "blend": "alpha"
-  }
-}

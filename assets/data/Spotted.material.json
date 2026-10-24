@@ -1,8 +1,0 @@
-{
-  "Spotted": {
-    "tex": "Spotted",
-    "cull": "none",
-    "depthmask": 0,
-    "blend": "alpha"
-  }
-}

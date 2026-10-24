@@ -39,13 +39,13 @@ if (Test-Path -LiteralPath $manifestPath) {
     if ($buildManifest.executableSha256 -ne $executableHash) { throw 'Executable does not match its build manifest.' }
     Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $runDirectory 'build-manifest.json')
     New-Item -ItemType Directory -Force (Join-Path $runDirectory 'inputs') | Out-Null
-    foreach ($inputName in @('host.cpp', 'host-display.hpp', 'frame-pacing.hpp', 'tower-restore.hpp', 'native-audio.hpp', 'original-audio.hpp', 'point-sprite-correction.hpp', 'weapon-combat.hpp', 'late-battle-probe.hpp')) {
+    foreach ($inputName in @('host.cpp', 'host-display.hpp', 'frame-pacing.hpp', 'desktop-launch.hpp', 'landscape-menu.hpp', 'high-price-probe.hpp', 'tower-restore.hpp', 'native-audio.hpp', 'original-audio.hpp', 'point-sprite-correction.hpp', 'weapon-combat.hpp', 'late-battle-probe.hpp', 'desktop-save.hpp', 'desktop-controls.hpp', 'desktop-map-menu.hpp', 'desktop-guide.hpp', 'desktop-ui.hpp', 'desktop-achievements.hpp', 'desktop-probe.hpp', 'towermadness.rc.in', 'towermadness.ico')) {
         if (!(Test-Path -LiteralPath (Join-Path $buildDirectory "inputs/$inputName"))) { continue }
         Copy-Item -LiteralPath (Join-Path $buildDirectory "inputs/$inputName") -Destination (Join-Path $runDirectory 'inputs')
     }
 }
 if ($Mode -eq 'play') {
-    Write-Output 'Original PlainPlane: click the field and original pie menu to build; Space sends a wave; the bottom-left original Menu hot zone toggles a host pause; close the window to exit.'
+    Write-Output 'Original PlainPlane: click the field and original pie menu to build; Space pauses, N sends a wave; F1 opens the field guide; F10 opens PC settings.'
     Write-Output 'This direct-play mode uses the host pause and does not persist progress. Use -Mode menu for the original menu. Resize/maximize the window; F6 selects 60/120/unlimited FPS. -Silent disables native audio.'
 }
 if ($Mode -eq 'menu') {
@@ -110,7 +110,13 @@ if ($Mode -eq 'speed' -and @($lines | Where-Object { $_ -match '^ORIGINAL_SPEED_
 }
 if ($Mode -eq 'menuauto' -and $Map -notin @('campaignfull','campaignall')) {
     # Native exit 0 only means the loop returned; require each actual restore/pause leg as well.
-    if ($Map.StartsWith('dlc-')) {
+    if ($Map -eq 'presentcheck') {
+        if ($logText -notmatch 'DESKTOP_PRESENT_DONE ') { $acceptance += 'Desktop presentation checks did not complete' }
+    } elseif ($Map -eq 'motioncheck') {
+        if ($logText -notmatch 'DESKTOP_MOTION_DONE ') { $acceptance += 'Desktop motion checks did not complete' }
+    } elseif ($Map -eq 'desktopcheck') {
+        if ($logText -notmatch 'DESKTOP_CHECK_DONE count=') { $acceptance += 'Desktop interaction checks did not complete' }
+    } elseif ($Map.StartsWith('dlc-')) {
         if ($logText -notmatch ('ORIGINAL_DLC_GUI_DONE .*"map":"' + [regex]::Escape($Map.Substring(4)) + '"')) {
             $acceptance += 'Original DLC GUI did not start the requested map'
         }
@@ -145,7 +151,7 @@ if ($Mode -eq 'menuauto' -and $Map -notin @('campaignfull','campaignall')) {
     }
     $restored = $lines | Where-Object { $_ -match '^ORIGINAL_(LOAD_IBS|LOAD_HOTKEY|SAVE_CONTINUE) bytes=' } | Select-Object -Last 1
     $final = $lines | Where-Object { $_ -match '^ORIGINAL_MENU_FINAL ' } | Select-Object -Last 1
-    if ($Map -in @('options','help','newgame') -or $Map.StartsWith('dlc-')) {
+    if ($Map -in @('options','help','newgame','desktopcheck','motioncheck','presentcheck') -or $Map.StartsWith('dlc-')) {
         # Options has no GAME object; its actual setting changes are checked above.
     } elseif ($restored -and $final -and $restored -match '\{.*\}' ) {
         $restoredState = $Matches[0] | ConvertFrom-Json

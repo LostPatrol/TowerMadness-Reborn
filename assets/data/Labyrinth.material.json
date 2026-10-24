@@ -1,8 +1,0 @@
-{
-  "Labyrinth": {
-    "tex": "Labyrinth",
-    "cull": "none",
-    "depthmask": 0,
-    "blend": "alpha"
-  }
-}

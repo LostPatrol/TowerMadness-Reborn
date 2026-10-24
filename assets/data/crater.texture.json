@@ -1,6 +1,0 @@
-{
-  "type": "pvr",
-  "file": "crater",
-  "mag": "linear",
-  "min": "linear_mipmap_nearest"
-}

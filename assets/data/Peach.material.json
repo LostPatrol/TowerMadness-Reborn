@@ -1,8 +1,0 @@
-{
-  "Peach": {
-    "tex": "Peach",
-    "cull": "none",
-    "depthmask": 0,
-    "blend": "alpha"
-  }
-}

@@ -1,6 +1,6 @@
 # Build a separate Win32 host that executes the original x86 ELF code.
 cmake_minimum_required(VERSION 3.20)
-project(TowerMadnessX86Probe LANGUAGES CXX)
+project(TowerMadnessX86Probe LANGUAGES CXX RC)
 if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
     message(FATAL_ERROR "The original ELF requires a native Windows x86 host.")
 endif()
@@ -10,7 +10,14 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 # directory's original host.cpp. build.ps1 restates -DX86_HOST_SOURCE on every configure,
 # so a stale cache entry can never silently decide which source is compiled.
 set(X86_HOST_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/host.cpp" CACHE FILEPATH "Absolute path of the host.cpp translation unit to compile")
-add_executable(TowerMadnessX86Probe "${X86_HOST_SOURCE}")
+add_executable(TowerMadnessX86Probe WIN32 "${X86_HOST_SOURCE}")
+# Prefer resources frozen beside the selected host translation unit.
+get_filename_component(X86_RESOURCE_DIRECTORY "${X86_HOST_SOURCE}" DIRECTORY)
+if(NOT EXISTS "${X86_RESOURCE_DIRECTORY}/towermadness.rc.in")
+    set(X86_RESOURCE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+endif()
+configure_file("${X86_RESOURCE_DIRECTORY}/towermadness.rc.in" "${CMAKE_CURRENT_BINARY_DIR}/towermadness.rc" @ONLY)
+target_sources(TowerMadnessX86Probe PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/towermadness.rc")
 # host.cpp uses the quoted include "../../third_party/json.hpp", written relative to this
 # directory. Keeping this directory on the include path makes that same include resolve to
 # the original third_party/json.hpp when the compiled copy lives somewhere else.

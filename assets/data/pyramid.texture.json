@@ -1,6 +1,0 @@
-{
-  "type": "pvr",
-  "file": "pyramid",
-  "mag": "linear",
-  "min": "linear_mipmap_nearest"
-}

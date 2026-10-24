@@ -1,6 +1,0 @@
-{
-  "type": "pvr",
-  "file": "lightning",
-  "mag": "linear",
-  "min": "linear_mipmap_nearest"
-}

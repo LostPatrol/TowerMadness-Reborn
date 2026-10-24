@@ -1,8 +1,0 @@
-{
-  "Dice": {
-    "tex": "Dice",
-    "cull": "none",
-    "depthmask": 0,
-    "blend": "alpha"
-  }
-}

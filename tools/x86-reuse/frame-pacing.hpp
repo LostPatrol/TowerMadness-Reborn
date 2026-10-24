@@ -48,6 +48,9 @@ public:
         LARGE_INTEGER frequency{}; QueryPerformanceFrequency(&frequency);
         frequency_ = static_cast<double>(frequency.QuadPart);
         started_ = previous_ = windowStart_ = counter();
+        // Match optional frame CSV times to resource and screenshot spans on the same monotonic clock.
+        log("FRAME_CLOCK qpcStart=" + std::to_string(static_cast<LONGLONG>(started_))
+            + " qpcFrequency=" + std::to_string(static_cast<LONGLONG>(frequency_)));
         timer_ = CreateWaitableTimerExW(nullptr, nullptr, HighResolutionTimer, TIMER_MODIFY_STATE | SYNCHRONIZE);
         if (!timer_) timer_ = CreateWaitableTimerW(nullptr, FALSE, nullptr);
         int requested = 60;

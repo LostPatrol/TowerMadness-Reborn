@@ -1,8 +1,0 @@
-{
-  "Kelvin": {
-    "tex": "Kelvin",
-    "cull": "none",
-    "depthmask": 0,
-    "blend": "alpha"
-  }
-}

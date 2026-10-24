@@ -1,12 +1,47 @@
-# Keep generated builds, analysis tools, and original packages outside source history.
+# Keep local agent instructions, research, and analysis tools out of the repository.
+/agent/
+/docs/
+AGENTS.md
+MEMORY.md
+/.agents/
+/.codex/
+/.rea/
+/rea/
+/REA/
+/tools/x86-reuse/ghidra/
+/tools/x86-reuse/inspect-elf.mjs
+*.gpr
+*.rep/
+*.idb
+*.i64
+
+# The retired reconstruction route is retained locally for reference only.
+/src/
+/CMakeLists.txt
+/tools/build.ps1
+/tools/package-release.ps1
+/assets/audio/
+/assets/data/
+/assets/meshes/
+/assets/samples/
+/assets/manifest.json
+
+# Local dependencies, original packages, builds, and player data.
 /build/
 /release/
 /third_party/
-/agent/codex/
-/agent/grok/
-/agent/dsh/
-/agent/claude/
 /data/
-/*.apk
+*.apk
+*.ipa
+node_modules/
+/package.json
+/package-lock.json
+
+# Local editor settings, caches, and diagnostics.
+/.vs/
+/.vscode/
+/.idea/
+__pycache__/
+*.pyc
 *.user
 *.log

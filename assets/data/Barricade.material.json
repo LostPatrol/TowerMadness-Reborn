@@ -1,8 +1,0 @@
-{
-  "Barricade": {
-    "tex": "Barricade",
-    "cull": "none",
-    "depthmask": 0,
-    "blend": "alpha"
-  }
-}

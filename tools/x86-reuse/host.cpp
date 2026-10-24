@@ -31,6 +31,15 @@
 #include <vector>
 #include "original-audio.hpp"
 
+// Desktop launcher definitions follow the anonymous host implementation.
+namespace desktop_launch {
+void restoreWindow();
+void toggleFullscreen();
+bool openSaveFolder();
+bool exportDiagnostics(bool reveal=true);
+void saveSettings();
+}
+
 namespace {
 // ELF32 structures use the original four-byte ABI and never host-sized fields.
 struct ElfHeader {
@@ -43,6 +52,8 @@ struct Symbol { std::uint32_t name, value, size; unsigned char info, other; std:
 struct Relocation { std::uint32_t offset, info; };
 struct Image {
     std::string name; std::vector<unsigned char> file; unsigned char* base = nullptr;
+    // PT_LOAD includes zero-filled class metadata beyond the bytes stored in the ELF file.
+    std::uint32_t memorySize = 0;
     std::vector<Section> sections; std::map<std::string, Symbol> exports;
 };
 // The process owns all image mappings, import traps, and experimental platform hooks.
@@ -54,6 +65,9 @@ std::filesystem::path convertedTextures;
 // Interactive (non-scripted) menu mode save/continue hotkeys, defined after the file helpers.
 void hotkeySaveState(void* userMenu);
 void hotkeyLoadState(void* userMenu);
+void desktopRefineProbe(void* menu,const std::filesystem::path& output);
+void desktopMotionProbe(void* menu,const std::filesystem::path& output);
+void desktopPresentProbe(void* menu,const std::filesystem::path& output);
 std::FILE* logFile = nullptr;
 // The host creates a legacy OpenGL context; native audio is optional for scripted runs.
 HWND windowHandle = nullptr;
@@ -63,7 +77,6 @@ HGLRC windowGl = nullptr;
 void* activeGame = nullptr;
 struct HostTouch { float x = 0, y = 0, startX = 0, startY = 0, previousX = 0, previousY = 0; int tapCount = 1; };
 // Small pointer jitter remains a tap; carousel drags end without activating the selected map.
-constexpr float TouchTapSlop = 5.0f;
 HostTouch hostTouch;
 // Wheel gestures expose two stable UITouch identities to the original pinch logic.
 HostTouch hostPinchTouch;
@@ -110,13 +123,23 @@ void log(const std::string& message) {
     std::fflush(stream);
 }
 
+// Presentation hooks are defined after the original object and menu adapters.
+void renderDesktopOverlay();
+void updateDesktopSave();
+namespace desktop_controls { void updateZoom(); void warmTowerModels(); }
+
 #include "host-display.hpp"
 #include "frame-pacing.hpp"
 // Only the active presentation loop owns timing; simulation retains the original realtime source.
 std::unique_ptr<HostFramePacer> framePacer;
 
+#include "desktop-save.hpp"
+
 /** Finish a timed frame and expose measured throughput in the normal window title. */
 void finishHostFrame() {
+    desktop_controls::updateZoom();
+    desktop_controls::warmTowerModels();
+    updateDesktopSave();
     if (!framePacer) return;
     framePacer->finishFrame();
     static ULONGLONG nextTitle = 0;
@@ -125,8 +148,8 @@ void finishHostFrame() {
     nextTitle = now + 1000;
     wchar_t title[128]{};
     const auto target = framePacer->targetFPS();
-    if (target) std::swprintf(title, std::size(title), L"TowerMadness | %.1f FPS | cap %d | F6: 60/120/unlimited", framePacer->recentFPS(), target);
-    else std::swprintf(title, std::size(title), L"TowerMadness | %.1f FPS | unlimited | F6: 60/120/unlimited", framePacer->recentFPS());
+    if (target) std::swprintf(title, std::size(title), L"TowerMadness Windows 0.7 | %.1f FPS | cap %d | F6: 60/120/unlimited", framePacer->recentFPS(), target);
+    else std::swprintf(title, std::size(title), L"TowerMadness Windows 0.7 | %.1f FPS | unlimited | F6: 60/120/unlimited", framePacer->recentFPS());
     SetWindowTextW(windowHandle, title);
 }
 
@@ -227,6 +250,7 @@ void mapImage(const std::filesystem::path& path) {
         const auto* segment = reinterpret_cast<const ProgramHeader*>(image->file.data() + header->phoff + index * header->phsize);
         if (segment->type == LoadSegment) size = std::max(size, segment->vaddr + segment->memsz);
     }
+    image->memorySize = size;
     image->base = static_cast<unsigned char*>(VirtualAlloc(nullptr, (size + PageSize - 1) & ~(PageSize - 1), MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE));
     if (!image->base) throw std::runtime_error("Native image mapping failed");
     for (unsigned index = 0; index < header->phnum; ++index) {
@@ -396,6 +420,10 @@ void installHook(const std::string& name, void* replacement) {
 
 #include "tower-restore.hpp"
 #include "point-sprite-correction.hpp"
+#include "landscape-menu.hpp"
+#include "desktop-map-menu.hpp"
+#include "desktop-controls.hpp"
+#include "desktop-guide.hpp"
 
 /** Preserve the cdecl argument stack while calling the driver's stdcall entry. */
 void* driverBridge(void* target, unsigned words) {
@@ -415,8 +443,41 @@ void* driverBridge(void* target, unsigned words) {
 
 /** Route Windows input through the unchanged original touch handlers. */
 LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM first, LPARAM second) {
-    if (message == WM_CLOSE) { DestroyWindow(window); return 0; }
+    if (message == WM_CLOSE) {
+        // Only human menu sessions ask; bounded verification runs remain unattended.
+        if (originalMenu && std::getenv("TOWERMADNESS_INTERACTIVE")) {
+            void* current = *reinterpret_cast<void**>(static_cast<unsigned char*>(originalMenu) + 0x15c);
+            const bool running = current && !*reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(originalMenu) + 4)
+                && !desktop_controls::isPaused(current)
+                && !reinterpret_cast<int(__cdecl*)(void*)>(requireExport("GAME_hasEnded"))(current);
+            if (!desktop_save::confirmExit(window, current != nullptr, &saveDesktopGame, originalMenu)) {
+                // Modal waiting is not battle time; retain menu/desktop pause ownership on return.
+                if (running) reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_resume"))(current);
+                return 0;
+            }
+        }
+        DestroyWindow(window); return 0;
+    }
     if (message == WM_DESTROY) { PostQuitMessage(0); return 0; }
+    if (desktopOverlayInput(window, message, first, second)) return 0;
+    // Paused battles retain desktop pages and checkpoint keys, but cannot issue world commands.
+    if (void* current = desktop_controls::game(true); desktop_controls::isPaused(current)) {
+        const bool worldPointer = message >= WM_MOUSEFIRST && message <= WM_MOUSELAST;
+        const int key=static_cast<int>(first);
+        const bool command = message == WM_KEYDOWN &&
+            (key == desktop_controls::keys[desktop_controls::Wave] || key == desktop_controls::keys[desktop_controls::Upgrade]
+             || key == desktop_controls::keys[desktop_controls::RotateLeft] || key == desktop_controls::keys[desktop_controls::RotateRight]
+             || key == desktop_controls::keys[desktop_controls::ResetCamera]);
+        if (worldPointer || command) return 0;
+    }
+    if (desktop_controls::input(window, message, first, second)) return 0;
+    if (message == WM_DPICHANGED) {
+        // Windows supplies the physical rectangle when the window moves between DPI scales.
+        const auto* bounds = reinterpret_cast<const RECT*>(second);
+        SetWindowPos(window, nullptr, bounds->left, bounds->top, bounds->right - bounds->left,
+            bounds->bottom - bounds->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        return 0;
+    }
     if (message == WM_KEYDOWN && first == VK_F6 && framePacer && !(second & (1LL << 30))) {
         const int current = framePacer->targetFPS();
         framePacer->configure(current == 60 ? 120 : current == 120 ? 0 : 60);
@@ -431,35 +492,20 @@ LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM first, LPARAM
     }
     if (message == WM_SIZE && first != SIZE_MINIMIZED) {
         hostDisplay.resize(LOWORD(second), HIWORD(second));
+        if (originalMenu) {
+            reinterpret_cast<void(__cdecl*)(void*, float, float)>(requireExport("MENU_setResolution"))(
+                originalMenu, static_cast<float>(LogicalWidth), static_cast<float>(LogicalHeight));
+            if (void* world = *reinterpret_cast<void**>(static_cast<unsigned char*>(originalMenu) + 0x160))
+                reinterpret_cast<void(__cdecl*)(void*, float, float)>(requireExport("MENUWORLD_setResolution"))(
+                    world, static_cast<float>(LogicalWidth), static_cast<float>(LogicalHeight));
+            if (void* game = *reinterpret_cast<void**>(static_cast<unsigned char*>(originalMenu) + 0x15c))
+                reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("GAME_setResolution"))(game, LogicalWidth, LogicalHeight);
+        } else if (activeGame) {
+            reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("GAME_setResolution"))(activeGame, LogicalWidth, LogicalHeight);
+        }
         if (windowGl) hostViewport(0, 0, LogicalWidth, LogicalHeight);
         log("WINDOW_RESIZE client=" + std::to_string(hostDisplay.width) + "x" + std::to_string(hostDisplay.height)
             + " viewport=" + std::to_string(hostDisplay.viewportWidth) + "x" + std::to_string(hostDisplay.viewportHeight));
-        return 0;
-    }
-    if (activeGame && message == WM_MOUSEWHEEL) {
-        const bool menuShowing = originalMenu && *reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(originalMenu) + 4) != 0;
-        void* game = originalMenu ? *reinterpret_cast<void**>(static_cast<unsigned char*>(originalMenu) + 0x15c) : activeGame;
-        if (!game || menuShowing || GetCapture() == window) return 0;
-        // A symmetric nonzero span lets the original code own zoom rate and camera bounds.
-        constexpr float PinchHalfSpan = 80.0f, WheelSpanStep = 8.0f;
-        POINT center{static_cast<short>(LOWORD(second)), static_cast<short>(HIWORD(second))};
-        ScreenToClient(window, &center);
-        float centerX = static_cast<float>(center.x), centerY = static_cast<float>(center.y);
-        if (!hostDisplay.pointer(centerX, centerY)) return 0;
-        const float steps = static_cast<short>(HIWORD(first)) / 120.0f;
-        const float delta = std::clamp(steps * WheelSpanStep, -PinchHalfSpan / 2, PinchHalfSpan / 2);
-        hostTouchCount = 2;
-        hostTouch = HostTouch{}; hostPinchTouch = HostTouch{};
-        hostTouch.x = hostTouch.previousX = centerX - PinchHalfSpan;
-        hostPinchTouch.x = hostPinchTouch.previousX = centerX + PinchHalfSpan;
-        hostTouch.y = hostTouch.previousY = hostPinchTouch.y = hostPinchTouch.previousY = centerY;
-        hostTouch.tapCount = hostPinchTouch.tapCount = 0;
-        reinterpret_cast<void(__cdecl*)(void*, void*)>(findExport("GAME_touchesBegan"))(game, &hostTouchSet);
-        hostTouch.x -= delta; hostPinchTouch.x += delta;
-        reinterpret_cast<void(__cdecl*)(void*, void*)>(findExport("GAME_touchesMoved"))(game, &hostTouchSet);
-        reinterpret_cast<void(__cdecl*)(void*, void*)>(findExport("GAME_touchesEnded"))(game, &hostTouchSet);
-        hostTouchCount = 1;
-        log("WINDOWS_WHEEL pinchDelta=" + std::to_string(delta));
         return 0;
     }
     if (activeGame && (message == WM_LBUTTONDOWN || message == WM_LBUTTONUP || (message == WM_MOUSEMOVE && (first & MK_LBUTTON)))) {
@@ -467,21 +513,37 @@ LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM first, LPARAM
         float pointerY = static_cast<float>(static_cast<short>(HIWORD(second)));
         const bool inside = hostDisplay.pointer(pointerX, pointerY);
         if (!inside && GetCapture() != window) return 0;
+        desktop_controls::hudTouch(pointerX, pointerY);
         hostTouch.previousX = hostTouch.x; hostTouch.previousY = hostTouch.y;
         hostTouch.x = pointerX;
         hostTouch.y = pointerY;
         if (message == WM_LBUTTONDOWN) {
+            desktop_controls::pointerDown = true; desktop_controls::dragging = false;
+            desktop_controls::pressPixel = POINT{static_cast<short>(LOWORD(second)), static_cast<short>(HIWORD(second))};
             hostTouch.startX = hostTouch.x; hostTouch.startY = hostTouch.y; hostTouch.tapCount = 1;
             hostTouch.previousX = hostTouch.x; hostTouch.previousY = hostTouch.y;
         } else {
-            const float dx = hostTouch.x - hostTouch.startX, dy = hostTouch.y - hostTouch.startY;
-            if (dx * dx + dy * dy > TouchTapSlop * TouchTapSlop) hostTouch.tapCount = 0;
+            if (!desktop_controls::pointerDown) return 0;
+            const float dx = static_cast<float>(static_cast<short>(LOWORD(second)) - desktop_controls::pressPixel.x);
+            const float dy = static_cast<float>(static_cast<short>(HIWORD(second)) - desktop_controls::pressPixel.y);
+            // Original GAME_touchesMoved marks a drag even at zero movement; suppress jitter before dispatch.
+            const auto dpi = reinterpret_cast<UINT(WINAPI*)(HWND)>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
+            const float slop = desktop_controls::ClickSlopPixels * (dpi ? dpi(window) / 96.0f : 1.0f);
+            if (dx * dx + dy * dy > slop * slop) desktop_controls::dragging = true;
+            if (desktop_controls::dragging) hostTouch.tapCount = 0;
+            else if (message == WM_MOUSEMOVE) return 0;
         }
         const bool menuShowing = originalMenu && *reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(originalMenu) + 4) != 0;
         void* currentGame = originalMenu ? *reinterpret_cast<void**>(static_cast<unsigned char*>(originalMenu) + 0x15c) : activeGame;
+        if (!menuShowing && desktop_controls::dragging && message == WM_MOUSEMOVE) {
+            hostTouch.x = hostTouch.startX + (pointerX - hostTouch.startX) * desktop_controls::dragSensitivity;
+            hostTouch.y = hostTouch.startY + (pointerY - hostTouch.startY) * desktop_controls::dragSensitivity;
+        }
         const char* phase = message == WM_LBUTTONDOWN ? "down" : message == WM_LBUTTONUP ? "up" : "move";
+        // Match native sidebar press feedback to the same logical hit coordinates and tap cancellation.
+        if (menuShowing && !landscapeMenuPointer(message, pointerX, pointerY) && message == WM_LBUTTONUP) hostTouch.tapCount = 0;
         if (message == WM_LBUTTONDOWN) SetCapture(window);
-        if (message == WM_LBUTTONUP) ReleaseCapture();
+        if (message == WM_LBUTTONUP) { desktop_controls::pointerDown = false; ReleaseCapture(); }
         log(std::string("WINDOWS_POINTER ") + phase + " " + std::to_string(hostTouch.x) + "," + std::to_string(hostTouch.y));
         if (message == WM_LBUTTONUP) {
             // The original EAGLView IMP routes to MENU_handleTouchEnded or GAME_touchesEnded by itself.
@@ -497,10 +559,15 @@ LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM first, LPARAM
         }
         return 0;
     }
-    if (activeGame && message == WM_KEYDOWN && first == VK_SPACE) {
+    if (activeGame && message == WM_KEYDOWN && first == static_cast<WPARAM>(desktop_controls::keys[desktop_controls::Pause])) {
+        if (!(second & (1LL << 30))) desktop_controls::toggleInGamePause();
+        return 0;
+    }
+    if (activeGame && message == WM_KEYDOWN && first == static_cast<WPARAM>(desktop_controls::keys[desktop_controls::Wave])) {
         void* currentGame = originalMenu ? *reinterpret_cast<void**>(static_cast<unsigned char*>(originalMenu) + 0x15c) : activeGame;
         if (currentGame) {
-            log("WINDOWS_KEY Space -> original GAME_sendNextWave");
+            if (!desktop_controls::game() || (second & (1LL << 30))) return 0;
+            log("WINDOWS_KEY Wave -> original GAME_sendNextWave");
             reinterpret_cast<void(__cdecl*)(void*)>(findExport("GAME_sendNextWave"))(currentGame);
         }
         return 0;
@@ -510,6 +577,7 @@ LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM first, LPARAM
         void* currentGame = *reinterpret_cast<void**>(static_cast<unsigned char*>(originalMenu) + 0x15c);
         const void* page = *reinterpret_cast<void**>(originalMenu);
         if (currentGame) {
+            desktop_controls::pausedGame = nullptr;
             reinterpret_cast<void(__cdecl*)(void*)>(findExport("MENU_backToMainMenu"))(originalMenu);
             reinterpret_cast<void(__cdecl*)(void*)>(findExport("MENU_show"))(originalMenu);
         } else if (page && page == findExport("startGamePage")) {
@@ -520,6 +588,7 @@ LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM first, LPARAM
     }
     // Interactive menu mode: F5 saves through the original OBS path, F9 restores it.
     if (activeGame && message == WM_KEYDOWN && originalMenu && (first == VK_F5 || first == VK_F9)) {
+        if (second & (1LL << 30)) return 0;
         log(std::string("WINDOWS_KEY ") + (first == VK_F5 ? "F5 save" : "F9 continue"));
         if (first == VK_F5) hotkeySaveState(originalMenu); else hotkeyLoadState(originalMenu);
         return 0;
@@ -531,8 +600,10 @@ LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM first, LPARAM
 void createGraphics() {
     WNDCLASSW definition{}; definition.lpfnWndProc = windowProcedure; definition.hInstance = GetModuleHandleW(nullptr);
     definition.lpszClassName = L"TowerMadnessOriginalX86Probe"; definition.style = CS_OWNDC;
+    definition.hIcon = LoadIconW(definition.hInstance, MAKEINTRESOURCEW(1));
+    definition.hCursor = desktop_controls::cursor();
     RegisterClassW(&definition);
-    // Resize the framebuffer while preserving the original portrait layout and input space.
+    // The original engine receives the same expanded canvas used by pointer conversion.
     constexpr DWORD WindowStyle = WS_OVERLAPPEDWINDOW;
     int initialWidth = LogicalWidth, initialHeight = LogicalHeight;
     if (const char* dimensions = std::getenv("TOWERMADNESS_WINDOW")) {
@@ -562,6 +633,21 @@ void createGraphics() {
     if (reinterpret_cast<std::uintptr_t>(swapInterval) > 3 && reinterpret_cast<std::uintptr_t>(swapInterval) != static_cast<std::uintptr_t>(-1))
         reinterpret_cast<BOOL(WINAPI*)(int)>(swapInterval)(0);
     log(std::string("NATIVE_OPENGL ") + reinterpret_cast<const char*>(glGetString(GL_VERSION)));
+    // Build private desktop glyphs before showing the first menu, avoiding a visible first-use stall.
+    desktop_map::begin(); desktop_map::text(0,0,""); desktop_map::end();
+    desktop_launch::restoreWindow();
+}
+
+/** Deliver verification gestures through the same physical pointer route as player input. */
+LRESULT verificationMessage(HWND window, UINT message, WPARAM first, LPARAM second) {
+    if (message == WM_LBUTTONDOWN || message == WM_LBUTTONUP || message == WM_MOUSEMOVE) {
+        const int x = static_cast<short>(LOWORD(second)), y = static_cast<short>(HIWORD(second));
+        const bool menuShowing = originalMenu && *reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(originalMenu) + 4);
+        const POINT menuPoint = menuVerificationPoint(x, y);
+        const POINT point = menuShowing ? hostDisplay.clientPoint(menuPoint.x, menuPoint.y) : hostDisplay.sceneProbePoint(x, y);
+        second = MAKELPARAM(point.x, point.y);
+    }
+    return SendMessageW(window, message, first, second);
 }
 
 /** Preserve GLES float projection semantics through desktop double entry points. */
@@ -647,10 +733,27 @@ void redirectGs(const std::filesystem::path& path) {
     log("SINGLE_THREAD_GS_ADAPTATIONS " + std::to_string(count));
 }
 
+// Resource timings distinguish file access, image decode, and driver upload stalls.
+struct ResourceTiming {
+    LARGE_INTEGER started{};
+    std::string kind,name;
+    /** Start a monotonic span without changing the game clock. */
+    ResourceTiming(const char* phase,std::string resource):kind(phase),name(std::move(resource)) { QueryPerformanceCounter(&started); }
+    /** Report slow resource work for correlation with the optional presentation CSV. */
+    ~ResourceTiming() {
+        LARGE_INTEGER ended{},frequency{}; QueryPerformanceCounter(&ended); QueryPerformanceFrequency(&frequency);
+        const double ms=(ended.QuadPart-started.QuadPart)*1000.0/frequency.QuadPart;
+        if(ms>=2.0) log("RESOURCE_TIME phase="+kind+" asset="+name+" ms="+std::to_string(ms)
+            +" qpcStart="+std::to_string(started.QuadPart)+" qpcEnd="+std::to_string(ended.QuadPart)
+            +" qpcFrequency="+std::to_string(frequency.QuadPart));
+    }
+};
+
 /** Read original APK assets through the recovered VFS ABI and heap ownership. */
 int __cdecl nativeFile(const char* name, const char* extension, char** data, int* length) {
     std::string filename = name;
     if (extension && *extension) filename += "." + std::string(extension);
+    ResourceTiming resourceTiming("file",filename);
     const auto path = assetsDirectory / filename;
     std::ifstream input(path, std::ios::binary);
     if (!input) { log("ASSET_MISSING " + filename); return 0; }
@@ -677,15 +780,20 @@ FileNode* __cdecl nativeFiles(const char* extension) {
     return first;
 }
 
-/** Upload the same packaged PNG through Windows WIC instead of NSBundle/UIKit. */
+/** Upload packaged PNGs through WIC without altering their original artwork. */
 int __cdecl nativePng(const char* name) {
     if (!name) return 0;
+    ResourceTiming resourceTiming("png-total",name);
     std::filesystem::path filename = std::string(name) + ".pvr.png";
     if (!std::filesystem::exists(convertedTextures / filename)) filename = std::string(name) + ".png";
     const auto path = std::filesystem::exists(convertedTextures / filename) ? convertedTextures / filename : assetsDirectory / filename;
     IWICImagingFactory* factory = nullptr; IWICBitmapDecoder* decoder = nullptr;
     IWICBitmapFrameDecode* frame = nullptr; IWICFormatConverter* converter = nullptr;
-    HRESULT status = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory));
+    // A process-owned WIC factory avoids repeated COM activation for every original texture.
+    static IWICImagingFactory* sharedFactory = nullptr;
+    HRESULT status = S_OK;
+    if (!sharedFactory) status = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&sharedFactory));
+    factory = sharedFactory;
     if (SUCCEEDED(status)) status = factory->CreateDecoderFromFilename(path.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &decoder);
     if (SUCCEEDED(status)) status = decoder->GetFrame(0, &frame);
     if (SUCCEEDED(status)) status = factory->CreateFormatConverter(&converter);
@@ -693,14 +801,19 @@ int __cdecl nativePng(const char* name) {
     UINT width = 0, height = 0;
     if (SUCCEEDED(status)) status = converter->GetSize(&width, &height);
     std::vector<unsigned char> pixels(static_cast<std::size_t>(width) * height * 4);
-    if (SUCCEEDED(status)) status = converter->CopyPixels(nullptr, width * 4, static_cast<UINT>(pixels.size()), pixels.data());
     if (SUCCEEDED(status)) {
+        ResourceTiming decodeTiming("png-decode",name);
+        status = converter->CopyPixels(nullptr, width * 4, static_cast<UINT>(pixels.size()), pixels.data());
+    }
+    if (SUCCEEDED(status)) {
+        ResourceTiming uploadTiming("texture-upload",name);
+        // Skybox UVs repeat across cube faces; a texture-space gradient exposes their boundaries.
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
         if (auto mipmap = reinterpret_cast<void(APIENTRY*)(GLenum)>(wglGetProcAddress("glGenerateMipmap"))) mipmap(GL_TEXTURE_2D);
         log("PNG_UPLOAD " + filename.string() + " " + std::to_string(width) + "x" + std::to_string(height));
     } else log("PNG_DECODE_FAILED " + path.string() + " hr=" + std::to_string(status));
-    if (converter) converter->Release(); if (frame) frame->Release(); if (decoder) decoder->Release(); if (factory) factory->Release();
+    if (converter) converter->Release(); if (frame) frame->Release(); if (decoder) decoder->Release();
     return SUCCEEDED(status) ? 1 : 0;
 }
 
@@ -710,13 +823,13 @@ const char* __cdecl nativeTranslate(const char* name) { return name; }
 /** Suppress direct-scene menu rendering where no original MENU object exists. */
 void __cdecl silentPlayback() {}
 
-/** Render a shipped original HTML page with the user's Windows browser. */
+/** Render a shipped original HTML page inside the desktop game window. */
 bool openOriginalPage(const char* filename) {
     const auto path = assetsDirectory / filename;
     if (!std::filesystem::exists(path)) { log("PLATFORM_HELP_MISSING " + path.string()); return false; }
-    const auto result = reinterpret_cast<std::intptr_t>(ShellExecuteW(windowHandle, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
-    log("PLATFORM_HELP page=" + std::string(filename) + " launched=" + std::to_string(result > 32));
-    return result > 32;
+    setDesktopGuide(filename);
+    log("PLATFORM_HELP page=" + std::string(filename) + " launched=1 embedded=1");
+    return true;
 }
 
 /** Replace the original UIKit-only Credits presentation with its unchanged HTML content. */
@@ -883,8 +996,8 @@ const char* cfStringBytes(const void* value) {
         bool mappedObject = false, mappedClass = false;
         for (const auto& image : images) {
             const auto base = reinterpret_cast<std::uintptr_t>(image->base);
-            mappedObject |= address >= base && address < base + image->file.size();
-            mappedClass |= isa >= base && isa < base + image->file.size();
+            mappedObject |= address >= base && address < base + image->memorySize;
+            mappedClass |= isa >= base && isa < base + image->memorySize;
         }
         if (mappedObject && mappedClass) {
             const auto bytes = reinterpret_cast<const char* const*>(value)[2];
@@ -1039,7 +1152,7 @@ bool inGuestImage(const void* pointer) {
     const auto address = reinterpret_cast<std::uintptr_t>(pointer);
     for (const auto& image : images) {
         const auto base = reinterpret_cast<std::uintptr_t>(image->base);
-        if (address >= base && address < base + image->file.size()) return true;
+        if (address >= base && address < base + image->memorySize) return true;
     }
     return false;
 }
@@ -1194,7 +1307,7 @@ std::uint32_t __cdecl nativeMessage(void* receiver, const char* selector, ...) {
         std::memcpy(&volume, &raw, sizeof(volume));
         if (name == "setBaseVolume:") original_audio::baseVolume = volume;
         if (name == "setTemporaryVolumeOverride:") original_audio::temporaryVolume = volume;
-        if (name == "fadeToVolume:") original_audio::fadeTarget = volume;
+        if (name == "fadeToVolume:") original_audio::setFadeTarget(volume);
         original_audio::refreshMusic();
         log("PLATFORM_MUSIC volume=" + std::to_string(volume) + " selector=" + name);
         return 0;
@@ -1783,10 +1896,14 @@ void __cdecl nativeMessageStruct(float* point, void* receiver, const char* selec
     const std::string name = selectorName(selector);
     if (receiver == &hostTouch || receiver == &hostPinchTouch) {
         const auto& touch = *static_cast<HostTouch*>(receiver);
-        if (name == "locationInView:") { point[0] = touch.x; point[1] = touch.y; return; }
-        if (name == "previousLocationInView:") { point[0] = touch.previousX; point[1] = touch.previousY; return; }
+        if (name == "locationInView:") { point[0] = touch.x; point[1] = touch.y; menuTouchPoint(point[0], point[1]); return; }
+        if (name == "previousLocationInView:") { point[0] = touch.previousX; point[1] = touch.previousY; menuTouchPoint(point[0], point[1]); return; }
     }
-    if (receiver == hostView.data() && name == "bounds") { point[0] = point[1] = 0; point[2] = 480; point[3] = 800; return; }
+    if (receiver == hostView.data() && name == "bounds") {
+        point[0] = point[1] = 0;
+        point[2] = static_cast<float>(LogicalWidth); point[3] = static_cast<float>(LogicalHeight);
+        return;
+    }
     log("UNIMPLEMENTED_OBJC_STRUCT_SELECTOR " + name); ExitProcess(32);
 }
 
@@ -1908,6 +2025,8 @@ int __cdecl nativeGettimeofday(std::int32_t* value, void*) {
 
 /** Save pixels produced by the original renderer without substituting a scene. */
 void capture(const std::filesystem::path& path, unsigned width, unsigned height) {
+    // Test screenshots include GPU readback and PNG encoding; identify their cost separately from gameplay.
+    ResourceTiming captureTiming("capture", path.filename().string());
     width = static_cast<unsigned>(hostDisplay.width); height = static_cast<unsigned>(hostDisplay.height);
     std::vector<unsigned char> pixels(static_cast<std::size_t>(width) * height * 4), flipped(pixels.size());
     glPixelStorei(GL_PACK_ALIGNMENT, 1); glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
@@ -1937,6 +2056,7 @@ void capture(const std::filesystem::path& path, unsigned width, unsigned height)
 
 /** Fraction of sampled framebuffer pixels that are not near-white; proves a page actually rendered. */
 double frameNonWhiteFraction(unsigned width, unsigned height) {
+    width = static_cast<unsigned>(hostDisplay.width); height = static_cast<unsigned>(hostDisplay.height);
     std::vector<unsigned char> pixels(static_cast<std::size_t>(width) * height * 4);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
@@ -2001,12 +2121,8 @@ std::filesystem::path resolveDataDirectory(const std::filesystem::path& package,
 }
 
 /** Persist the exact original OBS bytes produced by GAME_save (no host-side rewriting). */
-void writeSaveState(const std::filesystem::path& path, const void* bytes, std::uint32_t length) {
-    std::filesystem::create_directories(path.parent_path());
-    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
-    stream.write(reinterpret_cast<const char*>(&SaveMagic), 4);
-    stream.write(reinterpret_cast<const char*>(&length), 4);
-    stream.write(static_cast<const char*>(bytes), length);
+bool writeSaveState(const std::filesystem::path& path, const void* bytes, std::uint32_t length, bool backups = true) {
+    return desktop_save::writeCheckpoint(path, bytes, length, SaveMagic, backups);
 }
 
 /** Read a previously persisted original OBS byte stream. */
@@ -2082,21 +2198,38 @@ void installRestoredGame(void* userMenu, void* loaded) {
 
 /** F5 in the interactive menu: persist the running GAME through the original GAME_save OBS bytes. */
 void hotkeySaveState(void* userMenu) {
-    if (!userMenu) return;
+    saveDesktopGame(userMenu);
+}
+
+/** Save original OBS bytes and report the actual committed result to the player. */
+bool saveDesktopCheckpoint(void* userMenu, bool manual) {
+    if (!userMenu) return false;
     void* game = *reinterpret_cast<void**>(static_cast<unsigned char*>(userMenu) + 0x15c);
-    if (!game) { log("ORIGINAL_SAVE_HOTKEY_NOGAME"); return; }
+    if (!game) { desktop_save::notify(false, L"No active game to save."); return false; }
     void* obs = reinterpret_cast<void*(__cdecl*)(void*)>(findExport("GAME_save"))(game);
+    if (!obs) { desktop_save::lastError = L"The original game did not produce a checkpoint."; desktop_save::notify(false, desktop_save::lastError); return false; }
     const auto* header = reinterpret_cast<const std::uint32_t*>(obs);
     // Hotkey saves stay separate so an interactive save never replaces the canonical continue state.
-    const auto path = dataDirectory.empty() ? saveStatePath({}) : dataDirectory / "menu-save-hotkey.bin";
-    writeSaveState(path, reinterpret_cast<void*>(header[0]), header[1]);
-    log("ORIGINAL_SAVE_HOTKEY file=" + path.string() + " bytes=" + std::to_string(header[1]) + " " + playerState(game).dump());
+    const auto path = manual ? (dataDirectory.empty() ? saveStatePath({}) : dataDirectory / "menu-save-hotkey.bin") : dataDirectory / "menu-save-auto.bin";
+    const bool saved = writeSaveState(path, reinterpret_cast<void*>(header[0]), header[1], manual);
+    if (saved) log(std::string(manual ? "ORIGINAL_SAVE_HOTKEY file=" : "DESKTOP_AUTOSAVE file=") + path.string() + " bytes=" + std::to_string(header[1]) + " " + playerState(game).dump());
     reinterpret_cast<void(__cdecl*)(void*)>(requireExport("OBS_free"))(obs);
+    desktop_save::notify(saved, saved ? (manual ? L"Checkpoint saved. F9 restores it." : L"Autosave saved separately.") : L"Save failed: " + desktop_save::lastError);
+    return saved;
+}
+
+/** Expose a bool-returning manual save callback for the close reminder. */
+bool saveDesktopGame(void* userMenu) { return saveDesktopCheckpoint(userMenu, true); }
+
+/** Keep optional autosaves independent of the manual checkpoint. */
+void updateDesktopSave() {
+    if (originalMenu && desktop_controls::game() && desktop_save::autosaveDue(GetTickCount64())) saveDesktopCheckpoint(originalMenu, false);
 }
 
 /** Queue F9 without replacing objects while the current frame still holds their pointers. */
 void hotkeyLoadState(void* userMenu) {
     if (!userMenu) return;
+    desktop_controls::zoomPending=0;
     pendingRestorePath = dataDirectory.empty() ? saveStatePath({}) : dataDirectory / "menu-save-hotkey.bin";
     pendingRestoreTag = "ORIGINAL_LOAD_HOTKEY";
     pendingRestore = true;
@@ -2105,7 +2238,10 @@ void hotkeyLoadState(void* userMenu) {
 
 /** Replace a GAME at a frame boundary, retaining the original free-before-create ownership order. */
 void restoreSavedGame(void* userMenu, const std::filesystem::path& path, const std::string& tag) {
-    if (!readSaveState(path, loadedIbsBytes)) { log("ORIGINAL_LOAD_HOTKEY_NOFILE " + path.string()); return; }
+    if (!readSaveState(path, loadedIbsBytes)) {
+        log("ORIGINAL_LOAD_HOTKEY_NOFILE " + path.string());
+        desktop_save::notify(false, L"Checkpoint missing or unreadable. The current game is unchanged."); return;
+    }
     // Preserve individual lifecycle events even when the allocator reuses an address and log() deduplicates.
     static unsigned restoreSequence = 0;
     const unsigned sequence = ++restoreSequence;
@@ -2119,13 +2255,18 @@ void restoreSavedGame(void* userMenu, const std::filesystem::path& path, const s
     }
     void* ibs = reinterpret_cast<void*(__cdecl*)(void*, unsigned, unsigned)>(findExport("IBS_wrap"))(
         loadedIbsBytes.data(), static_cast<unsigned>(loadedIbsBytes.size()), 0);
+    desktop_controls::restoringCheckpoint=true;
+    desktop_controls::pendingFraming=nullptr;
     void* loaded = reinterpret_cast<void*(__cdecl*)(void*)>(findExport("GAME_fromIBS"))(ibs);
+    desktop_controls::restoringCheckpoint=false;
     reinterpret_cast<void(__cdecl*)(void*)>(requireExport("IBS_free"))(ibs);
     log(tag + " bytes=" + std::to_string(loadedIbsBytes.size()) + " restore=" + std::to_string(sequence)
         + " game=" + std::to_string(reinterpret_cast<std::uintptr_t>(loaded))
         + (loaded ? " " + playerState(loaded).dump() : std::string(" (failed)")));
     if (!loaded) throw std::runtime_error("Original GAME_fromIBS rejected the saved game");
     installRestoredGame(userMenu, loaded);
+    desktop_controls::adoptRestoredCamera(loaded);
+    desktop_save::notify(true, L"Checkpoint restored.");
 }
 
 /** Resolve tower IDs from the original loaded technology, never a rewritten catalog. */
@@ -2246,7 +2387,7 @@ void originalGuiWeaponsProbe(void* game, const std::filesystem::path& output) {
     for (const auto& step : script) {
         if (step.contains("click")) {
             const int x = step["click"][0], y = step["click"][1];
-            const POINT physical = hostDisplay.clientPoint(x, y);
+            const POINT physical = hostDisplay.sceneProbePoint(x, y);
             SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(physical.x, physical.y));
             SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(physical.x, physical.y));
         }
@@ -2292,6 +2433,7 @@ void originalGuiWeaponsProbe(void* game, const std::filesystem::path& output) {
     log("GUI_WEAPONS_DONE steps=" + std::to_string(script.size()));
 }
 #include "weapon-combat.hpp"
+#include "high-price-probe.hpp"
 
 /** Resolve an optional upgrade target without aborting a scenario when a tech omits it. */
 int nativeTowerIdOrNone(void* mode, const char* name) {
@@ -2449,7 +2591,7 @@ void originalScene(const std::filesystem::path& output, const Scenario& scenario
     auto* game = reinterpret_cast<void*(__cdecl*)(void*, int)>(findExport("GAME_alloc"))(mode, 0);
     if (!game) throw std::runtime_error("Original GAME_alloc returned null");
     log("GAME_READY");
-    reinterpret_cast<void(__cdecl*)(void*, int, int)>(findExport("GAME_setResolution"))(game, 480, 800);
+    reinterpret_cast<void(__cdecl*)(void*, int, int)>(findExport("GAME_setResolution"))(game, LogicalWidth, LogicalHeight);
     auto resume = reinterpret_cast<void(__cdecl*)(void*)>(findExport("GAME_resume"));
     resume(game);
     hostViewport(0, 0, LogicalWidth, LogicalHeight);
@@ -2494,6 +2636,7 @@ void originalScene(const std::filesystem::path& output, const Scenario& scenario
     if (operation == "weapons") { originalWeaponsProbe(game, mode, output); return; }
     if (operation == "guiweapons") { originalGuiWeaponsProbe(game, output); return; }
     if (operation == "weaponcombat") { originalWeaponCombat(game, mode, output); return; }
+    if (operation == "highprice") { high_price_probe::run(game, mode, output); return; }
     if (operation == "play") ShowWindow(windowHandle, SW_SHOW);
     framePacer = std::make_unique<HostFramePacer>();
     while (GetTickCount64() - start < duration) {
@@ -2512,36 +2655,36 @@ void originalScene(const std::filesystem::path& output, const Scenario& scenario
                 if (measured < expected * 0.8 || measured > expected * 1.2)
                     throw std::runtime_error("Original speed control did not change the simulation clock as expected");
                 if (speedEvent < 7) {
-                    SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(460, 56));
-                    SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(460, 56));
+                    verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(460, 56));
+                    verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(460, 56));
                 }
             }
             ++speedEvent;
         }
         if (operation == "input" && elapsed >= 800 && !clicked) {
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(340, 340));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(340, 340)); clicked = true;
+            verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(340, 340));
+            verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(340, 340)); clicked = true;
         }
         if (operation == "input" && elapsed >= 2000 && !categoryClicked) {
             capture(output / "original-input-category-ring.png", 480, 800);
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(325, 400));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(325, 400)); categoryClicked = true;
+            verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(325, 400));
+            verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(325, 400)); categoryClicked = true;
         }
         if (operation == "input" && elapsed >= 3500 && !towerClicked) {
             capture(output / "original-input-tower-ring.png", 480, 800);
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(260, 295));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(260, 295)); towerClicked = true;
+            verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(260, 295));
+            verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(260, 295)); towerClicked = true;
         }
         if (operation == "input" && elapsed >= 5200 && !waveClicked) {
             capture(output / "original-input-built.png", 480, 800);
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(455, 774));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(455, 774)); waveClicked = true;
+            verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(455, 774));
+            verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(455, 774)); waveClicked = true;
         }
         // The speed hot zone is x in [W-41.6,W), y in [32,80); this drives the original outer dispatcher.
         if (operation == "input" && elapsed >= 7000 && !speedClicked) {
             capture(output / "original-input-speed-before.png", 480, 800);
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(460, 56));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(460, 56)); speedClicked = true;
+            verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(460, 56));
+            verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(460, 56)); speedClicked = true;
         }
         if ((operation == "combat" || operation == "upgrade" || operation == "autoplay") && elapsed >= 1000 && !built) {
             log("ORIGINAL_COMMAND build Kilowatt Laser 5,10"); build(game, laser, 5, 10);
@@ -2581,7 +2724,7 @@ void originalScene(const std::filesystem::path& output, const Scenario& scenario
             paused = hostPauseRequested != 0;
             if (!paused) { resume(game); log("ORIGINAL_COMMAND GAME_resume after host pause"); }
         }
-        if (!paused) update(game);
+        if (!paused && !desktop_controls::isPaused(game)) update(game);
         render(game);
         if (!opening && elapsed >= 600) { capture(output / "original-opening.png", 480, 800); opening = true; }
         if (built && !capturedBuild && elapsed >= 2000) { capture(output / "original-built.png", 480, 800); capturedBuild = true; }
@@ -2645,15 +2788,30 @@ void originalScoreRoundtrip() {
     log("ORIGINAL_SCORE_ROUNDTRIP_DONE cycles=3");
 }
 
-/** Select one shipped DLC map using only original menu clicks and carousel drags. */
+/** Follow menu ownership changes before submitting the current native scene. */
+void updateAndRenderMenuPage(void* menu) {
+    reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_update"))(menu);
+    auto* bytes = static_cast<unsigned char*>(menu);
+    // MAPMENU_update can allocate GAME and hide MENU during this same update.
+    if (bytes[4] || !*reinterpret_cast<void**>(bytes + 0x15c))
+        reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_render"))(menu);
+    // MENU_render can also finish Resume's fade and transfer ownership before returning.
+    if (!bytes[4]) {
+        if (void* current = *reinterpret_cast<void**>(bytes + 0x15c))
+            reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_render"))(current);
+    }
+}
+
+/** Select one shipped DLC map using the same desktop arrows and original Play handler as the player. */
 void originalDlcSelection(void* menu, const std::filesystem::path& output, const std::string& wanted) {
     const auto click = [&](int x, int y) {
-        SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
-        SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+        verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+        verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
     };
     const ULONGLONG start = GetTickCount64();
     ULONGLONG nextAction = 1800, startedAt = 0;
     int stage = 0;
+    framePacer=std::make_unique<HostFramePacer>();
     while (GetTickCount64() - start < 180000) {
         const auto elapsed = GetTickCount64() - start;
         void* game = *reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c);
@@ -2661,7 +2819,7 @@ void originalDlcSelection(void* menu, const std::filesystem::path& output, const
         if (game) {
             if (playerState(game).at("map") != wanted) throw std::runtime_error("DLC GUI started wrong map");
             if (!startedAt) startedAt = elapsed;
-            reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("GAME_setResolution"))(game, 480, 800);
+            reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("GAME_setResolution"))(game, LogicalWidth, LogicalHeight);
             reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_update"))(game);
             reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_render"))(game);
             if (elapsed >= startedAt + 1500) {
@@ -2671,35 +2829,29 @@ void originalDlcSelection(void* menu, const std::filesystem::path& output, const
             }
         } else {
             if (elapsed >= nextAction) {
-                nextAction = elapsed + 900;
+                nextAction = elapsed + (stage ? 80 : 900);
                 if (stage == 0) { click(45, 210); ++stage; }
-                else if (selection && stage == 1) { click(450, 785); ++stage; }
-                else if (selection && stage == 2) { if (selection[25]) click(30, 50); ++stage; }
                 else if (selection) {
                     // MAPMENU owns the list, selected index, and sorting; inspect without changing them.
-                    const unsigned index = selection[11];
-                    const char* selected = index < selection[9] ? *reinterpret_cast<const char**>(selection[5] + index * 40) : "";
+                    const bool catalog=selection[12]!=0;
+                    const unsigned index=selection[catalog?11:10];
+                    const char* selected=index<selection[catalog?9:4]?*reinterpret_cast<const char**>(selection[catalog?5:3]+index*40):"";
                     if (wanted == selected) click(240, 350);
                     else {
                         unsigned target = 0;
                         while (target < selection[9] && wanted != *reinterpret_cast<const char**>(selection[5] + target * 40)) ++target;
                         if (target == selection[9]) throw std::runtime_error("DLC map absent from original list");
-                        const int from = target > index ? 400 : 100, to = target > index ? 200 : 300;
-                        SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(from, 350));
-                        SendMessageW(windowHandle, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM((from + to) / 2, 350));
-                        SendMessageW(windowHandle, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(to, 350));
-                        // Release inside the tile: a real drag must not activate an intermediate map.
-                        SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(to, 350));
+                        SendMessageW(windowHandle,WM_KEYDOWN,VK_RIGHT,0);
+                        SendMessageW(windowHandle,WM_KEYUP,VK_RIGHT,0);
                     }
                 }
             }
-            reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_update"))(menu);
-            reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_render"))(menu);
+            updateAndRenderMenuPage(menu);
         }
         original_audio::update(); presentDisplay();
         MSG message{};
         while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
-        Sleep(16);
+        finishHostFrame();
     }
     throw std::runtime_error("DLC GUI selection timed out");
 }
@@ -2764,12 +2916,12 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
     reinterpret_cast<void(__cdecl*)()>(findExport("PGL_init"))(); log("PGL_READY");
     hostViewport(0, 0, LogicalWidth, LogicalHeight);
     auto menuAlloc = reinterpret_cast<void*(__cdecl*)()>(requireExport("MENU_alloc"));
-    auto menuSetResolution = reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("MENU_setResolution"));
+    auto menuSetResolution = reinterpret_cast<void(__cdecl*)(void*, float, float)>(requireExport("MENU_setResolution"));
     auto menuChangePage = reinterpret_cast<void(__cdecl*)(void*, void*)>(requireExport("MENU_changePage"));
     auto menuShow = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_show"));
     auto menuUpdate = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_update"));
     auto menuRender = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("MENU_render"));
-    auto worldSetResolution = reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("MENUWORLD_setResolution"));
+    auto worldSetResolution = reinterpret_cast<void(__cdecl*)(void*, float, float)>(requireExport("MENUWORLD_setResolution"));
     auto gameSetResolution = reinterpret_cast<void(__cdecl*)(void*, int, int)>(requireExport("GAME_setResolution"));
     auto gameUpdate = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_update"));
     auto gameRender = reinterpret_cast<void(__cdecl*)(void*)>(requireExport("GAME_render"));
@@ -2781,21 +2933,33 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
     originalMenu = menu;
     activeGame = menu;
     *reinterpret_cast<void**>(hostView.data() + 0x40) = menu;
+    // Scripted navigation must click the rendered desktop controls, whose layout replaces the mobile carousel.
+    const auto clickMapButton = [&](int action) {
+        for (const auto& button : desktop_map::buttons) {
+            if (button.action != action) continue;
+            const POINT point = hostDisplay.clientPoint(static_cast<int>(button.x + button.w / 2),
+                static_cast<int>(button.y + button.h / 2));
+            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(point.x, point.y));
+            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(point.x, point.y));
+            return true;
+        }
+        return false;
+    };
     log("ORIGINAL_MENU_ALLOC " + std::to_string(reinterpret_cast<std::uintptr_t>(menu)));
-    // menu+0x110/+0x114 hold the FLOAT logical canvas size; MENU_render uses them as glOrthof bounds
-    // and MENU_init passes them to CAMERA_setWindowSize. The original EAGLView passes the view size in
-    // points, so use the host window size in FLOAT bit patterns: menu logical coordinates then equal
-    // Windows pixels and no touch rescale is needed. Integer 480/800 here would be denormal floats.
+    // Original MENU and MENUWORLD use float points; GAME uses integer logical pixels.
     {
-        const std::int32_t logicalWidth = static_cast<std::int32_t>(0x43f00000u);  // 480.0f
-        const std::int32_t logicalHeight = static_cast<std::int32_t>(0x44480000u); // 800.0f
+        const float logicalWidth = static_cast<float>(LogicalWidth);
+        const float logicalHeight = static_cast<float>(LogicalHeight);
         menuSetResolution(menu, logicalWidth, logicalHeight);
-        log("ORIGINAL_MENU_LOGICAL widthBits=" + std::to_string(logicalWidth) + " heightBits=" + std::to_string(logicalHeight));
+        log("ORIGINAL_MENU_LOGICAL width=" + std::to_string(logicalWidth) + " height=" + std::to_string(logicalHeight));
         if (void* world = *reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x160)) worldSetResolution(world, logicalWidth, logicalHeight);
     }
     menuShow(menu);
     if (void* mainPage = findExport("mainMenuPage")) { menuChangePage(menu, mainPage); log("ORIGINAL_MENU_PAGE mainMenuPage"); }
     else log("ORIGINAL_MENU_PAGE_MISSING mainMenuPage");
+    if (scripted && scenario.modeName=="desktopcheck") { desktopRefineProbe(menu,output); return; }
+    if (scripted && scenario.modeName=="motioncheck") { desktopMotionProbe(menu,output); return; }
+    if (scripted && scenario.modeName=="presentcheck") { desktopPresentProbe(menu,output); return; }
     if (!scripted) {
         // Restore the player's F5 checkpoint into the original paused Resume menu on cold startup.
         // Scripted continue keeps its separate canonical save contract and isolated state.
@@ -2907,23 +3071,30 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
     // MAPMENU_touchesEnded only starts the selected entry when the tap is inside these rodata bounds.
     const float mapHitMinX = rodataFloat(0x362e1c), mapHitMinY = rodataFloat(0x362b58), mapHitMaxY = rodataFloat(0x362e54);
     log("ORIGINAL_MAP_HIT minX=" + std::to_string(mapHitMinX) + " minY=" + std::to_string(mapHitMinY) + " maxY=" + std::to_string(mapHitMaxY));
+    {
+        // Original menu-world textures are lazy; prepare the first image before exposing the window.
+        ResourceTiming initialFrame("menu-initial-frame", "original menu");
+        menuRender(menu); presentDisplay(); glFinish();
+    }
     if (!scripted) ShowWindow(windowHandle, SW_SHOW);
     framePacer = std::make_unique<HostFramePacer>();
     while (GetTickCount64() - start < duration) {
         const ULONGLONG elapsed = GetTickCount64() - start;
         ++frameCount;
         if (helpMode && helpStep < 2 && elapsed >= 2000 + helpStep * 3000) {
+            // Embedded Guide consumes pointer input; close it before clicking original Credits.
+            if (helpStep == 1) verificationMessage(windowHandle, WM_KEYDOWN, VK_ESCAPE, 0);
             const int x = helpStep == 0 ? 45 : 450, y = helpStep == 0 ? 314 : 780;
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+            verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+            verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
             ++helpStep;
         }
         if (optionsMode && optionStep < 6 && elapsed >= 2000 + optionStep * 1500) {
             // New-game main menu has Options at y=262; its five original setting rows are spaced by 50px.
             const int x = optionStep == 0 ? 45 : 300;
             const int y = optionStep == 0 ? 262 : 100 + static_cast<int>(optionStep) * 50;
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+            verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+            verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
             log("ORIGINAL_OPTIONS_CLICK step=" + std::to_string(optionStep));
             ++optionStep;
         }
@@ -2945,25 +3116,31 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
         bool showing = *reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(menu) + 4) != 0;
         if (newGameMode && saveTested && tutorialDone && newGameStep == 0 && elapsed >= tutorialDoneAt + 26000) {
             replacedGameClock = currentGameClock(menu);
-            SendMessageW(windowHandle, WM_KEYDOWN, VK_ESCAPE, 0);
+            verificationMessage(windowHandle, WM_KEYDOWN, VK_ESCAPE, 0);
             newGameStep = 1; newGameActionAt = elapsed + 1500;
         } else if (newGameMode && newGameStep && elapsed >= newGameActionAt) {
             if (newGameStep == 1) {
-                SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(45, 210));
-                SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(45, 210));
+                verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(45, 210));
+                verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(45, 210));
                 newGameStep = 2; newGameActionAt = elapsed + 1500;
             } else if (newGameStep == 2) {
                 if (page != findExport("startGamePage")) throw std::runtime_error("Original New Game button did not open map selection");
                 capture(output / "newgame-selection.png", 480, 800);
-                newGameStep = 3;
+                if (!clickMapButton(4)) throw std::runtime_error("Campaign button was not rendered");
+                newGameStep = 3; newGameActionAt = elapsed + 500;
+            } else if (newGameStep == 3) {
+                if (!clickMapButton(1000)) throw std::runtime_error("First campaign thumbnail was not rendered");
+                newGameStep = 4; newGameActionAt = elapsed + 500;
+            } else if (newGameStep == 4) {
+                if (!clickMapButton(5)) throw std::runtime_error("Play selected map button was not rendered");
+                newGameStep = 5; newGameActionAt = elapsed + 2000;
             } else if (game && !showing && !playerState(game).at("gameStarted").get<bool>() && currentGameClock(menu) < replacedGameClock) {
                 capture(output / "newgame-replaced.png", 480, 800);
                 log("ORIGINAL_NEWGAME_GUI_DONE previousClock=" + std::to_string(replacedGameClock) + " " + playerState(game).dump());
                 break;
             } else {
                 if (++newGameTaps > 4) throw std::runtime_error("Original New Game tile did not replace the active game");
-                SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(240, 350));
-                SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(240, 350));
+                if (!clickMapButton(5)) throw std::runtime_error("Play selected map button was not rendered");
                 newGameActionAt = elapsed + 2000;
             }
             // Input may have replaced GAME; acquire all frame-local pointers again.
@@ -2998,8 +3175,8 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
             } else {
                 const int step = tutorial ? reinterpret_cast<int*>(tutorial)[3] : -1;
                 log("ORIGINAL_TUTORIAL_TAP step=" + std::to_string(step) + " tap=" + std::to_string(tutorialTap));
-                SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(240, 635));
-                SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(240, 635));
+                verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(240, 635));
+                verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(240, 635));
                 ++tutorialTap;
             }
         }
@@ -3014,7 +3191,7 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
         if (restoreStress && saveTested && restoreCycles < RestoreStressCycles && elapsed >= pauseAt + 10000 + restoreCycles * 750) {
             ++restoreCycles;
             log("ORIGINAL_RESTORE_STRESS request=" + std::to_string(restoreCycles));
-            SendMessageW(windowHandle, WM_KEYDOWN, VK_F9, 0);
+            verificationMessage(windowHandle, WM_KEYDOWN, VK_F9, 0);
         }
         // Reuse the proven original input coordinates: build ring, category, tower, wave and speed.
         if (scripted && !continueMode && game && tutorialDone && buildStep < 5
@@ -3022,8 +3199,8 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
             static const int points[5][2] = {{340, 340}, {325, 400}, {260, 295}, {455, 774}, {460, 56}};
             const int pixelX = points[buildStep][0], pixelY = points[buildStep][1];
             log("ORIGINAL_BUILD_CLICK step=" + std::to_string(buildStep) + " " + std::to_string(pixelX) + "," + std::to_string(pixelY) + " " + playerState(game).dump());
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(pixelX, pixelY));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(pixelX, pixelY));
+            verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(pixelX, pixelY));
+            verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(pixelX, pixelY));
             if (buildStep == 3) capture(output / "menu-built-after.png", 480, 800);
             if (buildStep == 2) capture(output / "menu-built.png", 480, 800);
             if (buildStep == 4) capture(output / "menu-wave-speed.png", 480, 800);
@@ -3039,12 +3216,12 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
         if (scripted && !continueMode && !longCampaign && game && tutorialDone && !hotkeySaveTested && elapsed >= tutorialDoneAt + 9500) {
             hotkeySaveTested = true;
             log("ORIGINAL_HOTKEY_TEST save");
-            SendMessageW(windowHandle, WM_KEYDOWN, VK_F5, 0);
+            verificationMessage(windowHandle, WM_KEYDOWN, VK_F5, 0);
         }
         if (scripted && !continueMode && !longCampaign && game && tutorialDone && !hotkeyLoadTested && elapsed >= tutorialDoneAt + 10500) {
             hotkeyLoadTested = true;
             log("ORIGINAL_HOTKEY_TEST load");
-            SendMessageW(windowHandle, WM_KEYDOWN, VK_F9, 0);
+            verificationMessage(windowHandle, WM_KEYDOWN, VK_F9, 0);
             log("ORIGINAL_HOTKEY_TEST load queued");
         }
         if (scripted && longCampaign && game && gameStartAt && elapsed >= nextStatLog) {
@@ -3067,15 +3244,15 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
             const ULONGLONG due = tutorialDoneAt + 13000 + static_cast<ULONGLONG>(guiBuildIndex) * 3200;
             if (guiBuildPhase == 0 && elapsed >= due) {
                 log("ORIGINAL_CAMPAIGN_GUI_BUILD cell=" + std::to_string(cellX) + "," + std::to_string(cellY) + " " + playerState(game).dump());
-                SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(cellX, cellY));
-                SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(cellX, cellY));
+                verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(cellX, cellY));
+                verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(cellX, cellY));
                 guiBuildPhase = 1; guiBuildPhaseAt = elapsed;
             } else if (guiBuildPhase == 1 && elapsed >= guiBuildPhaseAt + 800) {
                 // Captured ring geometry (menu-gui-cell-*.png): the Potato Gun sits at ring centre + (+23,-75)
                 // and the ring opens on the tapped cell, so one tap there selects and places it.
                 capture(output / ("menu-gui-cell-" + std::to_string(guiBuildIndex) + ".png"), 480, 800);
-                SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(cellX + 23, cellY - 75));
-                SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(cellX + 23, cellY - 75));
+                verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(cellX + 23, cellY - 75));
+                verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(cellX + 23, cellY - 75));
                 guiBuildPhase = 2; guiBuildPhaseAt = elapsed;
             } else if (guiBuildPhase == 2 && elapsed >= guiBuildPhaseAt + 800) {
                 capture(output / ("menu-gui-build-" + std::to_string(guiBuildIndex) + ".png"), 480, 800);
@@ -3101,8 +3278,8 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
             && autoWaveCount < 25 && elapsed >= tutorialDoneAt + 20000 + static_cast<ULONGLONG>(autoWaveCount) * 22000) {
             ++autoWaveCount;
             log("ORIGINAL_CAMPAIGN_WAVE_CLICK " + std::to_string(autoWaveCount) + " " + playerState(game).dump());
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(455, 774));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(455, 774));
+            verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(455, 774));
+            verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(455, 774));
         }
         if (scripted && longCampaign && !endCaptured && page == findExport("endOfGamePage")) {
             capture(output / "menu-endgame.png", 480, 800);
@@ -3156,7 +3333,7 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
                 nextMapAt = elapsed;
                 nextMapClock = currentGameClock(menu);
                 log("ORIGINAL_CAMPAIGN_NEXT_MAP " + playerState(game).dump());
-                SendMessageW(windowHandle, WM_KEYDOWN, VK_SPACE, 0);
+                verificationMessage(windowHandle, WM_KEYDOWN, desktop_controls::keys[desktop_controls::Wave], 0);
             } else {
                 if (page == findExport("endOfGamePage") && !playerState(game).at("won").get<bool>())
                     throw std::runtime_error("Campaign defense lost the original first map");
@@ -3165,8 +3342,8 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
                 capture(output / ("menu-continue-" + std::to_string(endClickStep) + ".png"), 480, 800);
                 const int clickY = page == findExport("endOfGamePage") ? 770
                     : page == findExport("startGamePage") ? 350 : 650;
-                SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(240, clickY));
-                SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(240, clickY));
+                verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(240, clickY));
+                verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(240, clickY));
                 log("ORIGINAL_CAMPAIGN_CONTINUE_CLICK step=" + std::to_string(endClickStep)
                     + " y=" + std::to_string(clickY) + " pageChanged="
                     + std::to_string(page != *reinterpret_cast<void**>(menu)));
@@ -3178,12 +3355,12 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
                 throw std::runtime_error("Second map did not start advancing");
             nextMapSaved = true;
             capture(output / "menu-second-map.png", 480, 800);
-            SendMessageW(windowHandle, WM_KEYDOWN, VK_F5, 0);
+            verificationMessage(windowHandle, WM_KEYDOWN, VK_F5, 0);
             nextMapClock = currentGameClock(menu);
         }
         if (longCampaign && nextMapSaved && !nextMapRestored && elapsed >= nextMapAt + 3000) {
             nextMapRestored = true;
-            SendMessageW(windowHandle, WM_KEYDOWN, VK_F9, 0);
+            verificationMessage(windowHandle, WM_KEYDOWN, VK_F9, 0);
         }
         // GAME_resume deliberately waits three seconds for a started game; observe beyond that countdown.
         if (longCampaign && nextMapRestored && !laterStage && elapsed >= nextMapAt + 9000) {
@@ -3199,8 +3376,8 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
                 if (!mediumSpeedSet) {
                     // Use the original button twice, giving the real 1x -> 2x -> 4x transitions.
                     for (int click = 0; click < 2; ++click) {
-                        SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(460, 56));
-                        SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(460, 56));
+                        verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(460, 56));
+                        verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(460, 56));
                     }
                     mediumSpeedSet = true;
                     mediumNextWave = elapsed + 15000;
@@ -3208,7 +3385,7 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
                 campaignDefense(game);
                 if (elapsed >= mediumNextWave) {
                     mediumNextWave = elapsed + 15000;
-                    SendMessageW(windowHandle, WM_KEYDOWN, VK_SPACE, 0);
+                    verificationMessage(windowHandle, WM_KEYDOWN, desktop_controls::keys[desktop_controls::Wave], 0);
                     log("ORIGINAL_MEDIUM_WAVE " + playerState(game).dump());
                 }
             } else if (page == findExport("endOfGamePage")) {
@@ -3232,11 +3409,11 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
                     laterNextWave = elapsed + (wanted == "Madness" ? 25000 : 15000);
                     laterEndAt = 0;
                     // Keep an authentic fresh-map checkpoint for independent continuation checks.
-                    SendMessageW(windowHandle, WM_KEYDOWN, VK_F5, 0);
-                    if (wanted != "Madness") SendMessageW(windowHandle, WM_KEYDOWN, VK_SPACE, 0);
+                    verificationMessage(windowHandle, WM_KEYDOWN, VK_F5, 0);
+                    if (wanted != "Madness") verificationMessage(windowHandle, WM_KEYDOWN, desktop_controls::keys[desktop_controls::Wave], 0);
                     for (int click = 0; click < 2; ++click) {
-                        SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(460, 56));
-                        SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(460, 56));
+                        verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(460, 56));
+                        verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(460, 56));
                     }
                     capture(output / (wanted + "-started.png"), 480, 800);
                     log("ORIGINAL_LATER_CAMPAIGN_STARTED " + playerState(game).dump());
@@ -3244,15 +3421,15 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
                     if (++laterClicks > 14) throw std::runtime_error("Original later campaign continuation did not advance");
                     const int y = page == findExport("endOfGamePage") ? 770
                         : page == findExport("startGamePage") ? 350 : 650;
-                    SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(240, y));
-                    SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(240, y));
+                    verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(240, y));
+                    verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(240, y));
                     laterClickAt = elapsed + 2000;
                 }
             } else if (!gameIsOver) {
                 campaignDefense(game);
                 if (elapsed >= laterNextWave) {
                     laterNextWave = elapsed + (wanted == "Madness" ? 25000 : 15000);
-                    SendMessageW(windowHandle, WM_KEYDOWN, VK_SPACE, 0);
+                    verificationMessage(windowHandle, WM_KEYDOWN, desktop_controls::keys[desktop_controls::Wave], 0);
                     log("ORIGINAL_LATER_CAMPAIGN_WAVE " + playerState(game).dump());
                 }
             } else if (page == findExport("endOfGamePage")) {
@@ -3279,8 +3456,8 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
             const int clickX = static_cast<int>(tabXMax * 0.5f), pixelY = static_cast<int>(clickY);
             const std::uintptr_t pageBefore = reinterpret_cast<std::uintptr_t>(page);
             log("MENU_TAB_CLICK index=" + std::to_string(tabIndex) + " " + std::to_string(clickX) + "," + std::to_string(pixelY));
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickX, pixelY));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(clickX, pixelY));
+            verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickX, pixelY));
+            verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(clickX, pixelY));
             const std::uintptr_t pageAfter = reinterpret_cast<std::uintptr_t>(*reinterpret_cast<void**>(menu));
             log("MENU_TAB_RESULT before=" + std::to_string(pageBefore) + " after=" + std::to_string(pageAfter));
             ++tabIndex;
@@ -3291,12 +3468,11 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
                 log("MENU_TAB_REVERT");
             }
         }
-        // Scripted level-select flow: switch to the campaign tab, then tap the selected entry.
+        // Scripted level-select flow follows the desktop Campaign -> thumbnail -> Play controls.
         if (scripted && game == nullptr && mapSelectAt != 0 && mapStep == 0 && elapsed >= mapSelectAt + 800) {
             mapStep = 1; mapStepAt = elapsed + 1200;
-            log("MENU_MAP_TAB campaign 112,785");
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(112, 785));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(112, 785));
+            log("MENU_MAP_TAB campaign");
+            if (!clickMapButton(4)) throw std::runtime_error("Campaign button was not rendered");
         }
         // Continue: rebuild the saved GAME and install it through the original restore entry (no MAPMENU callback:
         // that callback expects a GAMEMODE and would create a fresh game).
@@ -3308,11 +3484,9 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
         }
         if (scripted && !continueMode && game == nullptr && mapStep >= 1 && mapStep <= 3 && elapsed >= mapStepAt) {
             if (mapStep == 1) capture(output / "menu-campaign.png", 480, 800);
-            // The campaign page draws the selected map with an explicit TAP TO START prompt; tap its tile centre.
-            const int mapX = 240, mapY = 350;
-            log("MENU_MAP_CLICK step=" + std::to_string(mapStep) + " " + std::to_string(mapX) + "," + std::to_string(mapY));
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(mapX, mapY));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(mapX, mapY));
+            const int action = mapStep == 1 ? 1000 : 5;
+            log("MENU_MAP_CLICK step=" + std::to_string(mapStep) + " action=" + std::to_string(action));
+            if (!clickMapButton(action)) throw std::runtime_error("Scripted map control was not rendered");
             log("MENU_MAP_CLICK_RESULT game=" + std::to_string(reinterpret_cast<std::uintptr_t>(*reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c))));
             ++mapStep; mapStepAt = elapsed + 2000;
         }
@@ -3341,8 +3515,8 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
         }
         if (scripted && pauseFrozen && !resumed && elapsed >= pauseAt + 4500) {
             // Exercise the original Resume tab rather than bypassing its hit test.
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(45, 262));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(45, 262));
+            verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(45, 262));
+            verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(45, 262));
             log("ORIGINAL_MENU_RESUME_REQUESTED showing=" + std::to_string(*reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(menu) + 4)));
             resumed = true; resumeAt = elapsed;
         }
@@ -3381,7 +3555,7 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
                      << " showing=" << static_cast<int>(bytes[4]) << " alpha=" << *reinterpret_cast<const float*>(bytes + 0xec);
                 log(fade.str());
             }
-            menuUpdate(menu); menuRender(menu);
+            updateAndRenderMenuPage(menu);
         }
         else {
             if (continueMode && continueRestored && !continueFadeEnd) {
@@ -3420,9 +3594,12 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
                 }
                 gameSilence(game); menuEndGame(menu); log("ORIGINAL_MENU_GAME_ENDED");
                 // MENU_endGame may free replay games; the original outer dispatcher renders the menu next.
-                menuUpdate(menu); menuRender(menu);
+                updateAndRenderMenuPage(menu);
             }
-            else { gameUpdate(game); gameRender(game); }
+            else {
+                if (!desktop_controls::isPaused(game)) gameUpdate(game);
+                gameRender(game);
+            }
         }
         if (!capturedMap && page && page == findExport("startGamePage")) { capture(output / "menu-mapselect.png", 480, 800); capturedMap = true; }
         if (!capturedGame && game) { capture(output / "menu-in-game.png", 480, 800); capturedGame = true; }
@@ -3437,7 +3614,10 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
     if (!windowClosed) {
         void* finalGameForCapture = *reinterpret_cast<void**>(static_cast<unsigned char*>(menu) + 0x15c);
         const bool finalShowing = *reinterpret_cast<unsigned char*>(static_cast<unsigned char*>(menu) + 4) != 0;
-        if (finalGameForCapture && !finalShowing) { gameUpdate(finalGameForCapture); gameRender(finalGameForCapture); }
+        if (finalGameForCapture && !finalShowing) {
+            if (!desktop_controls::isPaused(finalGameForCapture)) gameUpdate(finalGameForCapture);
+            gameRender(finalGameForCapture);
+        }
         else { menuUpdate(menu); menuRender(menu); }
         glFinish();
         capture(output / (scripted ? "menu-final.png" : "menu-pause.png"), 480, 800);
@@ -3450,6 +3630,10 @@ void originalMenuScene(const std::filesystem::path& output, const Scenario& scen
         log("ORIGINAL_OPTIONS_DONE settings=" + nlohmann::json(hostAccountInts).dump()
             + " floats=" + nlohmann::json(hostAccountFloats).dump());
 }
+
+#include "desktop-achievements.hpp"
+#include "desktop-ui.hpp"
+#include "desktop-probe.hpp"
 
 /** Report a native Windows fault with its corresponding original ELF address. */
 LONG WINAPI nativeFault(EXCEPTION_POINTERS* exception) {
@@ -3617,10 +3801,12 @@ void run(const std::filesystem::path& package, const std::string& operation, con
     if (std::filesystem::exists(package.parent_path() / "textures")) convertedTextures = package.parent_path() / "textures";
     // Portable saves stay beside Play.cmd; development runs use their selected evidence state directory.
     dataDirectory = resolveDataDirectory(package, outputDirectory);
+    desktop_controls::loadSettings(dataDirectory);
+    if (operation.rfind("menu:", 0) == 0 || operation == "menu") _putenv_s("TOWERMADNESS_INTERACTIVE", "1");
     persistedStorePath = dataDirectory / "platform-store.txt";
     const Scenario scenario = parseScenario(operation);
     // "map" previously returned without loading anything and falsely looked like a passing probe.
-    const std::set<std::string> supported = {"play", "scene", "input", "combat", "upgrade", "flood", "autoplay", "menu", "menuauto", "levels", "scores", "speed", "audio", "weapons", "guiweapons", "weaponcombat"};
+    const std::set<std::string> supported = {"play", "scene", "input", "combat", "upgrade", "flood", "autoplay", "menu", "menuauto", "levels", "scores", "speed", "audio", "weapons", "guiweapons", "weaponcombat", "highprice"};
     if (!supported.count(scenario.operation)) throw std::runtime_error("Unsupported probe operation: " + scenario.operation);
     registerC(); mapImage(directory / "libverde.so");
     for (const auto& entry : std::filesystem::directory_iterator(directory))
@@ -3660,6 +3846,9 @@ void run(const std::filesystem::path& package, const std::string& operation, con
         if (const auto hook = hooks.find(underlying); hook != hooks.end()) installHook(name, hook->second);
     }
     correctTowerRestoreAllocation();
+    installLandscapeMenu();
+    installDesktopMapMenu();
+    desktop_controls::install();
     correctPointSpriteSubmission();
     correctScoreDateReader();
     installHook("VFS_getFile", reinterpret_cast<void*>(&nativeFile));
@@ -3722,7 +3911,7 @@ void run(const std::filesystem::path& package, const std::string& operation, con
     if (scenario.operation == "scores") { originalScoreRoundtrip(); return; }
     if (scenario.operation == "menu" || scenario.operation == "menuauto") { originalMenuScene(outputDirectory, scenario); return; }
     if (scenario.operation == "scene" || scenario.operation == "combat" || scenario.operation == "play" || scenario.operation == "input"
-        || scenario.operation == "upgrade" || scenario.operation == "flood" || scenario.operation == "autoplay" || scenario.operation == "speed" || scenario.operation == "weapons" || scenario.operation == "guiweapons" || scenario.operation == "weaponcombat") {
+        || scenario.operation == "upgrade" || scenario.operation == "flood" || scenario.operation == "autoplay" || scenario.operation == "speed" || scenario.operation == "weapons" || scenario.operation == "guiweapons" || scenario.operation == "weaponcombat" || scenario.operation == "highprice") {
         originalScene(outputDirectory, scenario); return;
     }
     auto function = reinterpret_cast<void(__cdecl*)()>(findExport(scenario.operation));
@@ -3731,19 +3920,14 @@ void run(const std::filesystem::path& package, const std::string& operation, con
 }
 }
 
-/** Keep each experiment process independent and preserve diagnostics on native failure. */
-int main(int argc, char** argv) {
-    if (argc < 4) { std::fprintf(stderr, "Usage: host PACKAGE OPERATION LOG\n"); return 2; }
-    logFile = std::fopen(argv[3], "w");
-    // Every trace, PNG, and diagnostic stays beside the log the caller selected.
-    std::filesystem::path outputDirectory = std::filesystem::path(argv[3]).parent_path();
-    if (outputDirectory.empty()) outputDirectory = ".";
-    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
-    SetUnhandledExceptionFilter(nativeFault);
-    // Avoid Windows bitmap stretching; the GL framebuffer and pointer coordinates use real pixels.
-    if (const auto dpiMode = GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetProcessDpiAwarenessContext"))
-        reinterpret_cast<BOOL(WINAPI*)(HANDLE)>(dpiMode)(reinterpret_cast<HANDLE>(-4));
-    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    try { run(argv[1], argv[2], outputDirectory); framePacer.reset(); return 0; }
-    catch (const std::exception& error) { log("HOST_ERROR " + std::string(error.what())); return 3; }
+#include "desktop-launch.hpp"
+
+/** Start without a console while preserving explicit developer/test arguments. */
+int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
+    int argc = 0;
+    wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (!argv) return 2;
+    const int result = desktop_launch::enter(argc, argv);
+    LocalFree(argv);
+    return result;
 }

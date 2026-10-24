@@ -83,11 +83,13 @@ void originalWeaponCombat(void* game, void* mode, const std::filesystem::path& o
     static_cast<std::uint32_t*>(game)[0xb9c / 4] = reinterpret_cast<std::uint32_t>(&combatDamage);
     nlohmann::json result{{"initial", playerState(game)}, {"config", config}, {"samples", nlohmann::json::array()}};
     // Pump ordinary original time and rendering; no synthetic simulation deltas are supplied.
+    framePacer = std::make_unique<HostFramePacer>();
     auto tick = [&]() {
         update(game); render(game); SwapBuffers(windowDc);
         MSG message{};
         while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&message); DispatchMessageW(&message); }
-        Sleep(16);
+        // Match normal desktop pacing and incremental cache preparation in this combat-only probe.
+        finishHostFrame();
     };
     const std::string name = config.at("base");
     const int base = nativeTowerId(mode, name.c_str());

@@ -1,8 +1,0 @@
-{
-  "Endurance": {
-    "tex": "Endurance",
-    "cull": "none",
-    "depthmask": 0,
-    "blend": "alpha"
-  }
-}

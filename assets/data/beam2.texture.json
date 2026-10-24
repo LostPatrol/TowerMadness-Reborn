@@ -1,6 +1,0 @@
-{
-  "type": "pvr",
-  "file": "beam2",
-  "mag": "linear",
-  "min": "linear_mipmap_nearest"
-}

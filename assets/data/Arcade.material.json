@@ -1,8 +1,0 @@
-{
-  "Arcade": {
-    "tex": "Arcade",
-    "cull": "none",
-    "depthmask": 0,
-    "blend": "alpha"
-  }
-}

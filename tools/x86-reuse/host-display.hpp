@@ -1,21 +1,24 @@
-// Scale the original portrait canvas into a resizable native OpenGL window.
+// Share a responsive logical canvas between the native renderer and pointer input.
 #pragma once
 
-// Original UI coordinates stay stable while the framebuffer uses the actual client pixels.
-constexpr int LogicalWidth = 480, LogicalHeight = 800;
-// Small windows remain usable; larger windows retain the original portrait aspect ratio.
+// Retain the original UI density while widening the actual camera canvas for desktop windows.
+int LogicalWidth = 480, LogicalHeight = 800;
+// Baseline dimensions keep original labels and radial menus readable.
+constexpr int PortraitCanvasWidth = 480, PortraitCanvasHeight = 800;
+// Small windows remain usable through uniform scaling.
 constexpr int MinimumClientWidth = 240, MinimumClientHeight = 400;
 struct HostDisplay {
     int width = LogicalWidth, height = LogicalHeight;
     int x = 0, y = 0, viewportWidth = LogicalWidth, viewportHeight = LogicalHeight;
 
-    /** Recompute centered letterboxing without changing original camera or UI coordinates. */
+    /** Extend the logical canvas to the client aspect instead of stretching a portrait image. */
     void resize(int clientWidth, int clientHeight) {
         width = std::max(1, clientWidth); height = std::max(1, clientHeight);
-        const double scale = std::min(static_cast<double>(width) / LogicalWidth, static_cast<double>(height) / LogicalHeight);
-        viewportWidth = std::max(1, static_cast<int>(std::lround(LogicalWidth * scale)));
-        viewportHeight = std::max(1, static_cast<int>(std::lround(LogicalHeight * scale)));
-        x = (width - viewportWidth) / 2; y = (height - viewportHeight) / 2;
+        const double scale = std::min(static_cast<double>(width) / PortraitCanvasWidth, static_cast<double>(height) / PortraitCanvasHeight);
+        LogicalWidth = std::max(PortraitCanvasWidth, static_cast<int>(std::lround(width / scale)));
+        LogicalHeight = std::max(PortraitCanvasHeight, static_cast<int>(std::lround(height / scale)));
+        viewportWidth = width; viewportHeight = height;
+        x = 0; y = 0;
     }
 
     /** Convert native top-left pointer coordinates to the original logical canvas. */
@@ -32,9 +35,22 @@ struct HostDisplay {
         return POINT{x + static_cast<LONG>(std::lround(static_cast<double>(px) * viewportWidth / LogicalWidth)),
             height - y - viewportHeight + static_cast<LONG>(std::lround(static_cast<double>(py) * viewportHeight / LogicalHeight))};
     }
+
+    /** Reposition legacy scene probes by their camera or HUD anchor before native input. */
+    POINT sceneProbePoint(int px, int py) const {
+        const int extraWidth = LogicalWidth - PortraitCanvasWidth;
+        const int extraHeight = LogicalHeight - PortraitCanvasHeight;
+        if (py < 100 && px > 400) px += extraWidth;
+        else if (py >= 736 && px >= 400) { px += extraWidth; py += extraHeight; }
+        else if (py >= 736 && px <= 64) py += extraHeight;
+        else { px += extraWidth / 2; py += extraHeight / 2; }
+        return clientPoint(px, py);
+    }
 };
 // The window and original renderer share one scale transform, including all input gestures.
 HostDisplay hostDisplay;
+// Bounded native probes may inspect the exact submitted frame without redrawing it.
+void (*displayPresentObserver)(bool afterSwap, BOOL succeeded) = nullptr;
 
 /** Map original GL viewport pixels to the actual high-resolution framebuffer. */
 void __cdecl hostViewport(int x, int y, int width, int height) {
@@ -54,6 +70,7 @@ void __cdecl hostScissor(int x, int y, int width, int height) {
 
 /** Clear only unused borders after rendering, preserving the original GL state. */
 void presentDisplay() {
+    renderDesktopOverlay();
     if (hostDisplay.x || hostDisplay.y) {
         GLfloat color[4]{}; GLint box[4]{}; GLboolean mask[4]{};
         glGetFloatv(GL_COLOR_CLEAR_VALUE, color); glGetIntegerv(GL_SCISSOR_BOX, box); glGetBooleanv(GL_COLOR_WRITEMASK, mask);
@@ -70,5 +87,7 @@ void presentDisplay() {
         glClearColor(color[0], color[1], color[2], color[3]); glColorMask(mask[0], mask[1], mask[2], mask[3]);
         glScissor(box[0], box[1], box[2], box[3]); if (!clipped) glDisable(GL_SCISSOR_TEST);
     }
-    SwapBuffers(windowDc);
+    if (displayPresentObserver) displayPresentObserver(false, TRUE);
+    const BOOL swapped = SwapBuffers(windowDc);
+    if (displayPresentObserver) displayPresentObserver(true, swapped);
 }

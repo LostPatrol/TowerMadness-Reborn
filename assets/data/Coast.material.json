@@ -1,8 +1,0 @@
-{
-  "Coast": {
-    "tex": "Coast",
-    "cull": "none",
-    "depthmask": 0,
-    "blend": "alpha"
-  }
-}

@@ -1,8 +1,0 @@
-{
-  "Spyra": {
-    "tex": "Spyra",
-    "cull": "none",
-    "depthmask": 0,
-    "blend": "alpha"
-  }
-}

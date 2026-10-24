@@ -1,8 +1,0 @@
-{
-  "Pinball": {
-    "tex": "Pinball",
-    "cull": "none",
-    "depthmask": 0,
-    "blend": "alpha"
-  }
-}

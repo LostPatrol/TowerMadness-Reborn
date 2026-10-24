@@ -1,6 +1,6 @@
 // Adapt the original OpenAL boundary to native Windows voices and original Vorbis assets.
 // The game retains its sound registry, source pools, effect settings and source selection.
-// Music preserves per-tune positions with a host-timed fade; spatial audio uses distance only.
+// Music preserves per-tune positions with clock-timed fades; effects retain original pools.
 #pragma once
 #include "native-audio.hpp"
 
@@ -162,7 +162,40 @@ inline bool tuneLoop = true, pendingLoop = true, musicPlaying = false;
 // A failed tune waits for a different request; unrelated effect playback stays available.
 inline bool musicFailed = false;
 inline float baseVolume = 0.5f, temporaryVolume = 1, fade = 1, fadeTarget = 1;
+// A full transition lasts one second regardless of host frame rate or a stalled frame.
+inline constexpr ULONGLONG FadeDurationMs = 1000;
+// Each retarget starts at its current level, so interrupted transitions remain continuous.
+inline float fadeOrigin = 1, appliedFadeTarget = 1;
 inline ULONGLONG musicTick = 0;
+
+/** Evaluate an eased envelope without a mixer or wall-clock dependency. */
+inline float fadeLevelAt(float origin, float target, ULONGLONG elapsedMs) {
+    if (elapsedMs >= FadeDurationMs) return target;
+    const float progress = static_cast<float>((std::min)(elapsedMs, FadeDurationMs)) / FadeDurationMs;
+    const float eased = progress * progress * (3.0f - 2.0f * progress);
+    return origin + (target - origin) * eased;
+}
+
+/** Sample the current envelope; accept legacy callers that assign fadeTarget directly. */
+inline void advanceFade(ULONGLONG now) {
+    if (fadeTarget != appliedFadeTarget) {
+        fadeOrigin = fade;
+        appliedFadeTarget = fadeTarget = std::isfinite(fadeTarget) ? (std::clamp)(fadeTarget, 0.0f, 1.0f) : 0.0f;
+        musicTick = now;
+    }
+    fade = fadeLevelAt(fadeOrigin, appliedFadeTarget, now - musicTick);
+}
+
+/** Retarget from the sampled current volume rather than resetting the fade. */
+inline void setFadeTarget(float target) {
+    const auto now = GetTickCount64();
+    advanceFade(now);
+    target = std::isfinite(target) ? (std::clamp)(target, 0.0f, 1.0f) : 0.0f;
+    if (target == appliedFadeTarget) return;
+    fadeOrigin = fade;
+    appliedFadeTarget = fadeTarget = target;
+    musicTick = now;
+}
 
 /** Remember the active tune before releasing its native player. */
 inline void rememberMusic() {
@@ -191,9 +224,11 @@ inline void refreshMusic() {
 inline void selectMusic(const std::string& name, bool loop) {
     if (trace) trace("AUDIO_MUSIC_REQUEST tune=" + name + " path=" + resource(name).string());
     // The original cancels an old pending URL even when the new request is the active tune.
-    if (name == tune) { pendingTune.clear(); fadeTarget = 1; refreshMusic(); return; }
-    if (tune.empty()) { tune = name; tuneLoop = loop; fade = 0; fadeTarget = 1; musicFailed = false; }
-    else { pendingTune = name; pendingLoop = loop; fadeTarget = 0; }
+    if (name == tune) { pendingTune.clear(); setFadeTarget(1); refreshMusic(); return; }
+    if (tune.empty()) {
+        tune = name; tuneLoop = loop; fade = fadeOrigin = 0;
+        fadeTarget = appliedFadeTarget = 1; musicTick = GetTickCount64(); musicFailed = false;
+    } else { pendingTune = name; pendingLoop = loop; setFadeTarget(0); }
     refreshMusic();
 }
 
@@ -201,14 +236,11 @@ inline void selectMusic(const std::string& name, bool loop) {
 inline void update() {
     backend.update();
     const auto now = GetTickCount64();
-    // One second linear host fade approximates the original scheduled UIKit callbacks.
-    const float step = musicTick ? (std::min)(0.2f, static_cast<float>(now - musicTick) / 1000.0f) : 0;
-    musicTick = now;
-    if (fade < fadeTarget) fade = (std::min)(fadeTarget, fade + step);
-    else if (fade > fadeTarget) fade = (std::max)(fadeTarget, fade - step);
+    advanceFade(now);
     refreshMusic();
     if (fade == 0 && !pendingTune.empty()) {
-        tune = pendingTune; pendingTune.clear(); tuneLoop = pendingLoop; fadeTarget = 1; musicFailed = false;
+        tune = pendingTune; pendingTune.clear(); tuneLoop = pendingLoop;
+        fadeOrigin = 0; fadeTarget = appliedFadeTarget = 1; musicTick = now; musicFailed = false;
     }
     warnings();
 }

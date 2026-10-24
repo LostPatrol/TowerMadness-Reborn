@@ -1,8 +1,0 @@
-{
-  "SuddenDeath": {
-    "tex": "SuddenDeath",
-    "cull": "none",
-    "depthmask": 0,
-    "blend": "alpha"
-  }
-}

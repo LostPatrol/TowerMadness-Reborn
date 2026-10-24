@@ -1,8 +1,0 @@
-{
-  "Pitchfork": {
-    "tex": "Pitchfork",
-    "cull": "none",
-    "depthmask": 0,
-    "blend": "alpha"
-  }
-}

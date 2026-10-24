@@ -39,8 +39,8 @@ struct Driver {
     /** Restore the test cadence through the real HUD, preserving original IBS speed semantics. */
     void selectFastSpeed(ULONGLONG elapsed) {
         for (int click = 0; click < 2; ++click) {
-            SendMessageW(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(460, 56));
-            SendMessageW(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(460, 56));
+            verificationMessage(windowHandle, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(460, 56));
+            verificationMessage(windowHandle, WM_LBUTTONUP, 0, MAKELPARAM(460, 56));
         }
         nextWave = elapsed + WaveInterval;
     }
@@ -68,7 +68,8 @@ struct Driver {
             campaignMadnessDefense(game);
             if (elapsed >= nextWave) {
                 nextWave = elapsed + WaveInterval;
-                SendMessageW(windowHandle, WM_KEYDOWN, VK_SPACE, 0);
+                // The desktop default reserves Space for pause; next-wave input is now N.
+                SendMessageW(windowHandle, WM_KEYDOWN, 'N', 0);
                 log("LATE_BATTLE_WAVE " + playerState(game).dump());
             }
             if (elapsed >= nextSample) {

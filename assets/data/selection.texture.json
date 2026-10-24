@@ -1,6 +1,0 @@
-{
-  "type": "pvr",
-  "file": "selection",
-  "mag": "linear",
-  "min": "linear_mipmap_nearest"
-}

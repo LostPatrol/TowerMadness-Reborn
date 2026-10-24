@@ -1,8 +1,0 @@
-{
-  "Skulltown": {
-    "tex": "Skulltown",
-    "cull": "none",
-    "depthmask": 0,
-    "blend": "alpha"
-  }
-}
